@@ -1,0 +1,36 @@
+---
+/** Follow a race (kept in this browser only); followed races appear on the homepage under "Your races". */
+interface Props { id: string; name: string; D: number }
+const { id, name, D } = Astro.props;
+---
+<button type="button" class="follow" data-follow={id} data-name={name} data-d={D} aria-pressed="false">
+	<span class="f-star" aria-hidden="true">☆</span><span class="f-label">Follow this race</span>
+</button>
+<script>
+	const KEY = "ptp:follow";
+	const read = (): Record<string, { name: string; D: number; ts: number }> => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
+	const write = (v: object) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* storage blocked: following just won't persist */ } };
+	for (const b of document.querySelectorAll<HTMLButtonElement>("[data-follow]")) {
+		const id = b.dataset.follow!;
+		const paint = () => {
+			const on = !!read()[id];
+			b.setAttribute("aria-pressed", String(on));
+			b.querySelector(".f-star")!.textContent = on ? "★" : "☆";
+			b.querySelector(".f-label")!.textContent = on ? "Following · on your homepage" : "Follow this race";
+		};
+		b.addEventListener("click", () => {
+			const f = read();
+			if (f[id]) delete f[id]; else f[id] = { name: b.dataset.name!, D: Number(b.dataset.d), ts: Date.now() };
+			write(f);
+			paint();
+		});
+		paint();
+	}
+</script>
+<style>
+	.follow { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--color-border); font-weight: 600; font-size: 14px; color: var(--color-text); align-self: flex-start; }
+	.follow:hover { border-color: var(--color-text-secondary); }
+	.follow:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+	.follow[aria-pressed="true"] { background: rgb(224 180 79 / .12); border-color: #e0b44f; color: #f5c451; }
+	.f-star { font-size: 16px; line-height: 1; }
+</style>

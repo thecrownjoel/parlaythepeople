@@ -199,6 +199,11 @@ const ld = graph(organization(origin), {
 			</section>
 		)}
 
+		<section id="your-races" class="yr" hidden aria-labelledby="yr-h">
+			<div class="sec-head"><h2 id="yr-h">Your races</h2><span class="sec-note" style="margin:0">Races you follow · change since your last visit</span></div>
+			<div class="yr-grid" data-yr></div>
+		</section>
+
 		{ticker.length > 0 && (
 			<section class="ticker" aria-label="Latest headlines">
 				<span class="ticker-label">Latest</span>
@@ -347,6 +352,38 @@ const ld = graph(organization(origin), {
 		</section>
 	</div>
 </Base>
+
+<script>
+	// "Your races": followed races (kept in this browser by FollowButton), with the move since the last visit
+	const KEY = "ptp:follow";
+	let follow: Record<string, { name: string; D: number; ts: number; seenD?: number; seenTs?: number }> = {};
+	try { follow = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { follow = {}; }
+	const ids = Object.keys(follow);
+	const box = document.getElementById("your-races");
+	if (ids.length && box) {
+		fetch(`/api/v1/races.json?ids=${encodeURIComponent(ids.join(","))}`).then((r) => r.json()).then(({ races }) => {
+			if (!races?.length) return;
+			const pct = (x: number) => `${Math.round(x * 100)}%`;
+			const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+			const now = Date.now();
+			box.querySelector("[data-yr]")!.innerHTML = races.map((r: any) => {
+				const f = follow[r.id];
+				const base = f?.seenD ?? f?.D;
+				const d = base != null ? r.D - base : null;
+				const lead = r.D >= r.R ? "D" : "R";
+				const move = d == null || Math.abs(d) < 0.005 ? "no change since your last visit" : `Dem ${d > 0 ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(1)} pts since your last visit`;
+				return `<a class="yr-card" href="${r.path}"><span class="yr-name">${esc(r.name)}</span><b class="${lead === "D" ? "dlead" : "rlead"}">${lead} ${pct(Math.max(r.D, r.R))}</b><span class="yr-who">${esc([r.dName && r.dName + " (D)", r.rName && r.rName + " (R)"].filter(Boolean).join(" vs. "))}</span><span class="yr-move ${d != null && Math.abs(d) >= 0.005 ? (d > 0 ? "up" : "down") : ""}">${move}</span></a>`;
+			}).join("");
+			box.hidden = false;
+			// remember what was seen, at most once an hour, so the next visit shows the move since now
+			for (const r of races) {
+				const f = follow[r.id];
+				if (f && (!f.seenTs || now - f.seenTs > 3_600_000)) { f.seenD = r.D; f.seenTs = now; }
+			}
+			try { localStorage.setItem(KEY, JSON.stringify(follow)); } catch { /* storage blocked */ }
+		}).catch(() => {});
+	}
+</script>
 
 <script is:inline>
 	// Hide animatable pieces until GSAP has set their starting positions (never longer than 2.5s).

@@ -219,3 +219,12 @@ a.lu-author:hover { text-decoration: underline; color: var(--color-text); }
 .mw-trade { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
 .mw-when { font-size: 12px; color: var(--color-muted); }
 @media (max-width: 520px) { .mw-row { grid-template-columns: minmax(0, 1fr) 64px; } .mw-row .mw-bar { display: none; } .mw-trade { grid-template-columns: 60px minmax(0, 1fr); } .mw-when { grid-column: 2; } }
+
+/* your races (followed in this browser) */
+.yr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.yr-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px; background: var(--color-surface); border: 1px solid #e0b44f55; text-decoration: none; color: inherit; }
+.yr-card:hover { border-color: #e0b44f; }
+.yr-name { font-weight: 600; }
+.yr-card b { font-family: var(--font-display); font-size: 28px; line-height: 1.1; }
+.yr-who { font-size: 12.5px; color: var(--color-text-secondary); }
+.yr-move { font: 600 12px var(--font-mono), monospace; color: var(--color-muted); }
