@@ -99,7 +99,7 @@ const cfg = JSON.stringify({ tokens: pTokens, cids, kalshi: kRows, book: lead?.t
 		// Polymarket: recent trades, then live
 		if (cfg.cids.length) {
 			fetch(`https://data-api.polymarket.com/trades?limit=150&takerOnly=true&market=${cfg.cids.join(",")}`)
-				.then((r) => (r.ok ? r.json() : []))
+				.then((r) => (r.ok ? (r.json() as Promise<any[]>) : []))
 				.then((ts: any[]) => {
 					for (const t of ts) {
 						const hit = tokMap.get(t.asset);
@@ -131,7 +131,7 @@ const cfg = JSON.stringify({ tokens: pTokens, cids, kalshi: kRows, book: lead?.t
 		async function drawBook() {
 			if (!cfg.book) return;
 			try {
-				const b = await (await fetch(`https://clob.polymarket.com/book?token_id=${cfg.book.tok}`)).json();
+				const b: { bids?: any[]; asks?: any[] } = await (await fetch(`https://clob.polymarket.com/book?token_id=${cfg.book.tok}`)).json();
 				const bids = (b.bids ?? []).map((x: any) => [Number(x.price), Number(x.size) * Number(x.price)]).sort((a: number[], c: number[]) => c[0] - a[0]);
 				const asks = (b.asks ?? []).map((x: any) => [Number(x.price), Number(x.size) * Number(x.price)]).sort((a: number[], c: number[]) => a[0] - c[0]);
 				if (!bids.length || !asks.length) { bookEl.innerHTML = '<p class="ra-muted">The order book is empty right now.</p>'; return; }

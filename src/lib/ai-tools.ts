@@ -172,7 +172,7 @@ export async function runTool(name: string, input: Record<string, any>): Promise
 					const tot = s_.o.reduce((a: number, o: any) => a + o.p, 0) || 1;
 					for (const o of s_.o) {
 						const pa = o.pa ?? "Other";
-						const row = by.get(pa) ?? { party: pa, odds: [], traded_usd: 0 };
+						const row = by.get(pa) ?? { party: pa, odds: [] as number[], traded_usd: 0 };
 						row.odds.push(o.p / tot);
 						row.traded_usd += o.v ?? 0;
 						by.set(pa, row);

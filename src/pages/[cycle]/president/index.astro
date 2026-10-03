@@ -46,7 +46,10 @@ function merged(m?: PresMarket, limit = 15) {
 		}
 	}
 	return [...rows.entries()]
-		.map(([key, r]) => ({ ...r, key, avg: [r.k, r.p].filter((v) => v != null).reduce((a, b) => a! + b!, 0)! / [r.k, r.p].filter((v) => v != null).length }))
+		.map(([key, r]) => {
+			const quotes = [r.k, r.p].filter((v): v is number => v != null);
+			return { ...r, key, avg: quotes.reduce((a, b) => a + b, 0) / quotes.length };
+		})
 		.filter((r) => r.avg >= 0.003)
 		.sort((a, b) => b.avg - a.avg)
 		.slice(0, limit);

@@ -28,7 +28,7 @@ export async function renderCard(key: string, html: string, origin: string): Pro
 			const page = await browser.newPage();
 			await page.setViewport({ width: 1200, height: 630 });
 			await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
-			const png = (await page.screenshot({ type: "png" })) as Uint8Array;
+			const png = (await page.screenshot({ type: "png" })) as Uint8Array<ArrayBuffer>;
 			await env.DATA.put(k, png, { httpMetadata: { contentType: "image/png" } });
 			return new Response(png, { headers });
 		} finally {

@@ -87,7 +87,7 @@
 		const [list, posts] = await Promise.all([
 			loadRaces(),
 			fetch(`/_emdash/api/search?${new URLSearchParams({ q, limit: "6", collections: "posts,pages" })}`)
-				.then((r) => (r.ok ? r.json() : null))
+				.then((r) => (r.ok ? (r.json() as Promise<{ data?: { items?: Post[] }; items?: Post[] }>) : null))
 				.then((d) => (d?.data?.items ?? d?.items ?? []) as Post[])
 				.catch(() => [] as Post[]),
 		]);

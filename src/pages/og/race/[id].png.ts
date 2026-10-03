@@ -49,14 +49,14 @@ h1{font:800 60px/1.05 Montserrat;margin-top:10px;position:relative;max-width:108
 <div class="foot"><span>Kalshi + Polymarket odds · <b>${traded} traded</b> · ${updated}</span><span>parlaythepeople.com</span></div>
 </body></html>`;
 
-	let png: Uint8Array;
+	let png: Uint8Array<ArrayBuffer>;
 	try {
 		const browser = await puppeteer.launch(env.BROWSER);
 		try {
 			const page = await browser.newPage();
 			await page.setViewport({ width: 1200, height: 630 });
 			await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
-			png = (await page.screenshot({ type: "png" })) as Uint8Array;
+			png = (await page.screenshot({ type: "png" })) as Uint8Array<ArrayBuffer>;
 		} finally {
 			await browser.close();
 		}

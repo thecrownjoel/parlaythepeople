@@ -361,7 +361,7 @@ const ld = graph(organization(origin), {
 	const ids = Object.keys(follow);
 	const box = document.getElementById("your-races");
 	if (ids.length && box) {
-		fetch(`/api/v1/races.json?ids=${encodeURIComponent(ids.join(","))}`).then((r) => r.json()).then(({ races }) => {
+		fetch(`/api/v1/races.json?ids=${encodeURIComponent(ids.join(","))}`).then((r) => r.json() as Promise<{ races?: any[] }>).then(({ races }) => {
 			if (!races?.length) return;
 			const pct = (x: number) => `${Math.round(x * 100)}%`;
 			const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
