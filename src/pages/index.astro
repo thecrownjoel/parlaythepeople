@@ -105,17 +105,20 @@ const gaps = races.filter((r) => r.k && r.p).map((r) => ({ r, g: Math.abs(shares
 const moved = next ? await movers(next, 7, 6) : [];
 
 // ---- presidency leaderboard
+/** Money traded on a race across both exchanges (Kalshi $1 contracts + Polymarket dollars). */
+const traded$ = (r: Race) => (r.k?.v ?? 0) + (r.p?.v ?? 0);
 function merged(m?: PresMarket, limit = 6) {
 	if (!m) return [];
-	const rows = new Map<string, { key: string; n: string; pa: string | null; vals: number[] }>();
+	const rows = new Map<string, { key: string; n: string; pa: string | null; vals: number[]; vol: number }>();
 	for (const x of ["k", "p"] as const) {
 		const s = m[x];
 		if (!s) continue;
 		const tot = s.o.reduce((a, o) => a + o.p, 0) || 1;
 		for (const o of s.o) {
 			const key = nameKey(o.n);
-			const row = rows.get(key) ?? { key, n: o.n, pa: o.pa, vals: [] };
+			const row = rows.get(key) ?? { key, n: o.n, pa: o.pa, vals: [], vol: 0 };
 			row.vals.push(o.p / tot);
+			row.vol += o.v ?? 0;
 			row.pa = row.pa ?? o.pa;
 			rows.set(key, row);
 		}
@@ -326,6 +329,8 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	.gauge-nums b { font-family: var(--font-display); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
 	.gn-d { color: #5e92ee; } .gn-r { color: #e85a4c; text-align: right; }
 	.gauge-sub { font-size: 12px; color: #a9b0bc; }
+	.gauge-money { font: 600 13px var(--font-mono), monospace; color: #f5c451; }
+	.money { color: #e0b44f; font-family: var(--font-mono), monospace; font-weight: 600; }
 	.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 	.snap-tile { background: #161c25; border: 1px solid #222a35; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 	.snap-tile b { font-family: var(--font-display); font-size: 28px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
@@ -435,6 +440,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 									<span class="gn-r"><b data-count-pct={c.R}>{pct(c.R)}</b> GOP</span>
 								</div>
 								{med && <span class="gauge-sub">Median outcome: {med} Republican seats · {maj} for control</span>}
+								<span class="gauge-money">{fmtVol(traded$(r))} traded on {ch} control</span>
 							</a>
 						);
 					})}
@@ -499,7 +505,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 							const col = f.nowLeader === "D" ? "var(--bt-d)" : "var(--bt-r)";
 							return (
 								<a class="flip ga" data-ga="flip" href={f.race.path} style={`--c:${col}`}>
-									<span class="flip-tag">Lead change · {f.days} days</span>
+									<span class="flip-tag">Lead change · {f.days} days · {fmtVol(traded$(f.race))} traded</span>
 									<strong class="flip-race">{name(f.race)}</strong>
 									<span class="flip-story">{f.who ?? (f.nowLeader === "D" ? "The Democrat" : "The Republican")} was at <b>{pct(fromLead)}</b>, now leads at <b style={`color:${col}`}>{pct(toLead)}</b></span>
 									<div class="flip-bars" aria-hidden="true">
@@ -557,7 +563,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 								<a class="h2h-row ga" data-ga="up" href={x.race.path}>
 									<div class="h2h-top">
 										<strong>{x.race.state} {x.race.kind === "senate" ? "Senate" : "Governor"}</strong>
-										<span class="h2h-names"><span style="color:var(--bt-d)">{x.dName}</span> vs. <span style="color:var(--bt-r)">{x.rName}</span></span>
+										<span class="h2h-names"><span style="color:var(--bt-d)">{x.dName}</span> vs. <span style="color:var(--bt-r)">{x.rName}</span> · <span class="money">{fmtVol(traded$(x.race))}</span></span>
 									</div>
 									<div class="h2h-bars">
 										<span class="h2h-lab">Conversation</span>
@@ -608,7 +614,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
-				<MoneyGlobe races={globeRaces} cycle={nextYear!} />
+				<MoneyGlobe races={globeRaces} cycle={nextYear!} totalTraded={traded} />
 				<div class="globe-copy">
 					<div class="gc-intro">
 					<p class="eyebrow">Where the money is</p>
@@ -649,7 +655,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 						<a class="mover ga" data-ga="up" href={m.race.path}>
 							<span>{name(m.race)}</span>
 							<span class={`num ${m.delta >= 0 ? "up" : "down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
-							<small>{pct(m.from)} → {pct(m.to)} Democratic</small>
+							<small>{pct(m.from)} → {pct(m.to)} Democratic · <span class="money">{fmtVol(traded$(m.race))} traded</span></small>
 						</a>
 					))}
 				</section>
@@ -658,7 +664,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				<section class="panel">
 					<h2 style="font-size:22px">Closest {nextYear} races</h2>
 					<ul class="racelist" style="grid-template-columns:1fr">
-						{closest.map(({ r, c }) => <li><a href={r.path}>{name(r)}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>)}
+						{closest.map(({ r, c }) => <li><a href={r.path}>{name(r)}</a><span class="num"><span class={c.lead === "D" ? "dlead" : "rlead"}>{c.lead} {pct(c.lp)}</span> <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
 					</ul>
 					<p class="datalinks" style="margin-top:10px"><a href={`/${nextYear}/`}>All {nextYear} races →</a></p>
 				</section>
@@ -668,7 +674,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 					<h2 style="font-size:22px">Where the exchanges disagree</h2>
 					<p class="sec-note" style="margin:0 0 6px">Largest gaps in Democratic odds between Kalshi and Polymarket.</p>
 					<ul class="racelist" style="grid-template-columns:1fr">
-						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">{(g * 100).toFixed(1)} pts</span></li>)}
+						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">{(g * 100).toFixed(1)} pts <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
 					</ul>
 				</section>
 			)}
@@ -684,7 +690,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				{leaders.map((l, i) => (
 					<div class="lb ga" data-ga="up">
 						<span class="lb-rank">{i + 1}</span>
-						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>}<span class="lb-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, (l.v / Math.max(leaders[0].v, 0.01)) * 100)}%;background:${partyColor(l.pa)}`}></i></span></span>
+						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>} <small class="money">{fmtVol(l.vol)} traded</small><span class="lb-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, (l.v / Math.max(leaders[0].v, 0.01)) * 100)}%;background:${partyColor(l.pa)}`}></i></span></span>
 						<Sparkline points={leaderSparks[i]} color={partyColor(l.pa)} height={30} label={`${l.n}, last 90 days`} />
 						<span class="num" style={`color:${partyColor(l.pa)}`}>{pct(l.v)}</span>
 					</div>
@@ -729,7 +735,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				<h2>Ballot measures on a knife's edge</h2>
 				<p class="sec-note">State measures the markets see as closest to a coin flip.</p>
 				<ul class="racelist">
-					{coinFlips.map((b: any) => <li><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{b.st}: {b.n}</span><span class="num">{pct(b.p)} pass</span></li>)}
+					{coinFlips.map((b: any) => <li><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{b.st}: {b.n}</span><span class="num">{pct(b.p)} pass <span class="money">{fmtVol(b.v)}</span></span></li>)}
 				</ul>
 			</section>
 		)}

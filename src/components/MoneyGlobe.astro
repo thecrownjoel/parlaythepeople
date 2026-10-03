@@ -7,13 +7,23 @@
  * Loads map data and the live feed only when scrolled into view; drag to turn; still for reduced motion.
  */
 import type { StateRace } from "../lib/trends";
-interface Props { races: (StateRace & { office: string; key: string })[]; cycle: number }
-const { races, cycle } = Astro.props;
+interface Props { races: (StateRace & { office: string; key: string })[]; cycle: number; totalTraded?: number }
+const { races, cycle, totalTraded = 0 } = Astro.props;
+const fmt$ = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`);
 const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.office, l: r.lead, v: Math.round(r.vol) }))).replace(/</g, "\\u003c");
 ---
 <div class="mg" data-globe data-cycle={cycle}>
 	<canvas class="mg-canvas" aria-label="Globe showing a line from Washington, D.C. to every race; color shows the favored party, brightness shows trading volume, and live trades flash along their race's line" role="img"></canvas>
-	<p class="mg-hint" aria-hidden="true">Drag to look around</p>
+	<div class="mg-label">
+		<span class="mg-title"><span class="mg-live" aria-hidden="true"></span>Live market map · {cycle} races</span>
+		<span class="mg-sub"><b>{fmt$(totalTraded)}</b> traded · <span data-mg-session>live trades will appear here</span></span>
+	</div>
+	<div class="mg-zoom" role="group" aria-label="Map zoom">
+		<button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+		<button type="button" data-zoom="out" aria-label="Zoom out">−</button>
+		<button type="button" data-zoom="reset" aria-label="Reset view" title="Reset view">⟲</button>
+	</div>
+	<p class="mg-hint" aria-hidden="true">Drag to move · double-click or Ctrl/⌘ + scroll to zoom</p>
 	<script type="application/json" data-globe-data set:html={json} />
 </div>
 
@@ -74,6 +84,7 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		const lower48 = { type: "FeatureCollection", features: states.features.filter((f: any) => !NOT_LOWER48.includes(f.properties.name)) };
 		const HOME_ROT = 97, HOME_TILT = -38;
 		let width = 0, height = 0, rot = HOME_ROT, tilt = HOME_TILT, dragging = false, lastX = 0, lastY = 0, last = performance.now(), dragOffset = 0, tiltOffset = 0;
+		let baseScale = 1, zoom = 1, zoomTarget = 1;
 		const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 		const bursts: Burst[] = [];
 
@@ -85,13 +96,17 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 			canvas.height = height * dpr;
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			proj.rotate([HOME_ROT, HOME_TILT]).fitExtent([[width * 0.03, height * 0.06], [width * 0.97, height * 0.97]], lower48 as any);
+			baseScale = proj.scale();
 		}
+		const setZoom = (z: number) => { zoomTarget = Math.max(0.6, Math.min(8, z)); if (!running) requestAnimationFrame(frame); };
 
 		function frame(now: number) {
 			const dt = Math.min(64, now - last) / 1000;
 			last = now;
-			// gentle sway around the USA; dragging nudges the view and it eases back home
-			if (!dragging) { dragOffset *= 0.96; tiltOffset *= 0.96; }
+			// gentle sway around the USA; dragging nudges the view and (at normal zoom) it eases back home
+			zoom += (zoomTarget - zoom) * 0.18;
+			proj.scale(baseScale * zoom);
+			if (!dragging && zoomTarget <= 1.01) { dragOffset *= 0.96; tiltOffset *= 0.96; }
 			const sway = reduce ? 0 : Math.sin(now / 9000) * 1.5;
 			rot = HOME_ROT + sway + dragOffset;
 			tilt = HOME_TILT + tiltOffset;
@@ -169,17 +184,56 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		canvas.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
 		canvas.addEventListener("pointermove", (e) => {
 			if (!dragging) return;
-			dragOffset = Math.max(-40, Math.min(40, dragOffset + (e.clientX - lastX) * 0.15));
-			tiltOffset = Math.max(-20, Math.min(20, tiltOffset - (e.clientY - lastY) * 0.15));
+			const k = 0.15 / zoom; // move less per pixel when zoomed in
+			dragOffset = Math.max(-60, Math.min(60, dragOffset + (e.clientX - lastX) * k));
+			tiltOffset = Math.max(-30, Math.min(30, tiltOffset - (e.clientY - lastY) * k));
 			lastX = e.clientX; lastY = e.clientY;
 			if (reduce) requestAnimationFrame(frame);
 		});
 		canvas.addEventListener("pointerup", () => (dragging = false));
+		// zoom: buttons, double-click (zooms toward the spot), Ctrl/⌘ + wheel, and two-finger pinch
+		root.querySelectorAll<HTMLButtonElement>("[data-zoom]").forEach((b) => b.addEventListener("click", () => {
+			if (b.dataset.zoom === "in") setZoom(zoomTarget * 1.5);
+			else if (b.dataset.zoom === "out") setZoom(zoomTarget / 1.5);
+			else { setZoom(1); dragOffset = 0; tiltOffset = 0; }
+		}));
+		canvas.addEventListener("dblclick", (e) => {
+			const r = canvas.getBoundingClientRect();
+			const ll = proj.invert?.([e.clientX - r.left, e.clientY - r.top]);
+			if (ll) { dragOffset += (-ll[0] - rot) * 0.6; tiltOffset += (-ll[1] - tilt) * 0.6; }
+			setZoom(zoomTarget * 1.8);
+		});
+		canvas.addEventListener("wheel", (e) => {
+			if (!e.ctrlKey && !e.metaKey) return; // plain scrolling keeps scrolling the page
+			e.preventDefault();
+			setZoom(zoomTarget * Math.exp(-e.deltaY * 0.0025));
+		}, { passive: false });
+		const touches = new Map<number, [number, number]>();
+		let pinch0 = 0, zoom0 = 1;
+		canvas.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") touches.set(e.pointerId, [e.clientX, e.clientY]); });
+		canvas.addEventListener("pointermove", (e) => {
+			if (!touches.has(e.pointerId)) return;
+			touches.set(e.pointerId, [e.clientX, e.clientY]);
+			if (touches.size === 2) {
+				const [a, b] = [...touches.values()];
+				const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+				if (!pinch0) { pinch0 = d; zoom0 = zoomTarget; } else setZoom(zoom0 * (d / pinch0));
+			}
+		});
+		const endTouch = (e: PointerEvent) => { touches.delete(e.pointerId); if (touches.size < 2) pinch0 = 0; };
+		canvas.addEventListener("pointerup", endTouch);
+		canvas.addEventListener("pointercancel", endTouch);
 		new ResizeObserver(() => { resize(); if (!running) requestAnimationFrame(frame); }).observe(canvas);
 		resize();
 		if (reduce) requestAnimationFrame(frame);
 		else run(true);
 
+		const sessionEl = root.querySelector<HTMLElement>("[data-mg-session]");
+		let sessionN = 0, sessionUsd = 0;
+		(root as any).__tally = (usd: number) => {
+			sessionN++; sessionUsd += usd;
+			if (sessionEl) sessionEl.textContent = `${sessionN} trade${sessionN === 1 ? "" : "s"} · $${sessionUsd >= 1000 ? (sessionUsd / 1000).toFixed(1) + "K" : Math.round(sessionUsd)} since you arrived`;
+		};
 		liveTrades(root.dataset.cycle!, arcByKey, (b) => { bursts.push({ ...b, t0: performance.now() }); if (reduce || !running) requestAnimationFrame(frame); });
 	}
 
@@ -245,6 +299,7 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 					lastTrade = Date.now();
 					setStatus("Live");
 					show(hit, Number(e.size) * Number(e.price), e.side, lastTrade);
+					(document.querySelector("[data-globe]") as any)?.__tally?.(Number(e.size) * Number(e.price));
 				}
 			};
 			ws.onclose = () => { setStatus("Reconnecting…"); setTimeout(connect, (backoff = Math.min(backoff * 2, 30000))); };
@@ -266,5 +321,15 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 	.mg { position: relative; width: 100%; margin: 0 auto; }
 	.mg-canvas { width: 100%; aspect-ratio: 16 / 10; display: block; cursor: grab; touch-action: pan-y; }
 	.mg-canvas:active { cursor: grabbing; }
-	.mg-hint { position: absolute; bottom: 4px; right: 8px; margin: 0; font-size: 11px; color: rgb(255 255 255 / 0.45); pointer-events: none; }
+	.mg-hint { position: absolute; bottom: 6px; right: 10px; margin: 0; font-size: 11px; color: rgb(255 255 255 / 0.45); pointer-events: none; }
+	.mg-label { position: absolute; top: 10px; left: 12px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; background: rgb(11 15 21 / .72); border: 1px solid #222a35; border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(4px); }
+	.mg-title { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: #fff; }
+	.mg-live { width: 8px; height: 8px; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 3px rgb(76 195 138 / .25); }
+	.mg-sub { font-size: 12.5px; color: #a9b0bc; }
+	.mg-sub b { color: #fff; font-family: var(--font-mono), monospace; }
+	.mg-zoom { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; gap: 4px; }
+	.mg-zoom button { all: unset; cursor: pointer; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgb(11 15 21 / .8); border: 1px solid #2c3440; color: #e8ebf0; font-size: 18px; font-weight: 600; }
+	.mg-zoom button:hover { border-color: #4a5566; color: #fff; }
+	.mg-zoom button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+	@media (max-width: 640px) { .mg-label { padding: 6px 9px; } .mg-title { font-size: 11px; } .mg-sub { font-size: 11px; } .mg-hint { display: none; } }
 </style>

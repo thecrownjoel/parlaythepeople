@@ -190,11 +190,6 @@
 				},
 				{
 					"type": "custom",
-					"label": "Methodology",
-					"url": "/methodology/"
-				},
-				{
-					"type": "custom",
 					"label": "Guide",
 					"url": "/guide/"
 				}

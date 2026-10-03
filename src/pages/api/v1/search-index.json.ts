@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { getIndex, getCycle, consensus, candidate, pct } from "../../../lib/markets";
+import { getIndex, getCycle, consensus, candidate, pct, fmtVol } from "../../../lib/markets";
 import { getSocial, pulseIndex, compact } from "../../../lib/social";
 
 /** Compact list of every race page for the site search overlay: title, subtitle, path, search text. */
@@ -20,7 +20,8 @@ export const GET: APIRoute = async () => {
 			const here = (x: ReturnType<typeof find>) => (x && x.races.includes(r.path) ? x : null);
 			const pd = here(find(d)), pr = here(find(rep));
 			const buzz = pd && pr ? ` · buzz ${compact(pd.i24)} vs. ${compact(pr.i24)}` : "";
-			items.push({ t, s: s + buzz, p: r.path, y: r.cycle, k: [t, r.state, r.st, r.label, d, rep, office[r.kind]].filter(Boolean).join(" ").toLowerCase() });
+			const money = ` · ${fmtVol((r.k?.v ?? 0) + (r.p?.v ?? 0))} traded`;
+			items.push({ t, s: s + money + buzz, p: r.path, y: r.cycle, k: [t, r.state, r.st, r.label, d, rep, office[r.kind]].filter(Boolean).join(" ").toLowerCase() });
 			// each tracked candidate is searchable by name, with their social pulse
 			for (const [name, pulse, party] of [[d, pd, "D"], [rep, pr, "R"]] as const) {
 				if (!name || !pulse || seenCand.has(`${name}|${r.path}`)) continue;

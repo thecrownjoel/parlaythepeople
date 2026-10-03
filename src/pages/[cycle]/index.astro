@@ -7,7 +7,7 @@ import Base from "../../layouts/Base.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import MarketDashboard from "../../components/MarketDashboard.astro";
 import MultiChart from "../../components/MultiChart.astro";
-import { getCycle, consensus, shares, pct, fmtDate, daysUntil, PARTY_PLURAL, type Race } from "../../lib/markets";
+import { getCycle, consensus, shares, pct, fmtDate, fmtVol, daysUntil, PARTY_PLURAL, type Race } from "../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
 
@@ -89,7 +89,7 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 			<p class="eyebrow">{midterm ? "Midterm elections" : hasPres ? "Presidential election year" : "Elections"} · {days > 0 ? `${days} days to Election Day` : `Election Day was ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}`}</p>
 			<h1>{h1}</h1>
 			<p class="lede">{lede}</p>
-			<p class="updated">Updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time></p>
+			<p class="updated"><span style="color:#e0b44f;font-weight:600">{fmtVol(races.reduce((a, r) => a + (r.k?.v ?? 0) + (r.p?.v ?? 0), 0))} traded on {year} races</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time></p>
 		</header>
 
 		{hasPres && (
@@ -104,7 +104,7 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 				<h2>Closest races</h2>
 				<ul class="racelist">
 					{closest.map(({ r, c }) => (
-						<li><a href={r.path}>{r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>
+						<li><a href={r.path}>{r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)} · {fmtVol((r.k?.v ?? 0) + (r.p?.v ?? 0))}</span></li>
 					))}
 				</ul>
 			</section>
@@ -133,7 +133,7 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 					<summary style="cursor:pointer"><h3 style="display:inline;font-size:18px">{officeNames[k]} <span class="num" style="color:var(--color-muted);font-weight:400">({by(k).length})</span></h3></summary>
 					<ul class="racelist" style="margin-top:10px">
 						{by(k).sort((a, b) => a.label.localeCompare(b.label)).map((r) => { const c = consensus(r); return (
-							<li><a href={r.path}>{k === "house" ? r.label : r.state}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>
+							<li><a href={r.path}>{k === "house" ? r.label : r.state}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)} · {fmtVol((r.k?.v ?? 0) + (r.p?.v ?? 0))}</span></li>
 						); })}
 					</ul>
 				</details>

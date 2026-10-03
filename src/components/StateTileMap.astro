@@ -1,7 +1,7 @@
 ---
 /** 2026 map: state tiles for Senate and governor races, and a district-by-district House view. Every square links to its race. */
 import type { StateRace } from "../lib/trends";
-import { RATING_LABEL, pct } from "../lib/markets";
+import { RATING_LABEL, pct, fmtVol } from "../lib/markets";
 interface Props { senate: StateRace[]; governor: StateRace[]; house?: StateRace[]; year: number }
 const { senate, governor, house = [], year } = Astro.props;
 // House: every district as a square, grouped by state (alphabetical), districts in order
@@ -33,8 +33,8 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 					const race = by.get(st);
 					return race ? (
 						<a role="listitem" class={`stm-tile rt-${race.rating === "I" ? "T" : race.rating}`} href={race.path} style={`grid-column:${c + 1};grid-row:${r + 1}`}
-							title={`${race.label}: ${RATING_LABEL[race.rating]}, ${race.lead} ${pct(race.lp)}${race.who ? ` (${race.who})` : ""}`}>
-							<b>{st}</b><span>{race.lead} {Math.round(race.lp * 100)}</span>
+							title={`${race.label}: ${RATING_LABEL[race.rating]}, ${race.lead} ${pct(race.lp)}${race.who ? ` (${race.who})` : ""} · ${fmtVol(race.vol)} traded`}>
+							<b>{st}</b><span>{race.lead} {Math.round(race.lp * 100)}</span><span class="stm-money">{fmtVol(race.vol)}</span>
 						</a>
 					) : (
 						<span role="listitem" class="stm-tile stm-none" style={`grid-column:${c + 1};grid-row:${r + 1}`} title={`${st}: no ${name.toLowerCase()} race in ${year}`}><b>{st}</b></span>
@@ -47,12 +47,14 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 		<div class="stm-house" data-map="house" hidden role="list" aria-label={`${year} House races by state`}>
 			{houseByState.map(({ state, st, rs }) => {
 				const d = rs.filter((r) => r.lead === "D").length, rep = rs.length - d;
+				const money = rs.reduce((a, r) => a + r.vol, 0);
 				return (
 					<div class="sh-state" role="listitem">
 						<div class="sh-head"><b>{state}</b><span><span style="color:var(--bt-d)">{d}</span> · <span style="color:var(--bt-r)">{rep}</span></span></div>
+						<span class="sh-money">{fmtVol(money)} traded</span>
 						<div class="sh-seats">
 							{rs.map((r) => (
-								<a class={`sh-seat rt-${r.rating === "I" ? "T" : r.rating}`} href={r.path} title={`${r.label}: ${RATING_LABEL[r.rating]}, ${r.lead} ${pct(r.lp)}${r.who ? ` (${r.who})` : ""}`} aria-label={`${r.label}, ${RATING_LABEL[r.rating]}`}>{r.label.split("-")[1] === "AL" ? "AL" : parseInt(r.label.split("-")[1])}</a>
+								<a class={`sh-seat rt-${r.rating === "I" ? "T" : r.rating}`} href={r.path} title={`${r.label}: ${RATING_LABEL[r.rating]}, ${r.lead} ${pct(r.lp)}${r.who ? ` (${r.who})` : ""} · ${fmtVol(r.vol)} traded`} aria-label={`${r.label}, ${RATING_LABEL[r.rating]}`}>{r.label.split("-")[1] === "AL" ? "AL" : parseInt(r.label.split("-")[1])}</a>
 							))}
 						</div>
 					</div>
@@ -82,6 +84,8 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 	.stm-tile { aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--color-text); font-size: 11px; line-height: 1.15; min-width: 0; transition: transform .15s; }
 	.stm-tile b { font-size: 13px; font-weight: 700; }
 	.stm-tile span { font-family: var(--font-mono), monospace; font-size: 10px; opacity: .85; }
+	.stm-tile .stm-money { font-size: 9.5px; opacity: .75; }
+	.sh-money { font: 600 11.5px var(--font-mono), monospace; color: #e0b44f; margin-top: -4px; }
 	a.stm-tile:hover, a.stm-tile:focus-visible { transform: scale(1.08); outline: 2px solid var(--color-text); z-index: 1; }
 	.stm-none { background: var(--bt-chip); color: var(--color-muted); }
 	.rt-SD { background: var(--bt-d); color: #fff; } .rt-LD { background: color-mix(in oklab, var(--bt-d) 62%, var(--color-surface)); }

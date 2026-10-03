@@ -31,21 +31,28 @@ PARTY_HINTS = {
     "2026-senate-alaska": {"peltola": "D", "sullivan": "R"},
 }
 
-# Headlines for the homepage "Latest" strip, from Google News search feeds (free, no key).
-# (label, search query, how many headlines to take). Edit the queries or counts to change the mix.
+# Headlines for the homepage "Latest" strip. All free: publishers' own RSS feeds plus Google News
+# search feeds. Each entry takes up to N headlines per refresh, so N sets the mix. Feeds marked
+# political=False carry other news too and are filtered to politics keywords.
+NEWS_FEEDS = [
+    # (label shown, feed url, headlines per refresh, already politics-only?)
+    ("The White House", "https://www.whitehouse.gov/news/feed/", 4, True),
+    ("Fox News", "https://moxie.foxnews.com/google-publisher/politics.xml", 4, True),
+    ("New York Post", "https://nypost.com/politics/feed/", 3, True),
+    ("Washington Examiner", "https://www.washingtonexaminer.com/feed/", 3, False),
+    ("Daily Caller", "https://dailycaller.com/feed/", 2, False),
+    ("National Review", "https://www.nationalreview.com/feed/", 2, False),
+    ("Washington Free Beacon", "https://freebeacon.com/feed/", 1, False),
+    ("The Federalist", "https://thefederalist.com/feed/", 1, False),
+    ("RealClearPolitics", "https://www.realclearpolitics.com/index.xml", 1, False),
+]
+# Google News searches round out the mix (midterm coverage and some Democratic news for balance)
 NEWS_QUERIES = [
-    ("White House", '"White House"', 6),
-    ("GOP", 'Republicans Congress OR "GOP" OR "Senate Republicans"', 5),
-    ("Administration", '"Trump administration"', 4),
     ("Midterms", '"2026 midterms" OR "midterm elections"', 3),
-    ("Democrats", '"Democrats" Congress', 2),
+    ("GOP", '"Senate Republicans" OR "House Republicans"', 2),
+    ("Democrats", '"Democrats" Congress', 1),
 ]
 NEWS_MAX_AGE_HOURS = 48
-
-# LunarCrush social data ("The Pulse"). Candidates are taken from the race data automatically:
-# every Senate and governor candidate, House candidates in competitive races (leader below
-# SOCIAL_HOUSE_MAX_LEAD), and the top presidential contenders. Fetched about once an hour.
-SOCIAL_HOUSE_MAX_LEAD = 0.80
-SOCIAL_PRES_TOP = 12
-SOCIAL_EXTRA_TOPICS = ["midterms", "white house", "donald trump", "republicans", "democrats", "congress", "senate", "polymarket", "kalshi"]
-SOCIAL_POSTS_PER_TOPIC = 4
+NEWS_POLITICS_WORDS = ["trump", "vance", "white house", "congress", "senate", "house", "gop", "republican", "democrat", "election",
+                       "midterm", "governor", "campaign", "poll", "vote", "voter", "administration", "supreme court", "biden",
+                       "harris", "newsom", "president", "lawmaker", "speaker", "ballot", "primary", "pelosi", "schumer", "thune", "johnson"]

@@ -135,7 +135,7 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 				<h2>{heading}</h2>
 				<div class="tbl-wrap">
 					<table class="tbl">
-						<thead><tr><th>Candidate</th><th class="r">Average</th><th></th><th class="r">Kalshi</th><th class="r">Polymarket</th></tr></thead>
+						<thead><tr><th>Candidate</th><th class="r">Average</th><th></th><th class="r">Kalshi</th><th class="r">Polymarket</th><th class="r">Traded</th></tr></thead>
 						<tbody>
 							{rows.map((r) => (
 								<tr>
@@ -144,6 +144,7 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 									<td><div class="pbar"><i style={`width:${Math.min(100, r.avg * 100 / Math.max(rows[0].avg, 0.01))}%;background:${r.pa === "D" ? "var(--bt-d)" : r.pa === "R" ? "var(--bt-r)" : "var(--bt-oth)"}`}></i></div></td>
 									<td class="r num">{pct(r.k, 1)}</td>
 									<td class="r num">{pct(r.p, 1)}</td>
+									<td class="r num" style="color:#e0b44f">{fmtVol(r.v)}</td>
 								</tr>
 							))}
 						</tbody>
