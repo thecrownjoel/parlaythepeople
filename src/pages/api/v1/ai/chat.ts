@@ -10,7 +10,7 @@ import { getIndex, daysUntil } from "../../../../lib/markets";
  * through Cloudflare AI Gateway; AI_MODEL overrides the model); otherwise a Workers AI model (AI_WORKERS_MODEL).
  * Either way it answers with the read-only tools in lib/ai-tools.ts.
  */
-type Env = { ANTHROPIC_API_KEY?: string; AI_GATEWAY_ID?: string; AI_MODEL?: string; AI_DAILY_LIMIT?: string; AI_WORKERS_MODEL?: string };
+type Env = { ANTHROPIC_API_KEY?: string; AI_GATEWAY_ID?: string; AI_MODEL?: string; AI_DAILY_LIMIT?: string; AI_WORKERS_MODEL?: string; AI_GLOBAL_DAILY?: string };
 /** Without an Anthropic key the analyst runs on Cloudflare Workers AI (same tools, same instructions). */
 const WORKERS_MODEL = "@cf/zai-org/glm-5.3";
 const E = env as unknown as Env;
@@ -92,6 +92,9 @@ export const POST: APIRoute = async ({ request }) => {
 	const limit = Number(E.AI_DAILY_LIMIT ?? 10);
 	const used = await env.MARKETS.prepare("SELECT n FROM ai_usage WHERE who = ? AND day = ?").bind(id, day).first<{ n: number }>();
 	if ((used?.n ?? 0) >= limit) return Response.json({ error: "limit", limit }, { status: 429 });
+	// a ceiling for the whole site, so a traffic spike can't run up the AI bill
+	const all = await env.MARKETS.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM ai_usage WHERE day = ?").bind(day).first<{ n: number }>();
+	if ((all?.n ?? 0) >= Number(E.AI_GLOBAL_DAILY ?? 500)) return Response.json({ error: "busy" }, { status: 429 });
 	await env.MARKETS.prepare("INSERT INTO ai_usage (who, day, n) VALUES (?, ?, 1) ON CONFLICT(who, day) DO UPDATE SET n = n + 1").bind(id, day).run();
 
 	const enc = new TextEncoder();
