@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
   user_id TEXT NOT NULL,
   race_id TEXT NOT NULL,
   added INTEGER NOT NULL,
+  name TEXT,                        -- race name as shown on the follow button (added Oct 2026: ALTER TABLE watchlist ADD COLUMN name TEXT)
   PRIMARY KEY (user_id, race_id)
 ) WITHOUT ROWID;
 
@@ -108,3 +109,42 @@ CREATE TABLE IF NOT EXISTS pro_requests (
   note TEXT,
   handled INTEGER NOT NULL DEFAULT 0
 );
+
+-- Briefings and alerts for paid plans. One row per user; no row = the defaults below.
+CREATE TABLE IF NOT EXISTS alert_prefs (
+  user_id TEXT PRIMARY KEY,
+  briefing INTEGER NOT NULL DEFAULT 1,     -- daily morning briefing on followed races
+  alerts INTEGER NOT NULL DEFAULT 1,       -- move and big-bet alerts on followed races
+  move_pts REAL NOT NULL DEFAULT 5,        -- alert when Democratic odds move this many points in 24 hours
+  whale_usd REAL NOT NULL DEFAULT 10000,   -- alert on a single trade this large
+  updated INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- What each alert email already covered, so nothing is sent twice.
+CREATE TABLE IF NOT EXISTS alerts_sent (
+  user_id TEXT NOT NULL,
+  key TEXT NOT NULL,                       -- move:<race>:<day> | whale:<src>:<trade id>
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (user_id, key)
+) WITHOUT ROWID;
+
+-- Every daily briefing written, readable again from the account page.
+CREATE TABLE IF NOT EXISTS briefings (
+  user_id TEXT NOT NULL,
+  day INTEGER NOT NULL,                    -- unix day
+  ts INTEGER NOT NULL,
+  races INTEGER,
+  body TEXT,                               -- markdown
+  sent INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day)
+) WITHOUT ROWID;
+
+-- PDF race reports (files in R2 DATA under reports/<user id>/).
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  race_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  r2_key TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reports_user ON reports (user_id, ts);

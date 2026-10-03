@@ -1,5 +1,5 @@
 ---
-/** Follow a race (kept in this browser only); followed races appear on the homepage under "Your races". */
+/** Follow a race: kept in this browser, and on the account when signed in (it drives Pro briefings and alerts). Followed races appear on the homepage under "Your races". */
 interface Props { id: string; name: string; D: number }
 const { id, name, D } = Astro.props;
 ---
@@ -20,9 +20,12 @@ const { id, name, D } = Astro.props;
 		};
 		b.addEventListener("click", () => {
 			const f = read();
-			if (f[id]) delete f[id]; else f[id] = { name: b.dataset.name!, D: Number(b.dataset.d), ts: Date.now() };
+			const on = !f[id];
+			if (on) f[id] = { name: b.dataset.name!, D: Number(b.dataset.d), ts: Date.now() }; else delete f[id];
 			write(f);
 			paint();
+			// signed-in readers: keep the account's list in step (a 401 just means signed out)
+			fetch("/api/watchlist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on, races: [{ race_id: id, name: b.dataset.name }] }) }).catch(() => {});
 		});
 		paint();
 	}

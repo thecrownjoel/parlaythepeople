@@ -18,6 +18,7 @@ import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
 import FollowButton from "../../../components/FollowButton.astro";
+import ReportButton from "../../../components/ReportButton.astro";
 import { moneySince, kalshiRecent } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
@@ -207,7 +208,7 @@ import { parlayD } from "../../../lib/model";
 			<p class="eyebrow">{race.cycle} {race.kind === "control" ? "U.S. " + officeName : race.kind === "house" ? `${race.state} · U.S. House` : officeName}{race.special ? " · special election" : ""}</p>
 			<h1>{race.kind === "control" ? `Who will control the ${officeName} after ${race.cycle}?` : race.kind === "house" ? `${race.label} House race odds` : `${race.state} ${officeName.toLowerCase() === "governor" ? "governor" : "Senate"} race odds`}</h1>
 			<p class="lede">{lede}</p>
-			<FollowButton id={race.id} name={officeTitle(race)} D={c.D} />
+			<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><FollowButton id={race.id} name={officeTitle(race)} D={c.D} />{race.kind !== "control" && <ReportButton id={race.id} />}</div>
 			<p class="updated"><span style="color:#e0b44f;font-weight:600">{fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))} traded</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time> · prices refresh every 10 minutes</p>
 		</header>
 

@@ -6,6 +6,8 @@
 
 export type PlanId = "anon" | "free" | "pro" | "team" | "enterprise";
 export type Action = "ask" | "deep";
+/** Everything that costs credits: analyst questions, plus briefings and PDF reports. */
+export type Metered = Action | "briefing" | "report";
 
 export interface Plan {
 	id: PlanId;
@@ -37,8 +39,9 @@ export const MODEL_PRICE: Record<string, { in: number; out: number }> = {
 };
 export const STANDARD_MODEL = "@cf/zai-org/glm-5.3";
 
-/** Credits charged per action (paid plans). An "ask" is one question; "deep" runs more rounds, more sources and a reranker. */
-export const CREDITS: Record<Action, number> = { ask: 1, deep: 5 };
+/** Credits charged per action (paid plans). An "ask" is one question; "deep" runs more rounds, more sources and a
+ *  reranker; a briefing is one morning email on followed races; a report is a Deep analysis rendered as a PDF. */
+export const CREDITS: Record<Metered, number> = { ask: 1, deep: 5, briefing: 2, report: 6 };
 
 const std = { ask: STANDARD_MODEL, deep: STANDARD_MODEL };
 

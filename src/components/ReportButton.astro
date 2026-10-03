@@ -1,0 +1,58 @@
+---
+/** "Download PDF report" on race pages: a Pro feature. Plan is checked in the browser, so the race page stays cacheable. */
+interface Props { id: string }
+const { id } = Astro.props;
+---
+<div class="rpt" data-report={id}>
+	<button type="button" class="rpt-btn" data-rpt-go hidden>Download PDF report</button>
+	<a class="rpt-btn rpt-ghost" href="/pro/" data-rpt-pro hidden>PDF report · Pro</a>
+	<span class="rpt-status" data-rpt-status aria-live="polite"></span>
+</div>
+<script>
+	for (const box of document.querySelectorAll<HTMLElement>("[data-report]")) {
+		const go = box.querySelector<HTMLButtonElement>("[data-rpt-go]")!;
+		const status = box.querySelector<HTMLElement>("[data-rpt-status]")!;
+		fetch("/api/v1/ai/chat").then((r) => r.json() as Promise<{ deep?: boolean; unit?: string }>).then((j) => {
+			if (j.deep) { go.hidden = false; go.title = "Uses 6 credits: a Deep analysis with charts, as a PDF"; }
+			else box.querySelector<HTMLElement>("[data-rpt-pro]")!.hidden = false;
+		}).catch(() => {});
+		go.addEventListener("click", async () => {
+			go.disabled = true;
+			status.textContent = "Starting the analysis… this takes two or three minutes.";
+			try {
+				const r = await fetch("/api/pro/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ race_id: box.dataset.report }) });
+				if (!r.ok || !r.body) throw new Error(r.status === 429 ? "You're out of credits this month." : "The report couldn't start. Please try again.");
+				const reader = r.body.getReader();
+				const dec = new TextDecoder();
+				let buf = "";
+				for (;;) {
+					const { value, done } = await reader.read();
+					if (done) break;
+					buf += dec.decode(value, { stream: true });
+					let i;
+					while ((i = buf.indexOf("\n\n")) >= 0) {
+						const ev = JSON.parse(buf.slice(0, i).replace(/^data: /, ""));
+						buf = buf.slice(i + 2);
+						if (ev.type === "status") status.textContent = `${ev.text}…`;
+						if (ev.type === "error") throw new Error(ev.text);
+						if (ev.type === "done") { status.innerHTML = `Ready: <a href="${ev.url}" target="_blank" rel="noopener">open your report</a>`; window.open(ev.url, "_blank"); }
+					}
+				}
+			} catch (e) {
+				status.textContent = (e as Error).message;
+			} finally {
+				go.disabled = false;
+			}
+		});
+	}
+</script>
+<style>
+	.rpt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+	.rpt-btn { all: unset; cursor: pointer; display: inline-flex; padding: 8px 14px; border-radius: 999px; background: #a3262a; color: #fff; font-weight: 600; font-size: 14px; }
+	.rpt-btn[hidden] { display: none; }
+	.rpt-btn:disabled { opacity: .55; cursor: default; }
+	.rpt-ghost { background: none; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
+	.rpt-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+	.rpt-status { font-size: 13px; color: var(--color-text-secondary); }
+	.rpt-status :global(a) { color: #8fb4ff; }
+</style>

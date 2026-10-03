@@ -1,0 +1,100 @@
+---
+/** AI cost and margin dashboard for site admins (EmDash login, admin role): spend by plan and feature, every paying account's margin, and pending Pro requests. */
+import { env } from "cloudflare:workers";
+import Base from "../../layouts/Base.astro";
+import { PLANS, type PlanId } from "../../lib/plans";
+import "../../styles/data.css";
+
+const role = (Astro.locals as any).user?.role ?? 0;
+if (role < 50) return Astro.redirect("/_emdash/admin", 302);
+Astro.response.headers.set("cache-control", "no-store");
+
+const DAY = 86400;
+const now = Math.floor(Date.now() / 1000);
+const since = now - 30 * DAY;
+const db = env.ACCOUNTS;
+const [events, subs, requests, analogs] = await Promise.all([
+	db.prepare("SELECT subject, action, COUNT(*) AS n, SUM(credits) AS credits, SUM(cost_usd) AS cost, SUM(input_tokens) AS tin, SUM(output_tokens) AS tout, SUM(ok = 1) AS ok FROM usage_events WHERE ts >= ? GROUP BY subject, action").bind(since).all<any>(),
+	db.prepare("SELECT s.subject, s.plan, s.status, s.period_start, s.period_end, s.note, u.email FROM subscriptions s LEFT JOIN users u ON s.subject = 'u:' || u.id").all<any>(),
+	db.prepare("SELECT ts, email, plan, org, note FROM pro_requests WHERE handled = 0 ORDER BY ts DESC LIMIT 50").all<any>(),
+	(env.ANALOGS as any).describe().catch(() => null),
+]);
+const subOf = new Map((subs.results ?? []).filter((s) => s.status === "active" || s.status === "trialing").map((s) => [s.subject, s]));
+const planOf = (subject: string): PlanId => (subject.startsWith("a:") ? "anon" : (subOf.get(subject)?.plan as PlanId) ?? "free");
+
+// spend by plan and action
+const byPlan = new Map<string, { n: number; credits: number; cost: number; ok: number; tin: number; tout: number }>();
+const bySubject = new Map<string, { credits: number; cost: number; n: number }>();
+for (const e of events.results ?? []) {
+	const k = `${planOf(e.subject)}|${e.action}`;
+	const x = byPlan.get(k) ?? { n: 0, credits: 0, cost: 0, ok: 0, tin: 0, tout: 0 };
+	x.n += e.n; x.credits += e.credits ?? 0; x.cost += e.cost ?? 0; x.ok += e.ok ?? 0; x.tin += e.tin ?? 0; x.tout += e.tout ?? 0;
+	byPlan.set(k, x);
+	const s = bySubject.get(e.subject) ?? { credits: 0, cost: 0, n: 0 };
+	s.credits += e.credits ?? 0; s.cost += e.cost ?? 0; s.n += e.n;
+	bySubject.set(e.subject, s);
+}
+const rows = [...byPlan].map(([k, v]) => ({ plan: k.split("|")[0], action: k.split("|")[1], ...v })).sort((a, b) => b.cost - a.cost);
+const totalCost = rows.reduce((a, r) => a + r.cost, 0);
+const paying = [...subOf.values()].map((s) => {
+	const p = PLANS[s.plan as PlanId];
+	const u = bySubject.get(s.subject) ?? { credits: 0, cost: 0, n: 0 };
+	const price = p?.price ?? 0;
+	return { ...s, name: p?.name ?? s.plan, price, used: u.credits, of: p?.credits ?? 0, cost: u.cost, margin: price ? (price - u.cost) / price : null };
+}).sort((a, b) => b.cost - a.cost);
+const mrr = paying.reduce((a, s) => a + (s.price ?? 0), 0);
+const $ = (x: number, d = 2) => `$${x.toFixed(d)}`;
+const day = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10);
+---
+<Base title="AI costs | Ops" description="AI cost and margin dashboard" canonical={`${Astro.url.origin}/ops/ai`} robots="noindex, nofollow">
+	<div class="dp ops">
+		<header class="dp-head">
+			<p class="eyebrow">Ops · last 30 days</p>
+			<h1>AI spend and margins</h1>
+			<p class="lede">{$(totalCost)} of model time across {rows.reduce((a, r) => a + r.n, 0).toLocaleString()} AI actions. {paying.length} paying accounts, {$(mrr, 0)} a month in plan prices. Gateway logs and caching: Cloudflare dashboard → AI → AI Gateway → "default".</p>
+		</header>
+
+		<section class="panel">
+			<h2>By plan and feature</h2>
+			<div class="tbl-wrap"><table class="tbl">
+				<thead><tr><th>Plan</th><th>Feature</th><th class="r">Actions</th><th class="r">Succeeded</th><th class="r">Credits</th><th class="r">Tokens in / out</th><th class="r">Model cost</th><th class="r">Per action</th></tr></thead>
+				<tbody>{rows.map((r) => <tr><td>{PLANS[r.plan as PlanId]?.name ?? r.plan}</td><td>{r.action}</td><td class="r num">{r.n}</td><td class="r num">{r.n ? Math.round((r.ok / r.n) * 100) : 0}%</td><td class="r num">{r.credits}</td><td class="r num">{Math.round(r.tin / 1000)}k / {Math.round(r.tout / 1000)}k</td><td class="r num">{$(r.cost)}</td><td class="r num">{$(r.n ? r.cost / r.n : 0, 4)}</td></tr>)}</tbody>
+			</table></div>
+		</section>
+
+		<section class="panel">
+			<h2>Paying accounts</h2>
+			{paying.length ? <div class="tbl-wrap"><table class="tbl">
+				<thead><tr><th>Account</th><th>Plan</th><th class="r">Credits used</th><th class="r">Model cost (30d)</th><th class="r">Price</th><th class="r">Margin</th><th>Note</th></tr></thead>
+				<tbody>{paying.map((s) => <tr><td>{s.email ?? s.subject}</td><td>{s.name}</td><td class="r num">{s.used} / {s.of}</td><td class="r num">{$(s.cost)}</td><td class="r num">{s.price ? $(s.price, 0) : "custom"}</td><td class="r num">{s.margin == null ? "—" : `${Math.round(s.margin * 100)}%`}</td><td>{s.note ?? ""}</td></tr>)}</tbody>
+			</table></div> : <p class="sec-note">No paying accounts yet.</p>}
+		</section>
+
+		<section class="panel">
+			<h2>Pro requests</h2>
+			{(requests.results ?? []).length ? <div class="tbl-wrap"><table class="tbl">
+				<thead><tr><th>Date</th><th>Email</th><th>Plan</th><th>Organization</th><th>Note</th></tr></thead>
+				<tbody>{(requests.results ?? []).map((q) => <tr><td>{day(q.ts)}</td><td>{q.email}</td><td>{q.plan}</td><td>{q.org ?? ""}</td><td>{q.note ?? ""}</td></tr>)}</tbody>
+			</table></div> : <p class="sec-note">No pending requests.</p>}
+		</section>
+
+		<section class="panel">
+			<h2>Race analogs index</h2>
+			<p class="sec-note">{analogs ? `${(analogs.vectorCount ?? analogs.vectorsCount ?? 0).toLocaleString()} odds windows indexed.` : "Index unavailable."} Rebuilt every Monday; rebuild now after big data changes.</p>
+			<button type="button" class="ops-btn" data-rebuild>Rebuild analogs now</button> <span class="sec-note" data-msg></span>
+		</section>
+	</div>
+</Base>
+<script>
+	document.querySelector("[data-rebuild]")?.addEventListener("click", async (e) => {
+		const b = e.currentTarget as HTMLButtonElement, msg = document.querySelector("[data-msg]")!;
+		b.disabled = true; msg.textContent = "Rebuilding…";
+		const r = await fetch("/api/ops/analogs", { method: "POST" }).catch(() => null);
+		msg.textContent = r?.ok ? JSON.stringify(await r.json()) : "Failed.";
+		b.disabled = false;
+	});
+</script>
+<style>
+	.ops { max-width: 1120px; }
+	.ops-btn { all: unset; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--color-border); font-weight: 600; }
+</style>

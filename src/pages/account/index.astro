@@ -3,6 +3,9 @@
 import Base from "../../layouts/Base.astro";
 import { account, safeNext } from "../../lib/auth";
 import { listPasskeys } from "../../lib/passkeys";
+import { prefsFor, watchlistFor } from "../../lib/briefing";
+import { mdToHtml } from "../../lib/md";
+import { env } from "cloudflare:workers";
 import { SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
 
@@ -10,6 +13,11 @@ Astro.response.headers.set("cache-control", "no-store");
 const a = await account(Astro.cookies, Astro.request);
 const user = a.user;
 const keys = user ? await listPasskeys(user.id) : [];
+const paid = !!a.plan.proTools;
+const watch = user ? await watchlistFor(user.id) : [];
+const prefs = user ? await prefsFor(user.id) : null;
+const briefs = user && paid ? ((await env.ACCOUNTS.prepare("SELECT day, races, body FROM briefings WHERE user_id = ? AND body IS NOT NULL ORDER BY day DESC LIMIT 7").bind(user.id).all<{ day: number; races: number; body: string }>()).results ?? []) : [];
+const reports = user && paid ? ((await env.ACCOUNTS.prepare("SELECT id, race_id, ts FROM reports WHERE user_id = ? ORDER BY ts DESC LIMIT 10").bind(user.id).all<{ id: string; race_id: string; ts: number }>()).results ?? []) : [];
 const next = safeNext(Astro.url.searchParams.get("next"));
 const error = Astro.url.searchParams.get("error");
 const day = (ts: number | null) => (ts ? new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
@@ -49,6 +57,37 @@ const unit = a.plan.credits ? "credits" : "questions";
 					</dl>
 					<p class="acct-links"><a href="/ai/">Ask the analyst</a><button type="button" class="acct-link" data-logout>Sign out</button></p>
 				</section>
+				<section class="panel acct-panel">
+					<h2>Your races</h2>
+					{watch.length
+						? <ul class="acct-keys">{watch.map((w) => <li><span>{w.name ?? w.race_id}</span></li>)}</ul>
+						: <p class="acct-quiet">You aren't following any races yet. Tap "Follow this race" on any race page.</p>}
+					{paid && prefs && (
+						<form class="acct-prefs" data-prefs>
+							<label class="acct-check"><input type="checkbox" name="briefing" checked={!!prefs.briefing} /> Morning briefing on these races, 7am Eastern ({`2 credits`} each)</label>
+							<label class="acct-check"><input type="checkbox" name="alerts" checked={!!prefs.alerts} /> Alerts when one moves or a big bet lands (free)</label>
+							<div class="acct-row">
+								<label>Move of <input type="number" name="move_pts" min="1" max="50" step="1" value={prefs.move_pts} /> points in 24 hours</label>
+								<label>Bets of $<input type="number" name="whale_usd" min="1000" step="1000" value={prefs.whale_usd} /> or more</label>
+							</div>
+							<button type="submit" class="acct-ghost">Save</button>
+							<p class="acct-msg" data-msg aria-live="polite"></p>
+						</form>
+					)}
+					{!paid && <p class="acct-quiet"><a href="/pro/">Pro</a> adds a morning briefing and alerts on the races you follow.</p>}
+				</section>
+				{briefs.length > 0 && (
+					<section class="panel acct-panel">
+						<h2>Recent briefings</h2>
+						{briefs.map((b, i) => <details open={i === 0}><summary>{new Date(b.day * 86400000).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} · {b.races} races</summary><div class="acct-brief" set:html={mdToHtml(b.body, Astro.url.origin)} /></details>)}
+					</section>
+				)}
+				{reports.length > 0 && (
+					<section class="panel acct-panel">
+						<h2>Your reports</h2>
+						<ul class="acct-keys">{reports.map((r) => <li><a href={`/api/pro/report/file?id=${r.id}`}>{r.race_id}</a><span class="acct-quiet">{day(r.ts)}</span></li>)}</ul>
+					</section>
+				)}
 				<section class="panel acct-panel">
 					<h2>Passkeys</h2>
 					<p class="acct-quiet">Sign in with Face ID, Touch ID, Windows Hello or a security key instead of waiting for an email.</p>
@@ -126,6 +165,13 @@ const unit = a.plan.credits ? "credits" : "questions";
 		await post("/api/auth/passkey/delete", { id: b.dataset.deleteKey });
 		location.reload();
 	}));
+	document.querySelector<HTMLFormElement>("[data-prefs]")?.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const f = e.currentTarget as HTMLFormElement;
+		const v = (n: string) => f.elements.namedItem(n) as HTMLInputElement;
+		const r = await post("/api/alerts", { briefing: v("briefing").checked, alerts: v("alerts").checked, move_pts: Number(v("move_pts").value), whale_usd: Number(v("whale_usd").value) }).catch(() => null);
+		say(f.querySelector("[data-msg]"), r?.ok ? "Saved." : "That didn't save. Please try again.", !r?.ok);
+	});
 	document.querySelector("[data-logout]")?.addEventListener("click", async () => { await post("/api/auth/logout"); location.href = "/"; });
 </script>
 
@@ -157,4 +203,10 @@ const unit = a.plan.credits ? "credits" : "questions";
 	.acct-keys { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 	.acct-keys li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 	.acct-keys li span:first-child { font-weight: 600; }
+	.acct-prefs { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--color-border); padding-top: 12px; }
+	.acct-check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+	.acct-prefs .acct-row label { font-size: 14px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 6px; }
+	.acct-prefs input[type="number"] { width: 90px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: inherit; }
+	.acct-brief { font-size: 14px; line-height: 1.55; } .acct-brief :global(h3) { font-size: 15px; margin: 12px 0 4px; }
+	details summary { cursor: pointer; font-weight: 600; }
 </style>

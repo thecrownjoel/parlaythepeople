@@ -5,7 +5,8 @@
  */
 import type { AstroCookies } from "astro";
 import { env } from "cloudflare:workers";
-import { PLANS, CREDITS, type Plan, type PlanId, type Action } from "./plans";
+import { sendMail } from "./mail";
+import { PLANS, CREDITS, type Plan, type PlanId, type Metered } from "./plans";
 
 const DAY = 86400;
 const SESSION_DAYS = 30;
@@ -75,11 +76,9 @@ export async function userByEmail(email: string, create = false): Promise<User |
 }
 
 export async function sendLoginEmail(to: string, link: string) {
-	const mail = (env as unknown as { EMAIL?: { send(m: object): Promise<unknown> } }).EMAIL;
-	if (!mail) throw new Error("email_not_configured");
-	await mail.send({
+	await sendMail({
 		to,
-		from: { email: "signin@parlaythepeople.com", name: "Parlay the People" },
+		from: "signin@parlaythepeople.com",
 		subject: "Your sign-in link for Parlay the People",
 		text: `Sign in to Parlay the People:\n\n${link}\n\nThe link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.`,
 		html: `<p>Sign in to Parlay the People:</p><p><a href="${link}" style="display:inline-block;padding:10px 16px;background:#a3262a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Sign in</a></p><p style="color:#666;font-size:13px">The link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.</p>`,
@@ -126,12 +125,23 @@ function period(sub: Sub) {
 
 export async function account(cookies: AstroCookies, request: Request): Promise<Account> {
 	const user = await currentUser(cookies);
-	const today = Math.floor(now() / DAY) * DAY;
 	if (!user) {
+		const today = Math.floor(now() / DAY) * DAY;
 		const subject = `a:${await anonId(request)}`;
 		const used = await usedSince(subject, today);
 		return { user: null, plan: PLANS.anon, subject, left: Math.max(0, PLANS.anon.daily! - used.n), resets: today + DAY };
 	}
+	return accountOf(user);
+}
+
+/** A signed-in user's plan and what's left, without a request (briefings and alerts run on a schedule). */
+export async function accountForUser(userId: string): Promise<Account | null> {
+	const user = await db().prepare("SELECT id, email, org_id FROM users WHERE id = ?").bind(userId).first<User>();
+	return user ? accountOf(user) : null;
+}
+
+async function accountOf(user: User): Promise<Account> {
+	const today = Math.floor(now() / DAY) * DAY;
 	const subject = user.org_id ? `o:${user.org_id}` : `u:${user.id}`;
 	const sub = await db().prepare("SELECT plan, status, period_start, period_end, extra_credits FROM subscriptions WHERE subject = ?").bind(subject).first<Sub>();
 	const plan = sub && (sub.status === "active" || sub.status === "trialing") && PLANS[sub.plan] ? PLANS[sub.plan] : PLANS.free;
@@ -150,10 +160,10 @@ async function usedSince(subject: string, since: number) {
 }
 
 /** What one action costs this account: questions on daily plans, credits on paid plans. */
-export const price = (a: Account, action: Action) => (a.plan.credits ? CREDITS[action] : 1);
+export const price = (a: Account, action: Metered) => (a.plan.credits ? CREDITS[action] : 1);
 
 /** Record an action before running it, so a burst of parallel requests can't overspend. Returns the event's rowid. */
-export async function charge(a: Account, action: Action, model: string) {
+export async function charge(a: Account, action: Metered, model: string) {
 	const r = await db().prepare("INSERT INTO usage_events (ts, subject, user_id, action, credits, model, ok) VALUES (?, ?, ?, ?, ?, ?, NULL)")
 		.bind(now(), a.subject, a.user?.id ?? null, action, price(a, action), model).run();
 	return r.meta.last_row_id;

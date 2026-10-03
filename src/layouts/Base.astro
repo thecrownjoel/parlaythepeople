@@ -871,6 +871,24 @@ const isLoggedIn = !!Astro.locals.user;
 			});
 		</script>
 		<ExchangeBrands />
+		<script>
+			// Followed races: once per browser session, merge this browser's list with the signed-in account's, both ways.
+			(async () => {
+				try {
+					if (sessionStorage.getItem("ptp:synced")) return;
+					sessionStorage.setItem("ptp:synced", "1");
+					const r = await fetch("/api/watchlist");
+					const j = (await r.json()) as { signed_in: boolean; races: { race_id: string; name: string | null }[] };
+					if (!j.signed_in) return;
+					const local: Record<string, { name: string; D?: number; ts: number }> = JSON.parse(localStorage.getItem("ptp:follow") || "{}");
+					const server = new Set(j.races.map((x) => x.race_id));
+					for (const x of j.races) if (!local[x.race_id]) local[x.race_id] = { name: x.name ?? x.race_id, ts: Date.now() };
+					localStorage.setItem("ptp:follow", JSON.stringify(local));
+					const missing = Object.entries(local).filter(([id]) => !server.has(id)).map(([race_id, v]) => ({ race_id, name: v.name }));
+					if (missing.length) await fetch("/api/watchlist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true, races: missing }) });
+				} catch { /* storage blocked or offline: following stays per browser */ }
+			})();
+		</script>
 		<EmDashBodyEnd page={pageCtx} />
 	</body>
 </html>

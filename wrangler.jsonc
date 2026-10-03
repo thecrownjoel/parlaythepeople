@@ -31,8 +31,16 @@
 			"database_id": "22b8e7cc-538b-4d44-9b95-11920f469458",
 		},
 	],
-	// Cloudflare Email Service: sends the one-time sign-in links (from signin@parlaythepeople.com)
+	// Cloudflare Email Service: sign-in links, daily briefings and alerts (from @parlaythepeople.com)
 	"send_email": [{ "name": "EMAIL" }],
+	// Race analogs (Pro): 32-day odds paths of every race (src/lib/analogs.ts)
+	"vectorize": [{ "binding": "ANALOGS", "index_name": "race-analogs" }],
+	// Morning briefings: one durable workflow run per Pro reader per day (src/lib/briefing.ts)
+	"workflows": [{ "name": "parlay-briefing", "binding": "BRIEFING", "class_name": "BriefingWorkflow" }],
+	"vars": {
+		// AI Gateway for every Workers AI call ("default" is created by Cloudflare on first use)
+		"AI_GATEWAY_ID": "default",
+	},
 	"ai": { "binding": "AI" },
 	// Browser Rendering: draws the per-race share images (/og/race/<id>.png)
 	"browser": { "binding": "BROWSER" },

@@ -11,6 +11,8 @@ import { parlayD, MODEL } from "./model";
 import { getSeries, RANGES } from "./chart";
 import { merged } from "./home";
 import { nameKey } from "./names";
+import { aiRun } from "./ai";
+import { findAnalogs } from "./analogs";
 
 const DAY = 86400;
 const r3 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 1000) / 1000);
@@ -98,6 +100,11 @@ export const PRO_TOOLS = [
 		input_schema: { type: "object", properties: { cycle: { type: "integer" }, min_gap: { type: "number", default: 0.03 } } },
 	},
 	{
+		name: "race_analogs",
+		description: "Pro. Other races whose Democratic odds followed the closest path over the last 32 days, and what their odds did over the following 32 days: how many kept moving the same way, the median next move, and how often the favorite flipped. Use for 'is this move likely to continue?' questions. A base rate, not a forecast.",
+		input_schema: { type: "object", properties: { race_id: { type: "string" } }, required: ["race_id"] },
+	},
+	{
 		name: "deep_research",
 		description: "Pro. A deeper search of the research library than search_research: more candidate passages, reranked for relevance to the exact question, with longer excerpts. Use for 'why' questions and background across many races or days.",
 		input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
@@ -166,6 +173,10 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 			}).filter((x) => (x.gap ?? 0) >= minGap).sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0)).slice(0, 15);
 			return { cycle: data.meta.cycle, min_gap: minGap, races: rows, note: "Odds are each exchange's two-party Democratic share. Thin markets (little money traded) often show the widest gaps." };
 		}
+		case "race_analogs": {
+			const races = await allRaces();
+			return findAnalogs(String(input.race_id ?? ""), new Map(races.map(({ r }) => [r.id, `${officeTitle(r)} ${r.cycle}`])));
+		}
 		case "deep_research": {
 			const query = String(input.query ?? "");
 			try {
@@ -175,7 +186,7 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 					text: (d.content ?? []).map((c: any) => c.text).join("\n").slice(0, 3000),
 				}));
 				if (!docs.length) return { results: [] };
-				const ranked: any = await (env.AI as any).run("@cf/baai/bge-reranker-base", { query, contexts: docs.map((d: any) => ({ text: d.text.slice(0, 1500) })), top_k: 10 });
+				const ranked: any = await aiRun("@cf/baai/bge-reranker-base", { query, contexts: docs.map((d: any) => ({ text: d.text.slice(0, 1500) })), top_k: 10 }, { feature: "rerank" });
 				const order: { id: number; score: number }[] = ranked?.response ?? [];
 				return { results: (order.length ? order : docs.map((_: unknown, i: number) => ({ id: i, score: 0 }))).slice(0, 10).map((o: { id: number; score: number }) => ({ ...docs.at(o.id), relevance: r3(o.score) })) };
 			} catch (e) {
