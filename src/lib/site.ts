@@ -60,3 +60,21 @@ export function dataset(origin: string, o: { name: string; description: string; 
 export function graph(...nodes: object[]) {
 	return { "@context": "https://schema.org", "@graph": nodes };
 }
+
+export const authorPath = (slug: string) => `/authors/${slug}/`;
+
+/** schema.org Person for an author, referenced by @id from their articles. */
+export function person(origin: string, a: { slug: string; name: string; bio?: string | null; image?: string | null; sameAs?: (string | null | undefined)[] }) {
+	const url = `${origin}${authorPath(a.slug)}`;
+	const same = (a.sameAs ?? []).filter((s): s is string => !!s && !s.startsWith(origin));
+	return {
+		"@type": "Person",
+		"@id": `${url}#person`,
+		name: a.name,
+		url,
+		...(a.bio ? { description: a.bio.split(/\n\s*\n/)[0].trim() } : {}),
+		...(a.image ? { image: a.image.startsWith("http") ? a.image : `${origin}${a.image}` } : {}),
+		...(same.length ? { sameAs: same } : {}),
+		worksFor: { "@id": `${origin}/#org` },
+	};
+}

@@ -1,5 +1,7 @@
 ---
 import { mediaUrls } from "../../lib/media";
+import JsonLd from "../../components/JsonLd.astro";
+import { organization, person, graph, breadcrumbs, authorPath, SITE_NAME } from "../../lib/site";
 import {
 	getEmDashEntry,
 	getEmDashCollection,
@@ -97,6 +99,29 @@ const otherPostsWithTags = otherPosts.map((p) => ({
 	bylines: p.data.bylines ?? [],
 }));
 
+// Article structured data, crediting each author's bio page (E-E-A-T for search and answer engines).
+const origin = Astro.url.origin;
+const people = bylines.map((c) => person(origin, { slug: c.byline.slug, name: c.byline.displayName, bio: c.byline.bio, image: c.byline.avatarMediaId ? avatarUrls.get(c.byline.avatarMediaId) : null, sameAs: [c.byline.websiteUrl] }));
+const articleLd = graph(
+	organization(origin),
+	{
+		"@type": "NewsArticle",
+		"@id": `${origin}/posts/${slug}#article`,
+		headline: post.data.title,
+		...(post.data.excerpt ? { description: post.data.excerpt } : {}),
+		url: `${origin}/posts/${slug}`,
+		mainEntityOfPage: `${origin}/posts/${slug}`,
+		...(seo.ogImage ? { image: [seo.ogImage] } : {}),
+		...(post.data.publishedAt ? { datePublished: post.data.publishedAt.toISOString() } : {}),
+		dateModified: post.data.updatedAt.toISOString(),
+		author: people.length ? people.map((p) => ({ "@id": p["@id"] })) : [{ "@id": `${origin}/#org` }],
+		publisher: { "@id": `${origin}/#org` },
+		isAccessibleForFree: true,
+	},
+	...people,
+	breadcrumbs(origin, [["Analysis", "/posts/"], [post.data.title, `/posts/${slug}`]]),
+);
+
 const publishDate =
 	post.data.publishedAt?.toLocaleDateString("en-US", {
 		year: "numeric",
@@ -116,7 +141,9 @@ const publishDate =
 	publishedTime={post.data.publishedAt?.toISOString() ?? null}
 	modifiedTime={post.data.updatedAt.toISOString()}
 	content={{ collection: "posts", id: post.data.id, slug }}
+	author={bylines.map((c) => c.byline.displayName).join(", ") || SITE_NAME}
 >
+	<JsonLd slot="head" data={articleLd} />
 	<article class="article">
 		{/* Hero: Full-width featured image */}
 		{
@@ -142,16 +169,18 @@ const publishDate =
 									{bylines.map((credit) => (
 										<div class="byline">
 											{credit.byline.avatarMediaId && avatarUrls.get(credit.byline.avatarMediaId) && (
-												<img
-													src={avatarUrls.get(credit.byline.avatarMediaId)}
-													alt={credit.byline.displayName}
-													class="byline-avatar"
-												/>
+												<a href={authorPath(credit.byline.slug)} tabindex="-1" aria-hidden="true">
+													<img
+														src={avatarUrls.get(credit.byline.avatarMediaId)}
+														alt=""
+														class="byline-avatar"
+													/>
+												</a>
 											)}
 											<div class="byline-info">
-												<span class="byline-name">
+												<a class="byline-name" href={authorPath(credit.byline.slug)} rel="author">
 													{credit.byline.displayName}
-												</span>
+												</a>
 												{credit.roleLabel && (
 													<span class="byline-role">{credit.roleLabel}</span>
 												)}
@@ -202,7 +231,7 @@ const publishDate =
 										{bylines.map((credit, i) => (
 											<>
 												{i > 0 && ", "}
-												{credit.byline.displayName}
+												<a href={authorPath(credit.byline.slug)} rel="author">{credit.byline.displayName}</a>
 											</>
 										))}
 									</span>
@@ -468,6 +497,8 @@ const publishDate =
 		color: var(--color-text);
 	}
 
+	a.byline-name, .article-meta-byline a { color: inherit; text-decoration: none; }
+	a.byline-name:hover, .article-meta-byline a:hover { text-decoration: underline; }
 	.byline-role {
 		font-size: var(--font-size-xs);
 		color: var(--color-muted);

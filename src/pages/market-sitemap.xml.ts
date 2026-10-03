@@ -1,11 +1,17 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 import { getIndex, getCycle } from "../lib/markets";
+import { authorPath } from "../lib/site";
 
-/** Sitemap for the data pages (cycles, races, presidency). EmDash's /sitemap.xml covers posts and pages. */
+/** Sitemap for the data pages (cycles, races, presidency) and author pages. EmDash's /sitemap.xml covers posts and pages. */
 export const GET: APIRoute = async ({ url }) => {
 	const o = url.origin;
 	const index = await getIndex();
-	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""]];
+	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""], [`${o}/posts/`, ""]];
+	try {
+		const { results } = await env.DB.prepare("SELECT slug, MAX(updated_at) AS mod FROM _emdash_bylines GROUP BY slug").all<{ slug: string; mod: string }>();
+		for (const b of results ?? []) urls.push([`${o}${authorPath(b.slug)}`, b.mod ?? ""]);
+	} catch { /* bylines table unavailable: skip author pages */ }
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
 		if (!data) continue;

@@ -16,7 +16,7 @@ import { nameKey } from "../lib/names";
 import { mediaUrls } from "../lib/media";
 import { getSocial, pulseIndex, racePulse, compact } from "../lib/social";
 import LunarCrushCredit from "../components/LunarCrushCredit.astro";
-import { organization, graph, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
+import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
 
 const origin = Astro.url.origin;
@@ -140,6 +140,7 @@ const lineup = posts.entries.slice(0, 10).map((p) => {
 	return {
 		href: `/posts/${p.id}`, title: p.data.title, date: p.data.publishedAt as Date | null | undefined,
 		author: by?.displayName ?? SITE_NAME,
+		authorHref: by?.slug ? authorPath(by.slug) : null,
 		avatar: (by?.avatarMediaId && avatarById.get(by.avatarMediaId)) || null,
 		initials: (by?.displayName ?? SITE_NAME).split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase(),
 	};
@@ -377,8 +378,13 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 
 	/* analysis lineup */
 	.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
-	.lineup a { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--color-border); text-decoration: none; color: inherit; transition: background .15s, padding .2s; }
-	.lineup a:hover { background: var(--bt-hover); padding-left: 10px; }
+	.lu-row { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--color-border); transition: background .15s, padding .2s; }
+	.lu-row:hover { background: var(--bt-hover); padding-left: 10px; }
+	/* the title link covers the row; the author link sits above it */
+	.lineup a { color: inherit; text-decoration: none; }
+	.lu-title::after { content: ""; position: absolute; inset: 0; }
+	a.lu-author { position: relative; z-index: 1; }
+	a.lu-author:hover { text-decoration: underline; color: var(--color-text); }
 	.lu-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-border); }
 	.lu-initials { display: flex; align-items: center; justify-content: center; background: #11151c; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 17px; }
 	.lu-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -386,8 +392,8 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	.lu-meta { font-size: 13px; color: var(--color-muted); }
 	.lu-author { color: var(--color-text-secondary); font-weight: 600; }
 	.lu-arrow { font-size: 20px; color: var(--color-muted); transition: transform .2s; }
-	.lineup a:hover .lu-arrow { transform: translateX(4px); color: var(--color-text); }
-	@media (max-width: 520px) { .lineup a { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; } .lu-avatar { width: 40px; height: 40px; } .lu-arrow { display: none; } }
+	.lu-row:hover .lu-arrow { transform: translateX(4px); color: var(--color-text); }
+	@media (max-width: 520px) { .lu-row { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; } .lu-avatar { width: 40px; height: 40px; } .lu-arrow { display: none; } }
 
 	.lb-bar { display: block; height: 4px; margin-top: 5px; background: var(--color-border); border-radius: 2px; overflow: hidden; max-width: 260px; }
 	.lb-bar i { display: block; height: 100%; border-radius: 2px; }
@@ -714,14 +720,14 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				<ol class="lineup">
 					{lineup.map((p) => (
 						<li class="ga" data-ga="line">
-							<a href={p.href}>
+							<div class="lu-row">
 								{p.avatar ? <img class="lu-avatar" src={p.avatar} alt="" width="52" height="52" loading="lazy" /> : <span class="lu-avatar lu-initials" aria-hidden="true">{p.initials}</span>}
 								<span class="lu-text">
-									<strong class="lu-title">{p.title}</strong>
-									<span class="lu-meta"><span class="lu-author">{p.author}</span>{p.date && <> · <time datetime={p.date.toISOString()}>{postDate(p.date)}</time></>}</span>
+									<a class="lu-title" href={p.href}>{p.title}</a>
+									<span class="lu-meta">{p.authorHref ? <a class="lu-author" href={p.authorHref} rel="author">{p.author}</a> : <span class="lu-author">{p.author}</span>}{p.date && <> · <time datetime={p.date.toISOString()}>{postDate(p.date)}</time></>}</span>
 								</span>
 								<span class="lu-arrow" aria-hidden="true">→</span>
-							</a>
+							</div>
 						</li>
 					))}
 				</ol>

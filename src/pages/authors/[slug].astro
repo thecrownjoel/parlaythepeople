@@ -1,0 +1,108 @@
+---
+/** Author bio page: photo, bio and every article they've written, with Person structured data. */
+import { getBylineBySlug, getEmDashCollection, decodeSlug } from "emdash";
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { organization, breadcrumbs, person, graph, authorPath, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const slug = decodeSlug(Astro.params.slug);
+const author = slug ? await getBylineBySlug(slug) : null;
+if (!author) return Astro.redirect("/404");
+
+const origin = Astro.url.origin;
+const avatar = author.avatarStorageKey ? `/_emdash/api/media/file/${author.avatarStorageKey}` : null;
+const bio = (author.bio ?? "").trim();
+const paras = bio ? bio.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
+const summary = paras[0] ?? `Articles by ${author.displayName} on ${SITE_NAME}.`;
+const initials = author.displayName.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+const website = author.websiteUrl && !author.websiteUrl.startsWith(origin) && !author.websiteUrl.includes("parlaythepeople.com") ? author.websiteUrl : null;
+
+// Every published post crediting this author, in any credit position.
+const { entries } = await getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 200 });
+const posts = entries.filter((p) => (p.data.bylines ?? []).some((c) => c.byline.id === author.id));
+const fmt = (d?: Date | null) => d?.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) ?? "";
+
+const url = `${origin}${authorPath(author.slug)}`;
+const p = person(origin, { slug: author.slug, name: author.displayName, bio, image: avatar, sameAs: [author.websiteUrl] });
+const ld = graph(
+	organization(origin),
+	{
+		"@type": "ProfilePage",
+		url,
+		name: `${author.displayName} | ${SITE_NAME}`,
+		mainEntity: { "@id": p["@id"] },
+		...(posts[0]?.data.publishedAt ? { dateModified: (posts[0].data.updatedAt ?? posts[0].data.publishedAt).toISOString() } : {}),
+		hasPart: posts.slice(0, 20).map((x) => ({ "@type": "Article", headline: x.data.title, url: `${origin}/posts/${x.id}`, ...(x.data.publishedAt ? { datePublished: x.data.publishedAt.toISOString() } : {}) })),
+	},
+	p,
+	breadcrumbs(origin, [["Analysis", "/posts/"], [author.displayName, authorPath(author.slug)]]),
+);
+---
+<Base title={`${author.displayName}: articles and bio`} description={summary.slice(0, 158)} image={avatar ? `${origin}${avatar}` : null} canonical={url}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp author">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/posts/">Analysis</a><span aria-hidden="true">/</span><span>{author.displayName}</span></nav>
+
+		<header class="au-head">
+			{avatar
+				? <img class="au-photo" src={avatar} alt={author.displayName} width="168" height="168" />
+				: <span class="au-photo au-initials" aria-hidden="true">{initials}</span>}
+			<div class="au-intro">
+				<p class="eyebrow">Author · {SITE_NAME}</p>
+				<h1>{author.displayName}</h1>
+				<p class="au-count">{posts.length} {posts.length === 1 ? "article" : "articles"}{posts[0]?.data.publishedAt && <> · latest {fmt(posts[0].data.publishedAt)}</>}</p>
+				{website && <a class="au-web" href={website} rel="me noopener" target="_blank">{website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")} ↗</a>}
+			</div>
+		</header>
+
+		{paras.length > 0 && (
+			<section class="au-bio" aria-labelledby="bio-h">
+				<h2 id="bio-h">About {author.displayName.split(/\s+/)[0]}</h2>
+				{paras.map((t) => <p>{t}</p>)}
+			</section>
+		)}
+
+		<section aria-labelledby="posts-h">
+			<h2 id="posts-h">Articles by {author.displayName}</h2>
+			{posts.length ? (
+				<ol class="au-posts">
+					{posts.map((x) => (
+						<li>
+							<a href={`/posts/${x.id}`}>
+								<strong>{x.data.title}</strong>
+								{x.data.excerpt && <span class="au-ex">{x.data.excerpt}</span>}
+								{x.data.publishedAt && <time datetime={x.data.publishedAt.toISOString()}>{fmt(x.data.publishedAt)}</time>}
+							</a>
+						</li>
+					))}
+				</ol>
+			) : (
+				<p class="sec-note">{author.displayName}'s first article is on the way.</p>
+			)}
+		</section>
+	</div>
+</Base>
+
+<style>
+	.author { max-width: 900px; }
+	.au-head { display: flex; gap: 28px; align-items: center; border-bottom: 2px solid var(--color-text); padding-bottom: 24px; }
+	.au-photo { width: 168px; height: 168px; border-radius: 50%; object-fit: cover; flex: none; border: 3px solid var(--color-border); background: var(--color-surface); }
+	.au-initials { display: grid; place-items: center; font-family: var(--font-display); font-size: 56px; font-weight: 700; color: var(--color-text-secondary); }
+	.au-intro { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+	.au-count { margin: 0; color: var(--color-muted); font-size: 14px; }
+	.au-web { font-size: 14px; color: var(--color-text-secondary); }
+	.au-bio p { font-size: 18px; line-height: 1.6; max-width: 68ch; margin: 0 0 14px; }
+	.au-posts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
+	.au-posts li { border-bottom: 1px solid var(--color-border); }
+	.au-posts a { display: flex; flex-direction: column; gap: 6px; padding: 18px 4px; color: inherit; text-decoration: none; }
+	.au-posts a:hover strong { text-decoration: underline; }
+	.au-posts strong { font-family: var(--font-display); font-size: 21px; line-height: 1.25; }
+	.au-ex { color: var(--color-text-secondary); font-size: 15px; line-height: 1.5; }
+	.au-posts time { color: var(--color-muted); font-size: 13px; }
+	@media (max-width: 640px) {
+		.au-head { flex-direction: column; align-items: flex-start; gap: 18px; }
+		.au-photo { width: 120px; height: 120px; }
+		.au-initials { font-size: 40px; }
+	}
+</style>
