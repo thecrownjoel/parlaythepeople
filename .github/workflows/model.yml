@@ -20,7 +20,7 @@ jobs:
       - name: LunarCrush history for their candidates
         env:
           LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
-        run: python3 ingest/model/social_features.py
+        run: python3 ingest/model/social_features.py --probe && python3 ingest/model/social_features.py
       - name: Fit and test
         run: python3 ingest/model/fit.py
       - uses: actions/upload-artifact@v4

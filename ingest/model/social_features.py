@@ -33,7 +33,22 @@ def history(name, t0, t1):
     return out
 
 
+def probe():
+    """Show what the API returns for one known 2024 candidate under a few parameter styles."""
+    for topic in ("ruben gallego", "jon tester"):
+        for params in ({"bucket": "day", "start": 1720000000, "end": 1730851200},
+                       {"bucket": "day", "interval": "all"},
+                       {"bucket": "day", "interval": "1y"}):
+            d = lc(f"/topic/{topic}/time-series/v2", params) or {}
+            data = d.get("data") or []
+            first = data[0] if data else None
+            print(f"probe {topic!r} {params}: keys={list(d)[:6]} points={len(data)} "
+                  f"first={json.dumps(first)[:160] if first else None} err={str(d.get('error') or d.get('message') or '')[:120]}")
+
+
 def main():
+    if "--probe" in sys.argv:
+        return probe()
     races = [r for r in json.load(open(os.path.join(OUT, "races.json"))) if r["office"] != "president"]
     jobs = []
     for r in races:
