@@ -70,7 +70,7 @@ const shown = PRESETS.filter((p) => presets.includes(p.key));
 		if (b) return void load(b.closest<HTMLElement>("[data-pp]")!, b.dataset.p!);
 		const cal = t.closest<HTMLElement>("[data-pp] .pp-cal");
 		const input = cal?.querySelector<HTMLInputElement>("input");
-		if (input && t !== input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } }
+		if (input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } }
 	});
 	document.addEventListener("change", (e) => {
 		const input = (e.target as HTMLElement).closest<HTMLInputElement>("[data-pp] input[type=date]");
@@ -86,8 +86,8 @@ const shown = PRESETS.filter((p) => presets.includes(p.key));
 	.pp button[aria-pressed="true"], .pp-cal[data-on="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgb(0 0 0 / .25), inset 0 0 0 1px var(--color-border); }
 	.pp-dark button[aria-pressed="true"], .pp-dark .pp-cal[data-on="true"] { background: #232b37; color: #fff; }
 	.pp button:focus-visible, .pp-cal:focus-within { outline: 2px solid var(--color-text); outline-offset: 1px; }
-	/* the native date input sits invisibly under the label so the browser's own calendar opens */
-	.pp-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; color-scheme: dark; }
+	/* the native date input sits invisibly under the label (clicks pass through; the label opens its calendar with showPicker) */
+	.pp-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; pointer-events: none; border: 0; padding: 0; color-scheme: dark; }
 	:global([data-period-body][aria-busy="true"]) { opacity: .45; transition: opacity .2s; pointer-events: none; }
 	:global(.pp-error) { color: var(--bt-r); font-size: 13px; margin: 0 0 8px; }
 	:global(.sec-head) { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 4px; }

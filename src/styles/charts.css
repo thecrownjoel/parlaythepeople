@@ -9,7 +9,7 @@
 	.hc-cal:hover { color: var(--color-text); }
 	.hc-cal[data-on="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 	.hc-cal:focus-within { outline: 2px solid var(--color-text); outline-offset: 1px; }
-	.hc-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; color-scheme: dark; }
+	.hc-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; pointer-events: none; border: 0; padding: 0; color-scheme: dark; }
 	.hc-body { transition: opacity 0.15s; }
 	.hc-body.hc-loading { opacity: 0.45; }
 	.hc-body .hc-move { margin: 0 0 10px; font-size: 14px; color: var(--color-text-secondary); }

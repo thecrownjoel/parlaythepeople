@@ -40,6 +40,6 @@ const body = renderMulti(series, { range, electionDay, title });
 		wrap.querySelectorAll<HTMLButtonElement>("[data-range]").forEach((btn) => btn.addEventListener("click", () => load(btn.dataset.range!)));
 		const input = wrap.querySelector<HTMLInputElement>(".hc-cal input")!;
 		input.addEventListener("change", () => input.value && load(input.value));
-		wrap.querySelector(".hc-cal")!.addEventListener("click", (e) => { if (e.target !== input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } } });
+		wrap.querySelector(".hc-cal")!.addEventListener("click", (e) => { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } });
 	}
 </script>
