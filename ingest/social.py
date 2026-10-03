@@ -28,6 +28,11 @@ KEY = os.environ.get("LUNARCRUSH_API_KEY", "")
 BASE = "https://lunarcrush.com/api4/public"
 import re  # noqa: E402
 PROFANITY = re.compile(r"\b(f+u+c+k\w*|sh[i1]t\w*|ass(hole)?s?|bitch\w*|damn|crap|piss\w*|bastard\w*|dick\w*|wtf|stfu|f\*+\w*)\b", re.I)
+# related topics too generic to be interesting on a race page
+STOP_TOPICS = {"to the", "if you", "link", "watch", "image", "twitter", "moment", "current", "the first", "including", "building",
+               "product", "build", "stand", "white", "red", "save", "send", "step", "answer", "night", "job", "focus", "just in",
+               "close", "hold", "break", "post", "data", "matter", "stay", "sit", "pay", "remember", "middle", "happen", "plan",
+               "care", "ground", "message", "reason", "major", "public", "national", "report", "country", "media", "government"}
 GENERIC = {"democrats", "republicans", "democratic party", "republican party", "democrat", "republican", "independent", "other"}
 
 
@@ -131,6 +136,7 @@ def fetch(topic, meta):
         "trend": d.get("trend"), "sentiment": next((p[2] for p in reversed(series) if p[2] is not None), None),
         "wow": round((last7 - prev7) / prev7, 3) if prev7 else None,
         "series": series[-30:], "top": posts,
+        "rel": [t for t in (d.get("related_topics") or []) if t not in STOP_TOPICS][:12],
         "link": f"https://lunarcrush.com/topic/{urllib.parse.quote(topic.replace(' ', '-'))}",
     }
 

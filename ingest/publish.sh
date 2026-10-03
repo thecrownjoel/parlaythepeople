@@ -9,6 +9,7 @@ done
 $WR r2 object put ballottape-data/index.json --file ingest/out/index.json --content-type application/json --remote >/dev/null
 [ -f ingest/out/social.json ] && $WR r2 object put ballottape-data/social.json --file ingest/out/social.json --content-type application/json --remote >/dev/null
 [ -s ingest/out/social.sql ] && $WR d1 execute ballottape-markets --remote --file ingest/out/social.sql >/dev/null && rm ingest/out/social.sql
+[ -f ingest/out/kalshi_trades.json ] && $WR r2 object put ballottape-data/kalshi_trades.json --file ingest/out/kalshi_trades.json --content-type application/json --remote >/dev/null
 [ -f ingest/out/news.json ] && $WR r2 object put ballottape-data/news.json --file ingest/out/news.json --content-type application/json --remote >/dev/null
 $WR r2 object put ballottape-data/unmatched.json --file ingest/out/unmatched.json --content-type application/json --remote >/dev/null
 $WR d1 execute ballottape-markets --remote --file ingest/schema.sql >/dev/null

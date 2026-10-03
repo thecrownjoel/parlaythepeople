@@ -253,7 +253,10 @@ def k_outcomes(e):
         out.append({"id": m["ticker"], "n": m.get("yes_sub_title") or m["ticker"], "pa": par,
                     "p": round(p, 4), "d": d, "v": round(vol),
                     # share prices in dollars: best bid, best ask, last trade (for the race pages' quote board)
-                    "q": [fnum(m.get("yes_bid_dollars")), fnum(m.get("yes_ask_dollars")), fnum(m.get("last_price_dollars"))]})
+                    "q": [fnum(m.get("yes_bid_dollars")), fnum(m.get("yes_ask_dollars")), fnum(m.get("last_price_dollars"))],
+                    # market stats: 24h volume (contracts), open interest, size at best bid / ask
+                    "m": {"v24": fnum(m.get("volume_24h_fp")), "oi": fnum(m.get("open_interest_fp")),
+                          "bs": fnum(m.get("yes_bid_size_fp")), "as": fnum(m.get("yes_ask_size_fp"))}})
     return out
 
 
@@ -272,6 +275,9 @@ def p_outcomes(e):
             name = "Republicans"
         out.append({"tok": ptoken(m), "tokn": ptoken_no(m), "cid": m.get("conditionId"), "n": name, "pa": par, "p": round(p, 4),
                     "q": [fnum(m.get("bestBid")), fnum(m.get("bestAsk")), fnum(m.get("lastTradePrice"))],
+                    # market stats: 24h volume ($), liquidity ($), 1-week and 1-month price change
+                    "m": {"v24": fnum(m.get("volume24hr")), "liq": fnum(m.get("liquidityNum")),
+                          "w": fnum(m.get("oneWeekPriceChange")), "mo": fnum(m.get("oneMonthPriceChange"))},
                     "d": m.get("oneDayPriceChange"), "v": round(float(m.get("volume") or 0))})
     return out
 

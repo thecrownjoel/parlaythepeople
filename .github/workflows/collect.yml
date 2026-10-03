@@ -22,6 +22,8 @@ jobs:
           python-version: '3.12'
       - name: Pull Kalshi and Polymarket
         run: python3 ingest/ingest.py
+      - name: Recent Kalshi trades for the most active contracts
+        run: python3 ingest/trades.py || echo "kalshi trades fetch failed; keeping the previous set"
       - name: Social pulse (LunarCrush, about once an hour)
         env:
           LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
