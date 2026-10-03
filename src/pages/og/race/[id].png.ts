@@ -6,7 +6,7 @@ import { parlayD } from "../../../lib/model";
 
 /**
  * Share image for a race (1200x630): current odds, money and the Parlay estimate. Drawn with Browser
- * Rendering and cached in R2 for six hours, so social crawlers get a fresh card without a render per share.
+ * Rendering and cached in R2 for twelve hours, so social crawlers get a fresh card without a render per share.
  */
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -17,10 +17,10 @@ export const GET: APIRoute = async ({ params, url }) => {
 	const r = data?.races.find((x) => x.id === id);
 	if (!r) return Response.redirect(`${url.origin}/brand/og.jpg`, 302);
 
-	const slot = Math.floor(Date.now() / 21_600_000); // six-hour window
+	const slot = Math.floor(Date.now() / 43_200_000); // twelve-hour window (557 races; keeps Browser Rendering time low)
 	const key = `og/race/${id}/${slot}-v2.png`;
 	const hit = await env.DATA.get(key);
-	const headers = { "content-type": "image/png", "cache-control": "public, max-age=3600, s-maxage=21600" };
+	const headers = { "content-type": "image/png", "cache-control": "public, max-age=3600, s-maxage=43200" };
 	if (hit) return new Response(hit.body, { headers });
 
 	const c = consensus(r);
