@@ -57,12 +57,19 @@ def main():
             sh = [s for s in (shares(r.get("k")), shares(r.get("p"))) if s and s[0] + s[1] > 0]
             if not sh:
                 continue
+            # remember which contracts belong to this race, so it can be resolved after its markets close
+            for src, key in (("k", "id"), ("p", "cid")):
+                for o in ((r.get(src) or {}).get("o") or []):
+                    if o.get(key) and o.get("pa") in ("D", "R", "I"):
+                        name = (o.get("n") or "").replace("'", "''")
+                        lines.append(f"INSERT OR IGNORE INTO race_contracts (race_id,src,market,party,name) VALUES "
+                                     f"('{r['id']}','{src}','{o[key]}','{o['pa']}','{name}');")
             pd = sum(s[0] / (s[0] + s[1]) for s in sh) / len(sh)  # two-party Democratic share, averaged
             est = estimate(model, pd)
             lines.append(f"INSERT OR REPLACE INTO forecasts (race_id,ts,market_d,model_d,version) VALUES "
                          f"('{r['id']}',{NOW - NOW % 3600},{pd:.4f},{est:.4f},'{version}');")
     open(os.path.join(OUT, "forecast.sql"), "w").write("\n".join(lines) + "\n")
-    print(f"forecast: {len(lines)} race estimates ({version})")
+    print(f"forecast: {sum(1 for l in lines if 'forecasts' in l)} race estimates ({version})")
 
 
 if __name__ == "__main__":

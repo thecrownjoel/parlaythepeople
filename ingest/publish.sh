@@ -17,6 +17,7 @@ $WR d1 execute ballottape-markets --remote --file ingest/out/d1.sql >/dev/null
 # The permanent record (archive.py): money-traded history, headlines and social posts; every trade;
 # a full snapshot of every contract each run and the raw exchange pulls hourly. A failure here
 # never blocks the site update above.
+[ -s ingest/out/results.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/results.sql >/dev/null || echo "results upload failed"; }
 [ -s ingest/out/forecast.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/forecast.sql >/dev/null || echo "forecast upload failed"; }
 [ -s ingest/out/archive.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/archive.sql >/dev/null || echo "archive history upload failed"; }
 $WR d1 execute ballottape-trades --remote --file ingest/trades_schema.sql >/dev/null || echo "trades schema failed"

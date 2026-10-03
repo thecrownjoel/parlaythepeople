@@ -32,6 +32,11 @@ jobs:
         run: python3 ingest/news.py || echo "news fetch failed; keeping the previous headlines"
       - name: Parlay estimates (hourly)
         run: python3 ingest/model/forecast.py || echo "forecast step failed"
+      - name: Race results once the exchanges settle (hourly, after Election Day)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ece401f47370ecab76cbc85bf2a7054c
+        run: python3 ingest/model/results.py || echo "results step failed"
       - name: Archive everything (snapshots, trades, volume, headlines, social)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

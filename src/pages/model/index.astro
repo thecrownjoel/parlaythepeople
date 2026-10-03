@@ -6,6 +6,7 @@ import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site
 import { MODEL, parlayD } from "../../lib/model";
 import { getIndex, getCycle, consensus, pct } from "../../lib/markets";
 import { raceName } from "../../lib/home";
+import { trackRecord } from "../../lib/trackrecord";
 import "../../styles/data.css";
 
 const origin = Astro.url.origin;
@@ -23,6 +24,9 @@ const live = (next?.races ?? [])
 	.sort((a, b) => Math.abs(b.e - b.m) - Math.abs(a.e - a.m))
 	.slice(0, 10);
 
+const track = await trackRecord();
+const sinceWord = track.first ? new Date(track.first * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
+const upsets = track.calls.filter((c) => (c.market >= 0.5 ? "D" : "R") !== c.winner && c.winner !== "I");
 const faqs: [string, string][] = [
 	["What is the Parlay estimate?", `${SITE_NAME}'s own probability for each race, built by adjusting the prediction-market odds with a model trained on how decided races actually turned out.`],
 	["How is it different from the market odds?", "In decided races, clear favorites (priced at 80% or more) won more often than their prices implied. The model corrects for that. Competitive races, with the favorite under 70%, keep the market's odds."],
@@ -61,6 +65,24 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["The Parlay estimat
 				</tbody>
 			</table>
 			<p class="sec-note" style="margin-top:10px">In decided races where markets priced the favorite between 65% and 80%, favorites won about as often as priced, which is why competitive races are left alone. We also tested price momentum, disagreement between the exchanges, thin markets, distance from Election Day and LunarCrush social data (each favorite's share of the conversation against its share of the odds, and sentiment, on 43 races with full social history). None improved accuracy on held-out races, so none are in the model yet. They will be retested on 2026's results, with several times more races, along with trade flow from our trade archive.</p>
+		</section>
+
+		<section id="track-record">
+			<h2>Track record</h2>
+			{track.resolved === 0 ? (
+				<p>Every hour we save the Parlay estimate and the market odds for every race: <b>{track.logged.toLocaleString()} estimates for {track.racesLogged} races</b>{sinceWord ? ` since ${sinceWord}` : ""}. As races are decided after Election Day, each is scored here automatically, from the day before, a week before and a month before, against what the markets said at the same moment. Wins and losses both get published.</p>
+			) : (
+				<>
+					<p class="sec-note">{track.resolved} decided races scored so far, from estimates saved before each result. Lower scores are better.</p>
+					<table class="dtable">
+						<thead><tr><th>Estimate made</th><th>Races</th><th>Brier: market</th><th>Brier: Parlay</th><th>Log loss: market</th><th>Log loss: Parlay</th></tr></thead>
+						<tbody>{track.byHorizon.filter((h) => h.score).map((h) => (
+							<tr><td>{h.label}</td><td class="num">{h.score!.races}</td><td class="num">{h.score!.brier_market.toFixed(4)}</td><td class="num"><b>{h.score!.brier_model.toFixed(4)}</b></td><td class="num">{h.score!.ll_market.toFixed(3)}</td><td class="num"><b>{h.score!.ll_model.toFixed(3)}</b></td></tr>
+						))}</tbody>
+					</table>
+					{upsets.length > 0 && <p class="sec-note" style="margin-top:10px">Upsets so far (the market's favorite the day before lost): {upsets.slice(0, 12).map((u) => u.race_id.replace(/^\d{4}-/, "").replace(/-/g, " ")).join(", ")}{upsets.length > 12 ? ` and ${upsets.length - 12} more` : ""}.</p>}
+				</>
+			)}
 		</section>
 
 		{live.length > 0 && (

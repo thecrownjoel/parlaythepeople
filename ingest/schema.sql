@@ -104,3 +104,16 @@ CREATE TABLE IF NOT EXISTS ai_log (
   ts INTEGER NOT NULL, who TEXT, question TEXT, tools TEXT, ms INTEGER, input_tokens INTEGER, output_tokens INTEGER, ok INTEGER
 );
 CREATE INDEX IF NOT EXISTS ai_log_ts ON ai_log (ts);
+
+-- Which exchange contracts belong to which race and party (kept so races can be resolved after their
+-- markets close and drop out of the live data), and each race's result once the exchanges settle it.
+CREATE TABLE IF NOT EXISTS race_contracts (
+  race_id TEXT NOT NULL, src TEXT NOT NULL, market TEXT NOT NULL, party TEXT, name TEXT,
+  PRIMARY KEY (race_id, src, market)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS race_results (
+  race_id TEXT PRIMARY KEY,
+  winner TEXT NOT NULL,          -- D | R | I
+  decided_at INTEGER NOT NULL,   -- when we saw it settle (unix seconds)
+  source TEXT                    -- k, p or kp (both agreed)
+);
