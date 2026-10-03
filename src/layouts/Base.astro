@@ -100,6 +100,7 @@ const isLoggedIn = !!Astro.locals.user;
 		<link rel="icon" type="image/png" sizes="192x192" href="/brand/icon-192.png" />
 		<link rel="apple-touch-icon" href="/brand/icon-180.png" />
 		<meta name="theme-color" content="#11151c" />
+		<meta name="color-scheme" content="dark" />
 		<link rel="alternate" type="application/rss+xml" title="Parlay the People analysis" href="/rss.xml" />
 		<slot name="head" />
 		<script is:inline>
@@ -121,7 +122,7 @@ const isLoggedIn = !!Astro.locals.user;
 		<header class="site-header">
 			<nav class="nav">
 				<a href="/" class="site-title brand" aria-label={`${siteTitle} home`}>
-					<img src="/brand/mark.jpg" alt="" width="40" height="40" class="brand-mark" />
+					<img src="/brand/mark.png" alt="" width="40" height="40" class="brand-mark" />
 					<span class="brand-word"><span>Parlay</span><span>the People</span></span>
 				</a>
 				<div class="nav-right">
@@ -219,81 +220,7 @@ const isLoggedIn = !!Astro.locals.user;
 							Market data from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>. Not affiliated with either exchange. Not betting or investment advice.
 						</p>
 					</div>
-					<div class="theme-switcher">
-						<button
-							type="button"
-							class="theme-btn"
-							data-theme="light"
-							aria-label="Light mode"
-						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								><circle cx="12" cy="12" r="5"></circle><line
-									x1="12"
-									y1="1"
-									x2="12"
-									y2="3"></line><line x1="12" y1="21" x2="12" y2="23"
-								></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"
-								></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"
-								></line><line x1="1" y1="12" x2="3" y2="12"></line><line
-									x1="21"
-									y1="12"
-									x2="23"
-									y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"
-								></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"
-								></line></svg
-							>
-						</button>
-						<button
-							type="button"
-							class="theme-btn"
-							data-theme="dark"
-							aria-label="Dark mode"
-						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-								></path></svg
-							>
-						</button>
-						<button
-							type="button"
-							class="theme-btn"
-							data-theme="system"
-							aria-label="System theme"
-						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								><rect x="2" y="3" width="20" height="14" rx="2" ry="2"
-								></rect><line x1="8" y1="21" x2="16" y2="21"></line><line
-									x1="12"
-									y1="17"
-									x2="12"
-									y2="21"></line></svg
-							>
-						</button>
-					</div>
+					{/* Theme switcher removed: the site is dark-only for now (see theme.css). */}
 				</div>
 			</div>
 		</footer>

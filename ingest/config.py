@@ -30,3 +30,14 @@ MIN_RACES_NEXT_CYCLE = 50
 PARTY_HINTS = {
     "2026-senate-alaska": {"peltola": "D", "sullivan": "R"},
 }
+
+# Headlines for the homepage "Latest" strip, from Google News search feeds (free, no key).
+# (label, search query, how many headlines to take). Edit the queries or counts to change the mix.
+NEWS_QUERIES = [
+    ("White House", '"White House"', 6),
+    ("GOP", 'Republicans Congress OR "GOP" OR "Senate Republicans"', 5),
+    ("Administration", '"Trump administration"', 4),
+    ("Midterms", '"2026 midterms" OR "midterm elections"', 3),
+    ("Democrats", '"Democrats" Congress', 2),
+]
+NEWS_MAX_AGE_HOURS = 48

@@ -182,3 +182,7 @@ export function latestPoint(data: CycleData, raceId: string): HistoryPoint | nul
 	const k = shares(r.k), p = shares(r.p);
 	return { ts, k_d: k?.D ?? null, k_r: k?.R ?? null, p_d: p?.D ?? null, p_r: p?.R ?? null };
 }
+
+export interface NewsItem { title: string; source: string; url: string; ts: number; tag: string }
+/** Political headlines for the "Latest" strip (collected from Google News every 10 minutes). */
+export const getNews = () => r2json<{ generated: number; items: NewsItem[] }>("news.json");

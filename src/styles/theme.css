@@ -59,7 +59,7 @@ html body header.site-header.site-header { background: #11151c; color: #f3f4f6; 
 html body .site-header.site-header a, html body .site-header.site-header .nav-links.nav-links a { color: #e8ebf0; }
 html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
-.brand-mark { width: 40px; height: 40px; border-radius: 6px; display: block; }
+.brand-mark { width: 42px; height: 42px; display: block; }
 .brand-word { display: flex; flex-direction: column; font-family: var(--font-display); font-weight: 800; text-transform: uppercase; line-height: 0.95; letter-spacing: 0.02em; color: #ffffff; }
 .brand-word span:first-child { font-size: 19px; }
 .brand-word span:last-child { font-size: 12.5px; letter-spacing: 0.06em; }
@@ -91,3 +91,9 @@ html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff
  */
 :root.dark { --lightningcss-light: ; --lightningcss-dark: initial; color-scheme: dark; }
 :root.light { --lightningcss-light: initial; --lightningcss-dark: ; color-scheme: light; }
+
+/*
+ * Dark only, for now: pin every light-dark() token to its dark value (the CSS build compiles
+ * light-dark() into these --lightningcss-* switches). The footer theme switcher was removed from Base.astro.
+ */
+:root, :root.light, :root.dark { --lightningcss-light: ; --lightningcss-dark: initial; color-scheme: dark; }

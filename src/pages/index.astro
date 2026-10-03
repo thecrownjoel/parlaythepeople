@@ -10,7 +10,7 @@ import JsonLd from "../components/JsonLd.astro";
 import Sparkline from "../components/Sparkline.astro";
 import StateTileMap from "../components/StateTileMap.astro";
 import MoneyGlobe from "../components/MoneyGlobe.astro";
-import { getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, daysUntil, PARTY_PLURAL, type Race, type PresMarket, type Source } from "../lib/markets";
+import { getNews, getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, daysUntil, PARTY_PLURAL, type Race, type PresMarket, type Source } from "../lib/markets";
 import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, leadChanges, candidateMoves, type Spark } from "../lib/trends";
 import { nameKey } from "../lib/names";
 import { mediaUrls } from "../lib/media";
@@ -21,11 +21,12 @@ const origin = Astro.url.origin;
 const index = await getIndex();
 const nextYear = index?.next;
 const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
-const [next, presCycle, posts, counts] = await Promise.all([
+const [next, presCycle, posts, counts, news] = await Promise.all([
 	nextYear ? getCycle(nextYear) : Promise.resolve(null),
 	presYear ? getCycle(presYear) : Promise.resolve(null),
 	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 13 }),
 	historyCounts(),
+	getNews(),
 ]);
 if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
 
@@ -133,8 +134,9 @@ const lineup = posts.entries.slice(0, 10).map((p) => {
 	};
 });
 // Ticker: newest analysis headlines first, then live market headlines.
-const ticker: { text: string; href: string; tag: string }[] = [
-	...posts.entries.slice(0, 8).map((p) => ({ text: p.data.title, href: `/posts/${p.id}`, tag: "Analysis" })),
+const ticker: { text: string; href: string; tag: string; external?: boolean }[] = [
+	...(news?.items ?? []).slice(0, 16).map((n) => ({ text: n.title, href: n.url, tag: n.source || n.tag, external: true })),
+	...posts.entries.slice(0, 2).map((p) => ({ text: p.data.title, href: `/posts/${p.id}`, tag: SITE_NAME })),
 	...(senC ? [{ text: `${PARTY_PLURAL[consensus(senC).lead as "D" | "R"]} ${pct(consensus(senC).lp)} to win the Senate`, href: senC.path, tag: "Markets" }] : []),
 	...(houseC ? [{ text: `${PARTY_PLURAL[consensus(houseC).lead as "D" | "R"]} ${pct(consensus(houseC).lp)} to win the House`, href: houseC.path, tag: "Markets" }] : []),
 	...(presParty ? [{ text: `${presYear} presidency: Democrats ${pct(presParty.D)}, Republicans ${pct(presParty.R)}`, href: `/${presYear}/president/`, tag: "Markets" }] : []),
@@ -174,7 +176,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 <style>
 	.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
 	.home-hero-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-	.home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; border-radius: 14px; display: block; box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); }
+	.home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; display: block; filter: drop-shadow(0 12px 28px rgb(163 38 42 / 0.25)); }
 	@media (max-width: 760px) { .home-hero { grid-template-columns: 1fr; } .home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; } }
 
 	.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
@@ -334,7 +336,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				<p class="lede ga" data-ga="hero">{lede}</p>
 				{next && <p class="updated ga" data-ga="hero">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
 			</div>
-			<img class="home-hero-logo ga" data-ga="logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
+			<img class="home-hero-logo ga" data-ga="logo" src="/brand/logo-full.png" width="760" height="936" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
 
 
@@ -387,7 +389,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 					<ul class="ticker-track">
 						{[...ticker, ...ticker].map((t, i) => (
 							<li aria-hidden={i >= ticker.length ? "true" : undefined}>
-								<a href={t.href} tabindex={i >= ticker.length ? -1 : undefined}><span class="ticker-tag">{t.tag}</span>{t.text}</a>
+								<a href={t.href} tabindex={i >= ticker.length ? -1 : undefined} target={t.external ? "_blank" : undefined} rel={t.external ? "noopener nofollow" : undefined}><span class="ticker-tag">{t.tag}</span>{t.text}</a>
 							</li>
 						))}
 					</ul>
@@ -395,9 +397,28 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			</section>
 		)}
 
-
-
-
+		{cards.length > 0 && (
+			<section>
+				<h2>The big picture</h2>
+				<p class="sec-note">Democratic odds now, the change over 30 days, and the last 90 days of trading.</p>
+				<div class="trends">
+					{cards.map((c) => {
+						const chg = sparkChange(c.spark);
+						return (
+							<a class="panel trend ga" data-ga="up" href={c.href}>
+								<span class="trend-lab">{c.label}</span>
+								<div class="trend-top">
+									<span class="trend-val" data-count-pct={c.now ?? 0}>{pct(c.now)}</span>
+									{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg * 100).toFixed(1)} pts / 30d</span>}
+								</div>
+								<Sparkline points={c.spark} color={c.color} label={`${c.label}, last 90 days`} />
+								<span class="trend-sub">{c.sub}</span>
+							</a>
+						);
+					})}
+				</div>
+			</section>
+		)}
 
 		{(flips.length > 0 || cmoves.rising.length > 0) && (
 			<section aria-labelledby="story-h">
@@ -444,54 +465,13 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		)}
 
 
-		{cards.length > 0 && (
-			<section>
-				<h2>The big picture</h2>
-				<p class="sec-note">Democratic odds now, the change over 30 days, and the last 90 days of trading.</p>
-				<div class="trends">
-					{cards.map((c) => {
-						const chg = sparkChange(c.spark);
-						return (
-							<a class="panel trend ga" data-ga="up" href={c.href}>
-								<span class="trend-lab">{c.label}</span>
-								<div class="trend-top">
-									<span class="trend-val" data-count-pct={c.now ?? 0}>{pct(c.now)}</span>
-									{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg * 100).toFixed(1)} pts / 30d</span>}
-								</div>
-								<Sparkline points={c.spark} color={c.color} label={`${c.label}, last 90 days`} />
-								<span class="trend-sub">{c.sub}</span>
-							</a>
-						);
-					})}
-				</div>
-			</section>
-		)}
 
 
-		<section class="analysis" aria-labelledby="analysis-h">
-			<div class="analysis-head">
-				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
-				<a href="/posts" class="datalinks">Every article →</a>
-			</div>
-			{lineup.length > 0 ? (
-				<ol class="lineup">
-					{lineup.map((p) => (
-						<li class="ga" data-ga="line">
-							<a href={p.href}>
-								{p.avatar ? <img class="lu-avatar" src={p.avatar} alt="" width="52" height="52" loading="lazy" /> : <span class="lu-avatar lu-initials" aria-hidden="true">{p.initials}</span>}
-								<span class="lu-text">
-									<strong class="lu-title">{p.title}</strong>
-									<span class="lu-meta"><span class="lu-author">{p.author}</span>{p.date && <> · <time datetime={p.date.toISOString()}>{postDate(p.date)}</time></>}</span>
-								</span>
-								<span class="lu-arrow" aria-hidden="true">→</span>
-							</a>
-						</li>
-					))}
-				</ol>
-			) : (
-				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
-			)}
-		</section>
+
+
+
+
+
 
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
@@ -576,6 +556,31 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		)}
 
 
+
+		<section class="analysis" aria-labelledby="analysis-h">
+			<div class="analysis-head">
+				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
+				<a href="/posts" class="datalinks">Every article →</a>
+			</div>
+			{lineup.length > 0 ? (
+				<ol class="lineup">
+					{lineup.map((p) => (
+						<li class="ga" data-ga="line">
+							<a href={p.href}>
+								{p.avatar ? <img class="lu-avatar" src={p.avatar} alt="" width="52" height="52" loading="lazy" /> : <span class="lu-avatar lu-initials" aria-hidden="true">{p.initials}</span>}
+								<span class="lu-text">
+									<strong class="lu-title">{p.title}</strong>
+									<span class="lu-meta"><span class="lu-author">{p.author}</span>{p.date && <> · <time datetime={p.date.toISOString()}>{postDate(p.date)}</time></>}</span>
+								</span>
+								<span class="lu-arrow" aria-hidden="true">→</span>
+							</a>
+						</li>
+					))}
+				</ol>
+			) : (
+				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
+			)}
+		</section>
 
 		{coinFlips.length > 0 && (
 			<section>

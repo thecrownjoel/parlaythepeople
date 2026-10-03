@@ -212,7 +212,7 @@
 							"children": [
 								{
 									"_type": "span",
-									"text": "Independent, nonpartisan tracking of election prediction markets. Not affiliated with Kalshi or Polymarket. Not betting or investment advice.",
+									"text": "Independent tracking of election prediction markets and the politics around them. Not affiliated with Kalshi or Polymarket. Not betting or investment advice.",
 									"_key": "k1"
 								}
 							],
@@ -349,7 +349,7 @@
 							"children": [
 								{
 									"_type": "span",
-									"text": "Parlay the People is independent and nonpartisan. It is not affiliated with Kalshi, Polymarket or any campaign, and nothing here is betting or investment advice. Market prices are crowd forecasts and can be wrong.",
+									"text": "Parlay the People is independent. It is not affiliated with Kalshi, Polymarket or any campaign, and nothing here is betting or investment advice. Market prices are crowd forecasts and can be wrong.",
 									"_key": "k5"
 								}
 							],
