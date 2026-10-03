@@ -26,7 +26,7 @@ export async function homeData() {
 export type HomeData = Awaited<ReturnType<typeof homeData>>;
 
 /** Short race name for lists. */
-export const raceName = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
+export const raceName = (r: Race) => (r.kind === "control" ? r.label : r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
 
 /** Money traded on a race across both exchanges (Kalshi $1 contracts + Polymarket dollars). */
 export const traded$ = (r: Race) => (r.k?.v ?? 0) + (r.p?.v ?? 0);
@@ -73,5 +73,6 @@ export const SECTIONS = {
 	closest: { def: "now", asOf: true, presets: ["24h", "7d", "30d", "60d"] },
 	gaps: { def: "now", asOf: true, presets: ["24h", "7d", "30d", "60d"] },
 	leaders: { def: "30d", asOf: false, presets: ["24h", "7d", "30d", "60d"] },
+	money: { def: "24h", asOf: false, presets: ["24h", "7d", "30d", "60d"] },
 } as const;
 export type SectionKey = keyof typeof SECTIONS;

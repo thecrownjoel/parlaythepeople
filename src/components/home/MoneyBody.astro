@@ -1,0 +1,67 @@
+---
+/** Where the money went over a period: dollars traded, the races that drew the most, and the biggest single trades. */
+import { consensus, pct, fmtVol } from "../../lib/markets";
+import { moneySince, moneyTotal, moneyStart, biggestTrades } from "../../lib/money";
+import { raceName, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { races, nextYear, presYear } = d;
+const [money, start, big] = await Promise.all([moneySince(period.ts), moneyStart(), biggestTrades(period.ts, 8)]);
+const byId = new Map(races.map((r) => [r.id, r]));
+const label = (id: string) => {
+	const r = byId.get(id);
+	if (r) return { name: raceName(r), href: r.path, r };
+	const m = id.match(/^(\d{4})-pres-(winner|party|nomD|nomR)$/);
+	if (m) return { name: `${m[1]} ${m[2] === "nomD" ? "Democratic nomination" : m[2] === "nomR" ? "Republican nomination" : "presidency"}`, href: `/${m[1]}/president/`, r: null };
+	return { name: id, href: null, r: null };
+};
+const total = moneyTotal(money, `${nextYear}-`);
+const pres = presYear ? moneyTotal(money, `${presYear}-`) : null;
+const top = [...money].filter(([id]) => id.startsWith(`${nextYear}-`)).sort((a, b) => b[1].usd - a[1].usd).slice(0, 8);
+const max = top[0]?.[1].usd || 1;
+const clipped = start != null && period.ts < start;
+const startWord = start ? new Date(start * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
+const ago = (ts: number) => { const s = Date.now() / 1000 - ts; return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
+---
+<p class="sec-note">Every trade on both exchanges, added up {period.since}{clipped ? ` (trade records begin ${startWord})` : ""}.</p>
+{total.usd > 0 ? (
+	<>
+		<div class="mw-stats">
+			<div><b class="money">{fmtVol(total.usd)}</b><span>traded on {nextYear} races</span></div>
+			<div><b>{total.n.toLocaleString()}</b><span>trades</span></div>
+			<div><b>{fmtVol(total.k)} <small>/</small> {fmtVol(total.p)}</b><span>Kalshi / Polymarket</span></div>
+			{pres && pres.usd > 0 && <div><b class="money">{fmtVol(pres.usd)}</b><span>on the {presYear} race</span></div>}
+		</div>
+		<div class="grid2" style="margin-top:14px">
+			<div class="panel">
+				<h3 style="font-size:18px">Most money traded <span class="sec-note" style="font-weight:400;font-size:13px">· {nextYear} races</span></h3>
+				{top.map(([id, m]) => {
+					const l = label(id);
+					const c = l.r ? consensus(l.r) : null;
+					return (
+						<a class="mw-row ga" data-ga="up" href={l.href ?? undefined}>
+							<span class="mw-name">{l.name}{c && <em class={c.lead === "D" ? "dlead" : "rlead"}>{c.lead} {pct(c.lp)}</em>}</span>
+							<span class="mw-bar" aria-hidden="true"><i data-ga-bar style={`width:${(m.usd / max) * 100}%`}></i></span>
+							<span class="num money">{fmtVol(m.usd)}</span>
+						</a>
+					);
+				})}
+			</div>
+			<div class="panel">
+				<h3 style="font-size:18px">Biggest single trades</h3>
+				{big.length ? big.map((t) => {
+					const l = label(t.race_id);
+					const side = t.src === "k" ? (t.side === "yes" ? "Yes" : "No") : (t.side === "BUY" ? "Buy" : "Sell");
+					return (
+						<a class="mw-trade ga" data-ga="up" href={l.href ?? undefined}>
+							<span class="num money">{fmtVol(t.usd)}</span>
+							<span class="mw-name">{l.name}<em>{side} {t.outcome ?? ""}{t.yes_price != null ? ` at ${Math.round(t.yes_price * 100)}¢` : ""} · {t.src === "k" ? "Kalshi" : "Polymarket"}</em></span>
+							<span class="mw-when">{ago(t.ts)}</span>
+						</a>
+					);
+				}) : <p class="empty-note">No trades recorded {period.since}.</p>}
+			</div>
+		</div>
+	</>
+) : <p class="empty-note">No trades recorded {period.since}{clipped ? `; trade records begin ${startWord}` : ""}.</p>}

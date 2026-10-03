@@ -1,0 +1,81 @@
+---
+/** One race's money from the trade archive: dollars by day for 30 days (Kalshi and Polymarket stacked) and its biggest trades. */
+import { raceMoneyByDay, raceBigTrades } from "../lib/money";
+import { fmtVol } from "../lib/markets";
+interface Props { raceId: string }
+const { raceId } = Astro.props;
+const [days, big] = await Promise.all([raceMoneyByDay(raceId, 30), raceBigTrades(raceId, 6)]);
+const DAY = 86400;
+const today = Math.floor(Date.now() / 1000 / DAY);
+const series = Array.from({ length: 30 }, (_, i) => today - 29 + i).map((d) => days.find((x) => x.day === d) ?? { day: d, k: 0, p: 0, n: 0, big: 0 });
+const total = (n: number) => series.slice(-n).reduce((a, x) => a + x.k + x.p, 0);
+const max = Math.max(...series.map((x) => x.k + x.p), 1);
+const W = 600, H = 120, gap = 2, bw = W / 30 - gap;
+const fmtDay = (d: number) => new Date(d * DAY * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const ago = (ts: number) => { const s = Date.now() / 1000 - ts; return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
+const first = series.find((x) => x.k + x.p > 0);
+---
+{first && (
+	<div class="rm">
+		<div class="rm-stats">
+			<div><b class="money">{fmtVol(total(1))}</b><span>today</span></div>
+			<div><b class="money">{fmtVol(total(7))}</b><span>last 7 days</span></div>
+			<div><b class="money">{fmtVol(total(30))}</b><span>last 30 days</span></div>
+			<div><b>{series.reduce((a, x) => a + x.n, 0).toLocaleString()}</b><span>trades, 30 days</span></div>
+		</div>
+		<figure class="rm-chart">
+			<figcaption>Money traded per day <span class="rm-key"><i class="k"></i>Kalshi <i class="p"></i>Polymarket</span></figcaption>
+			<svg viewBox={`0 0 ${W} ${H + 18}`} role="img" aria-label={`Money traded per day, last 30 days: ${fmtVol(total(30))} in total`} preserveAspectRatio="none">
+				<line x1="0" x2={W} y1={H} y2={H} class="rm-base" />
+				{series.map((x, i) => {
+					const hk = (x.k / max) * (H - 6), hp = (x.p / max) * (H - 6), xx = i * (W / 30) + gap / 2;
+					return (
+						<g>
+							<title>{fmtDay(x.day)}: {fmtVol(x.k + x.p)} ({fmtVol(x.k)} Kalshi, {fmtVol(x.p)} Polymarket), {x.n.toLocaleString()} trades</title>
+							<rect x={xx} y={0} width={bw} height={H} fill="transparent" />
+							{hk > 0 && <rect x={xx} y={H - hk} width={bw} height={hk} rx="2" class="k" />}
+							{hp > 0 && <rect x={xx} y={H - hk - hp - (hk > 0 ? 1 : 0)} width={bw} height={hp} rx="2" class="p" />}
+						</g>
+					);
+				})}
+				<text x="0" y={H + 14} class="rm-ax">{fmtDay(series[0].day)}</text>
+				<text x={W} y={H + 14} class="rm-ax" text-anchor="end">Today</text>
+			</svg>
+			<p class="rm-note">Trade records begin {fmtDay(first.day)}. Peak day: {fmtVol(max)}.</p>
+		</figure>
+		{big.length > 0 && (
+			<div class="rm-big">
+				<h3>Biggest trades on this race</h3>
+				<ol>
+					{big.map((t) => (
+						<li><span class="num money">{fmtVol(t.usd)}</span><span>{t.src === "k" ? (t.side === "yes" ? "Yes" : "No") : (t.side === "BUY" ? "Buy" : "Sell")} {t.outcome ?? ""}{t.yes_price != null ? ` at ${Math.round(t.yes_price * 100)}¢` : ""}</span><span class="rm-src">{t.src === "k" ? "Kalshi" : "Polymarket"} · {ago(t.ts)}</span></li>
+					))}
+				</ol>
+			</div>
+		)}
+	</div>
+)}
+<style>
+	.rm { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+	.rm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+	.rm-stats > div { background: var(--color-surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+	.rm-stats b { font-family: var(--font-display); font-size: 24px; line-height: 1; font-variant-numeric: tabular-nums; }
+	.rm-stats span { font-size: 12px; color: var(--color-text-secondary); }
+	.money { color: #e0b44f; font-family: var(--font-mono), monospace; }
+	.rm-chart { margin: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px; }
+	.rm-chart figcaption { font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+	.rm-key { font-weight: 400; font-size: 12px; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+	.rm-key i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+	.rm-key i.p { margin-left: 8px; }
+	.rm-chart svg { width: 100%; height: 150px; display: block; overflow: visible; }
+	.k, .rm-key i.k { fill: #3fbf8f; background: #3fbf8f; }
+	.p, .rm-key i.p { fill: #5b8def; background: #5b8def; }
+	.rm-chart g:hover rect.k, .rm-chart g:hover rect.p { opacity: .8; }
+	.rm-base { stroke: var(--color-border); }
+	.rm-ax { font-size: 11px; fill: var(--color-muted); }
+	.rm-note { margin: 6px 0 0; font-size: 12px; color: var(--color-muted); }
+	.rm-big h3 { font-size: 15px; margin: 0 0 6px; }
+	.rm-big ol { list-style: none; margin: 0; padding: 0; }
+	.rm-big li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14px; align-items: baseline; }
+	.rm-src { font-size: 12px; color: var(--color-muted); }
+</style>

@@ -9,11 +9,12 @@ import MoversBody from "../../../components/home/MoversBody.astro";
 import ClosestBody from "../../../components/home/ClosestBody.astro";
 import GapsBody from "../../../components/home/GapsBody.astro";
 import LeadersBody from "../../../components/home/LeadersBody.astro";
+import MoneyBody from "../../../components/home/MoneyBody.astro";
 import { homeData, SECTIONS, type SectionKey } from "../../../lib/home";
 import { parsePeriod } from "../../../lib/period";
 export const partial = true;
 
-const BODIES = { snapshot: SnapshotBody, big: BigPictureBody, moving: MovingBody, pulse: PulseBody, map: MapBody, movers: MoversBody, closest: ClosestBody, gaps: GapsBody, leaders: LeadersBody };
+const BODIES = { snapshot: SnapshotBody, big: BigPictureBody, moving: MovingBody, pulse: PulseBody, map: MapBody, movers: MoversBody, closest: ClosestBody, gaps: GapsBody, leaders: LeadersBody, money: MoneyBody };
 const key = Astro.params.section as SectionKey;
 const sec = SECTIONS[key];
 if (!sec) return new Response("Unknown section", { status: 404 });

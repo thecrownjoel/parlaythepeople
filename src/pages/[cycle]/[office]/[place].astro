@@ -16,6 +16,7 @@ import Sparkline from "../../../components/Sparkline.astro";
 import LunarCrushCredit from "../../../components/LunarCrushCredit.astro";
 import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
+import RaceMoney from "../../../components/RaceMoney.astro";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
 import { renderMulti, rangeOf } from "../../../lib/chart";
@@ -270,6 +271,7 @@ import { parlayD } from "../../../lib/model";
 				{pStats?.w != null && <div class="act-stat"><span>1 week</span><b class={`num ${pStats.w >= 0 ? "pc-up" : "pc-down"}`}>{pStats.w >= 0 ? "▲" : "▼"} {Math.abs(Math.round(pStats.w * 100))}¢</b><span>{pStats.leadName}</span></div>}
 				{pStats?.mo != null && <div class="act-stat"><span>1 month</span><b class={`num ${pStats.mo >= 0 ? "pc-up" : "pc-down"}`}>{pStats.mo >= 0 ? "▲" : "▼"} {Math.abs(Math.round(pStats.mo * 100))}¢</b><span>{pStats.leadName}</span></div>}
 			</div>
+			<RaceMoney raceId={race.id} />
 			<RaceActivity race={race} kalshi={kalshiByTicker} kalshiTickers={kalshiTickers} />
 		</section>
 

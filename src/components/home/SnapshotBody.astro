@@ -2,18 +2,23 @@
 /** Midterms snapshot: control gauges and headline tiles, with each number's change over the period. */
 import { consensus, pct, fmtVol } from "../../lib/markets";
 import { racesAt, outcomesAt } from "../../lib/trends";
+import { moneySince, moneyTotal, moneyStart } from "../../lib/money";
 import { traded$, pts, type HomeData } from "../../lib/home";
 import type { Period } from "../../lib/period";
 interface Props { d: HomeData; period: Period }
 const { d, period } = Astro.props;
 const { next, nextYear, senC, houseC, races } = d;
 const now = Math.floor(Date.now() / 1000);
-const [at, bopThen, majThen, majNow] = await Promise.all([
+const [at, bopThen, majThen, majNow, money, mStart] = await Promise.all([
 	racesAt(period.ts),
 	outcomesAt(`${nextYear}-bop`, period.ts),
 	outcomesAt(`${nextYear}-majority`, period.ts),
 	outcomesAt(`${nextYear}-majority`, now),
+	moneySince(period.ts),
+	moneyStart(),
 ]);
+const periodUsd = moneyTotal(money, `${nextYear}-`).usd;
+const fullPeriod = mStart != null && period.ts >= mStart;
 const medianBin = (g: any) => {
 	const src = g?.k ?? g?.p; if (!src) return null;
 	let c = 0;
@@ -60,6 +65,6 @@ const chg = (now: number | null, then: number | null | undefined) => (now == nul
 		{sweepNow != null && (() => { const v = chg(sweepNow, sweepThen); return <div class="snap-tile"><b data-count-pct={sweepNow}>{pct(sweepNow)}</b><span>Democrats sweep both chambers</span>{v != null && <em class="tile-chg">{pts(v)} pts {period.since}</em>}</div>; })()}
 		{pvNow != null && (() => { const v = chg(pvNow, pvThen); return <div class="snap-tile"><b data-count-pct={pvNow}>{pct(pvNow)}</b><span>Democrats win the national House vote</span>{v != null && <em class="tile-chg">{pts(v)} pts {period.since}</em>}</div>; })()}
 		<div class="snap-tile"><b data-count={tossups}>{tossups}</b><span>races rated toss-up</span>{at.size > 0 && <em class="tile-chg">{tossups === tossThen ? "unchanged" : `${tossups > tossThen ? "▲" : "▼"} ${Math.abs(tossups - tossThen)}, was ${tossThen}`} {period.since}</em>}</div>
-		<div class="snap-tile"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span><em class="tile-chg">total to date</em></div>
+		<div class="snap-tile"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span><em class="tile-chg">{periodUsd > 0 ? `${fmtVol(periodUsd)} ${fullPeriod ? period.since : "since trade records began"}` : "total to date"}</em></div>
 	</div>
 </div>

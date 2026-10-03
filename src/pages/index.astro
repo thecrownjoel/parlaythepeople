@@ -26,6 +26,7 @@ import MoversBody from "../components/home/MoversBody.astro";
 import ClosestBody from "../components/home/ClosestBody.astro";
 import GapsBody from "../components/home/GapsBody.astro";
 import LeadersBody from "../components/home/LeadersBody.astro";
+import MoneyBody from "../components/home/MoneyBody.astro";
 import { homeData, SECTIONS, type SectionKey } from "../lib/home";
 import { parsePeriod } from "../lib/period";
 import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
@@ -251,6 +252,11 @@ const ld = graph(organization(origin), {
 				</div>
 			</section>
 		)}
+
+		<section aria-labelledby="money-went-h" data-period-section="money">
+			<div class="sec-head"><h2 id="money-went-h">Where the money went</h2><PeriodPicker {...pickerOf("money")} /></div>
+			<div data-period-body><MoneyBody d={home} period={P.money} /></div>
+		</section>
 
 		{senMap.length > 0 && (
 			<section data-ga-map data-period-section="map">

@@ -224,7 +224,7 @@ def trades_sql(cyc):
                 time.sleep(1.5 * (attempt + 1))
         return job, [], err  # leave the cursor alone; the next run retries
 
-    lines, n_trades, errs = [], 0, 0
+    lines, n_trades, errs, min_ts = [], 0, 0, NOW
     with cf.ThreadPoolExecutor(6) as ex:
         for (_dv, src, market, race_id, name, v, since), rows, err in ex.map(one, todo):
             if err:
@@ -237,8 +237,15 @@ def trades_sql(cyc):
                 lines.append("INSERT OR IGNORE INTO trades (src,id,market,race_id,outcome,ts,side,yes_price,size,usd,wallet) VALUES "
                              + ",".join(vals[i:i + 100]) + ";")
             n_trades += len(vals)
+            min_ts = min([min_ts] + [r[1] for r in rows])
             last = max([r[1] for r in rows] + [since])
             lines.append(f"INSERT OR REPLACE INTO trade_cursor (src,market,last_ts,last_v) VALUES ({sql_str(src)},{sql_str(market)},{last},{sql_num(v)});")
+    if n_trades:
+        # refresh the daily money rollup for every day these trades touched
+        first_day = min_ts // 86400
+        lines.append("INSERT OR REPLACE INTO trade_daily (race_id,day,src,usd,n,big) "
+                     f"SELECT race_id, ts / 86400, src, SUM(usd), COUNT(*), MAX(usd) FROM trades WHERE ts >= {first_day * 86400} "
+                     "AND race_id IS NOT NULL GROUP BY race_id, ts / 86400, src;")
     return lines, f"{n_trades} trades from {len(todo) - errs} contracts ({errs} failed, {len(seen)} followed)"
 
 

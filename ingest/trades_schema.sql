@@ -25,3 +25,15 @@ CREATE TABLE IF NOT EXISTS trade_cursor (
   last_v REAL,
   PRIMARY KEY (src, market)
 ) WITHOUT ROWID;
+
+-- Money per race per day per exchange, rolled up from trades by the collector so pages never sum raw trades.
+CREATE TABLE IF NOT EXISTS trade_daily (
+  race_id TEXT NOT NULL,
+  day INTEGER NOT NULL,         -- unix day (ts / 86400)
+  src TEXT NOT NULL,
+  usd REAL, n INTEGER, big REAL, -- dollars, trades, largest single trade
+  PRIMARY KEY (race_id, day, src)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS trade_daily_day ON trade_daily (day);
+-- biggest trades in a period: walk trades from the largest down
+CREATE INDEX IF NOT EXISTS trades_usd ON trades (usd);

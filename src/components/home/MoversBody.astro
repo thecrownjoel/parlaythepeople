@@ -2,17 +2,18 @@
 /** Biggest moves: races whose Democratic odds changed most over the period. */
 import { pct, fmtVol } from "../../lib/markets";
 import { moversSince } from "../../lib/trends";
+import { moneySince } from "../../lib/money";
 import { raceName, traded$, type HomeData } from "../../lib/home";
 import type { Period } from "../../lib/period";
 interface Props { d: HomeData; period: Period }
 const { d, period } = Astro.props;
-const moved = d.next ? await moversSince(d.next, period.ts, 6) : [];
+const [moved, money] = await Promise.all([d.next ? moversSince(d.next, period.ts, 6) : Promise.resolve([]), moneySince(period.ts)]);
 ---
 <p class="sec-note" style="margin:0 0 6px">Change in Democratic odds {period.since}.</p>
 {moved.length ? moved.map((m) => (
 	<a class="mover ga" data-ga="up" href={m.race.path}>
 		<span>{raceName(m.race)}</span>
 		<span class={`num ${m.delta >= 0 ? "up" : "down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
-		<small>{pct(m.from)} → {pct(m.to)} Democratic · <span class="money">{fmtVol(traded$(m.race))} traded</span></small>
+		<small>{pct(m.from)} → {pct(m.to)} Democratic · <span class="money">{money.get(m.race.id)?.usd ? `${fmtVol(money.get(m.race.id)!.usd)} in period` : `${fmtVol(traded$(m.race))} total`}</span></small>
 	</a>
 )) : <p class="empty-note">No race moved a point or more {period.since}.</p>}

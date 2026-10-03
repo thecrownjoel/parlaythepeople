@@ -202,3 +202,20 @@ a.lu-author:hover { text-decoration: underline; color: var(--color-text); }
 .snap-right { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
 .pulse-tools { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
 .grid3 > .panel .sec-head { align-items: flex-start; }
+
+/* where the money went */
+.mw-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+.mw-stats > div { background: var(--color-surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.mw-stats b { font-family: var(--font-display); font-size: clamp(22px, 2.6vw, 30px); line-height: 1; font-variant-numeric: tabular-nums; }
+.mw-stats b small { color: var(--color-muted); font-size: .6em; }
+.mw-stats span { font-size: 12.5px; color: var(--color-text-secondary); }
+.mw-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 64px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
+.mw-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mw-name em { display: block; font-style: normal; font-weight: 400; font-size: 12px; color: var(--color-muted); }
+.mw-row .mw-name em { display: inline; margin-left: 8px; font-family: var(--font-mono), monospace; }
+.mw-bar { display: block; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+.mw-bar i { display: block; height: 100%; background: #e0b44f; border-radius: 3px; }
+.mw-row .num { text-align: right; }
+.mw-trade { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
+.mw-when { font-size: 12px; color: var(--color-muted); }
+@media (max-width: 520px) { .mw-row { grid-template-columns: minmax(0, 1fr) 64px; } .mw-row .mw-bar { display: none; } .mw-trade { grid-template-columns: 60px minmax(0, 1fr); } .mw-when { grid-column: 2; } }
