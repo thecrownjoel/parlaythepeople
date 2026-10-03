@@ -5,7 +5,7 @@ import { getIndex, getCycle } from "../lib/markets";
 export const GET: APIRoute = async ({ url }) => {
 	const o = url.origin;
 	const index = await getIndex();
-	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/data/`, ""]];
+	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""]];
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
 		if (!data) continue;

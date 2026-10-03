@@ -1,6 +1,6 @@
 ---
 /**
- * Spinning globe: an arc from Washington to every race this cycle (Senate and governor arcs end at
+ * Globe framed on the USA (gentle sway, drag to look around): an arc from Washington to every race this cycle (Senate and governor arcs end at
  * the state's center, House arcs at a fixed point inside the state). Real data only: arc color =
  * favored party, glow = money traded. Live Polymarket trades fire a comet down the race's arc,
  * sized by the trade's dollar value, and are listed in #live-trades if the page has one.
@@ -13,7 +13,7 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 ---
 <div class="mg" data-globe data-cycle={cycle}>
 	<canvas class="mg-canvas" aria-label="Globe showing a line from Washington, D.C. to every race; color shows the favored party, brightness shows trading volume, and live trades flash along their race's line" role="img"></canvas>
-	<p class="mg-hint" aria-hidden="true">Drag to turn</p>
+	<p class="mg-hint" aria-hidden="true">Drag to look around</p>
 	<script type="application/json" data-globe-data set:html={json} />
 </div>
 
@@ -68,29 +68,37 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		const proj = geoOrthographic().clipAngle(90).precision(0.6);
 		const path = geoPath(proj, ctx);
 		const grat = geoGraticule10();
-		let size = 0, rot = 96, tilt = -32, dragging = false, lastX = 0, lastY = 0, last = performance.now();
+		// Framed on the USA: fit the lower 48 to the canvas, then sway gently around it
+		const lower48 = { type: "FeatureCollection", features: states.features.filter((f: any) => !["Alaska", "Hawaii", "Puerto Rico"].includes(f.properties.name)) };
+		const HOME_ROT = 97, HOME_TILT = -38;
+		let width = 0, height = 0, rot = HOME_ROT, tilt = HOME_TILT, dragging = false, lastX = 0, lastY = 0, last = performance.now(), dragOffset = 0, tiltOffset = 0;
 		const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 		const bursts: Burst[] = [];
 
 		function resize() {
 			const r = canvas.getBoundingClientRect();
 			const dpr = Math.min(2, devicePixelRatio || 1);
-			size = r.width;
-			canvas.width = r.width * dpr;
-			canvas.height = r.width * dpr;
+			width = r.width; height = r.height;
+			canvas.width = width * dpr;
+			canvas.height = height * dpr;
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-			proj.translate([size / 2, size / 2]).scale(size / 2 - 6);
+			proj.rotate([HOME_ROT, HOME_TILT]).fitExtent([[width * 0.03, height * 0.06], [width * 0.97, height * 0.97]], lower48 as any);
 		}
 
 		function frame(now: number) {
 			const dt = Math.min(64, now - last) / 1000;
 			last = now;
-			if (!dragging && !reduce) rot = (rot - 6 * dt) % 360;
+			// gentle sway around the USA; dragging nudges the view and it eases back home
+			if (!dragging) { dragOffset *= 0.96; tiltOffset *= 0.96; }
+			const sway = reduce ? 0 : Math.sin(now / 9000) * 1.5;
+			rot = HOME_ROT + sway + dragOffset;
+			tilt = HOME_TILT + tiltOffset;
 			proj.rotate([rot, tilt]);
 			const center: [number, number] = [-rot, -tilt];
 			const visible = (p: [number, number]) => geoDistance(p, center) < Math.PI / 2 - 0.02;
-			ctx.clearRect(0, 0, size, size);
-			const g = ctx.createRadialGradient(size * 0.4, size * 0.35, size * 0.05, size / 2, size / 2, size / 2);
+			ctx.clearRect(0, 0, width, height);
+			const size = Math.max(width, height);
+			const g = ctx.createRadialGradient(width * 0.45, height * 0.2, size * 0.05, width / 2, height * 1.4, size * 1.2);
 			g.addColorStop(0, "#1c2533"); g.addColorStop(1, "#0b0f15");
 			ctx.beginPath(); path({ type: "Sphere" } as any); ctx.fillStyle = g; ctx.fill();
 			ctx.beginPath(); path(grat); ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.6; ctx.stroke();
@@ -159,8 +167,8 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		canvas.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
 		canvas.addEventListener("pointermove", (e) => {
 			if (!dragging) return;
-			rot += (e.clientX - lastX) * 0.4;
-			tilt = Math.max(-70, Math.min(70, tilt - (e.clientY - lastY) * 0.4));
+			dragOffset = Math.max(-40, Math.min(40, dragOffset + (e.clientX - lastX) * 0.15));
+			tiltOffset = Math.max(-20, Math.min(20, tiltOffset - (e.clientY - lastY) * 0.15));
 			lastX = e.clientX; lastY = e.clientY;
 			if (reduce) requestAnimationFrame(frame);
 		});
@@ -253,8 +261,8 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 </script>
 
 <style>
-	.mg { position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
-	.mg-canvas { width: 100%; aspect-ratio: 1; display: block; cursor: grab; touch-action: pan-y; }
+	.mg { position: relative; width: 100%; margin: 0 auto; }
+	.mg-canvas { width: 100%; aspect-ratio: 16 / 10; display: block; cursor: grab; touch-action: pan-y; }
 	.mg-canvas:active { cursor: grabbing; }
 	.mg-hint { position: absolute; bottom: 4px; right: 8px; margin: 0; font-size: 11px; color: rgb(255 255 255 / 0.45); pointer-events: none; }
 </style>

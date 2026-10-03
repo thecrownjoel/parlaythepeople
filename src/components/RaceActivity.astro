@@ -1,0 +1,185 @@
+---
+/**
+ * Market activity for one race: money flow, a trade tape from both exchanges (Polymarket live,
+ * Kalshi from the collector) and a live Polymarket order-book depth chart for the leading contract.
+ * Server renders the shell and Kalshi trades; the browser adds Polymarket trades, live updates and the book.
+ */
+import type { Race } from "../lib/markets";
+interface Props { race: Race; kalshi: [number, number, number | null, string][][] | null; kalshiTickers: { id: string; n: string; pa: string | null }[] }
+const { race } = Astro.props;
+const pTokens = (race.p?.o ?? []).flatMap((o: any) => [
+	o.tok ? [o.tok, o.n, o.pa ?? "O", 1] : null,
+	o.tokn ? [o.tokn, o.n, o.pa ?? "O", 0] : null,
+]).filter(Boolean);
+const cids = (race.p?.o ?? []).map((o: any) => o.cid).filter(Boolean);
+const lead = [...(race.p?.o ?? [])].sort((a, b) => b.p - a.p)[0] as any;
+// Kalshi trades as [ts, "k", name, party, takerYes, usd, priceOfSideBought]
+const kRows: any[] = [];
+for (const [i, t] of (Astro.props.kalshiTickers ?? []).entries()) {
+	for (const [ts, n, yes, side] of Astro.props.kalshi?.[i] ?? []) {
+		if (yes == null) continue;
+		const isYes = side === "yes";
+		const px = isYes ? yes : 1 - yes;
+		kRows.push([ts, "k", t.n, t.pa ?? "O", isYes ? 1 : 0, Math.round(n * px * 100) / 100, Math.round(px * 100) / 100]);
+	}
+}
+const cfg = JSON.stringify({ tokens: pTokens, cids, kalshi: kRows, book: lead?.tok ? { tok: lead.tok, name: lead.n, pa: lead.pa } : null }).replace(/</g, "\\u003c");
+---
+<div class="ra" data-race-activity>
+	<script type="application/json" data-ra-cfg set:html={cfg} />
+	<div class="grid2">
+		<div class="panel ra-flow">
+			<h3>Money flow · last 24 hours</h3>
+			<div class="ra-flowbar" aria-hidden="true"><i class="d" style="width:50%"></i><i class="r" style="width:50%"></i></div>
+			<div class="ra-flowtxt" data-ra-flow>Loading recent trades…</div>
+			<dl class="facts ra-stats" data-ra-stats></dl>
+		</div>
+		<div class="panel ra-bookp">
+			<h3>Order book{lead && <span class="ra-sub"> · Polymarket · {lead.n}</span>}</h3>
+			<div class="ra-book" data-ra-book><p class="ra-muted">{lead ? "Loading the live order book…" : "Polymarket doesn't list this race."}</p></div>
+			<p class="ra-muted" style="margin:6px 0 0;font-size:12px">Money waiting to buy (green) and sell (red) at each price. Refreshes every 30 seconds.</p>
+		</div>
+	</div>
+	<div class="panel" style="margin-top:14px">
+		<div class="ra-tapehead"><h3 style="margin:0">Trade tape</h3><span class="ra-live" data-ra-live><span class="ra-dot"></span>Connecting…</span></div>
+		<div class="ra-tapewrap">
+			<table class="tbl ra-tape">
+				<thead><tr><th>When</th><th>Exchange</th><th>Trade</th><th class="r">Price</th><th class="r">Amount</th></tr></thead>
+				<tbody data-ra-tape><tr><td colspan="5" class="ra-muted">Loading trades…</td></tr></tbody>
+			</table>
+		</div>
+		<p class="ra-muted" style="margin:8px 0 0;font-size:12px">Polymarket trades appear live. Kalshi trades are collected every 10 minutes for the most active contracts. Blue backs the Democrat, red the Republican.</p>
+	</div>
+</div>
+
+<script>
+	type Row = [number, "k" | "p", string, string, number, number, number]; // ts, exchange, name, party, backsYes, usd, price
+	const PARTY = (p: string) => (p === "D" ? "var(--bt-d)" : p === "R" ? "var(--bt-r)" : "var(--bt-oth)");
+	const other = (p: string) => (p === "D" ? "R" : p === "R" ? "D" : "O");
+	const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+	const money = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(v < 10 ? 2 : 0)}`);
+	const ago = (ts: number) => { const s = Math.max(0, Date.now() / 1000 - ts); return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
+
+	for (const root of document.querySelectorAll<HTMLElement>("[data-race-activity]")) {
+		const cfg = JSON.parse(root.querySelector("[data-ra-cfg]")!.textContent!);
+		const tokMap = new Map<string, [string, string, number]>(cfg.tokens.map((t: any) => [t[0], [t[1], t[2], t[3]]]));
+		let rows: Row[] = [...cfg.kalshi];
+		const tape = root.querySelector<HTMLElement>("[data-ra-tape]")!;
+		const live = root.querySelector<HTMLElement>("[data-ra-live]")!;
+
+		// which party a trade backs: buying Yes on X backs X; buying No (or selling Yes) backs the other side
+		const backs = (r: Row) => (r[4] ? r[3] : other(r[3]));
+		function render(flashTs?: number) {
+			rows.sort((a, b) => b[0] - a[0]);
+			rows = rows.slice(0, 200);
+			tape.innerHTML = rows.length ? rows.slice(0, 15).map((r) => {
+				const party = backs(r);
+				return `<tr class="${flashTs && r[0] >= flashTs ? "ra-flash" : ""}"><td>${ago(r[0])}</td><td><span class="ra-ex ra-${r[1]}">${r[1] === "k" ? "Kalshi" : "Polymarket"}</span></td>`
+					+ `<td><span class="sw" style="background:${PARTY(party)}"></span> ${r[4] ? "Yes" : "No"} · ${esc(r[2])}</td><td class="r num">${Math.round(r[6] * 100)}¢</td><td class="r num" style="color:${PARTY(party)}">${money(r[5])}</td></tr>`;
+			}).join("") : `<tr><td colspan="5" class="ra-muted">No recent trades on this race.</td></tr>`;
+			// money flow, last 24h
+			const day = rows.filter((r) => Date.now() / 1000 - r[0] < 86400);
+			const d = day.filter((r) => backs(r) === "D").reduce((a, r) => a + r[5], 0);
+			const rr = day.filter((r) => backs(r) === "R").reduce((a, r) => a + r[5], 0);
+			const tot = d + rr;
+			const bar = root.querySelector<HTMLElement>(".ra-flowbar")!;
+			(bar.children[0] as HTMLElement).style.width = `${tot ? (d / tot) * 100 : 50}%`;
+			(bar.children[1] as HTMLElement).style.width = `${tot ? (rr / tot) * 100 : 50}%`;
+			root.querySelector<HTMLElement>("[data-ra-flow]")!.innerHTML = tot
+				? `<b style="color:var(--bt-d)">${money(d)}</b> backed the Democrat · <b style="color:var(--bt-r)">${money(rr)}</b> backed the Republican`
+				: "No trades in the last 24 hours.";
+			const biggest = day.reduce((m: Row | null, r) => (!m || r[5] > m[5] ? r : m), null);
+			root.querySelector<HTMLElement>("[data-ra-stats]")!.innerHTML =
+				`<div><dt>Trades (24h)</dt><dd class="num">${day.length}</dd></div><div><dt>Traded (24h)</dt><dd class="num">${money(tot)}</dd></div>`
+				+ `<div><dt>Largest trade</dt><dd class="num">${biggest ? `${money(biggest[5])} · ${esc(biggest[2].split(" ").slice(-1)[0])}` : "—"}</dd></div>`;
+		}
+		render();
+		setInterval(() => render(), 15000);
+
+		// Polymarket: recent trades, then live
+		if (cfg.cids.length) {
+			fetch(`https://data-api.polymarket.com/trades?limit=150&takerOnly=true&market=${cfg.cids.join(",")}`)
+				.then((r) => (r.ok ? r.json() : []))
+				.then((ts: any[]) => {
+					for (const t of ts) {
+						const hit = tokMap.get(t.asset);
+						if (!hit) continue;
+						const isYes = hit[2] === 1, buy = t.side !== "SELL";
+						rows.push([t.timestamp, "p", hit[0], hit[1], isYes === buy ? 1 : 0, Number(t.size) * Number(t.price), Number(t.price)]);
+					}
+					render();
+				}).catch(() => {});
+			const ws = new WebSocket("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+			ws.onopen = () => { ws.send(JSON.stringify({ assets_ids: [...tokMap.keys()], type: "market" })); live.innerHTML = '<span class="ra-dot on"></span>Live'; };
+			ws.onmessage = (m) => {
+				let d: any; try { d = JSON.parse(m.data); } catch { return; }
+				for (const e of Array.isArray(d) ? d : [d]) {
+					if (e?.event_type !== "last_trade_price") continue;
+					const hit = tokMap.get(e.asset_id); if (!hit) continue;
+					const now = Math.floor(Date.now() / 1000), isYes = hit[2] === 1, buy = e.side !== "SELL";
+					rows.push([now, "p", hit[0], hit[1], isYes === buy ? 1 : 0, Number(e.size) * Number(e.price), Number(e.price)]);
+					render(now);
+				}
+			};
+			ws.onclose = () => (live.innerHTML = '<span class="ra-dot"></span>Offline');
+		} else {
+			live.innerHTML = '<span class="ra-dot"></span>Kalshi only';
+		}
+
+		// Order book depth for the leading Polymarket contract
+		const bookEl = root.querySelector<HTMLElement>("[data-ra-book]")!;
+		async function drawBook() {
+			if (!cfg.book) return;
+			try {
+				const b = await (await fetch(`https://clob.polymarket.com/book?token_id=${cfg.book.tok}`)).json();
+				const bids = (b.bids ?? []).map((x: any) => [Number(x.price), Number(x.size) * Number(x.price)]).sort((a: number[], c: number[]) => c[0] - a[0]);
+				const asks = (b.asks ?? []).map((x: any) => [Number(x.price), Number(x.size) * Number(x.price)]).sort((a: number[], c: number[]) => a[0] - c[0]);
+				if (!bids.length || !asks.length) { bookEl.innerHTML = '<p class="ra-muted">The order book is empty right now.</p>'; return; }
+				const mid = (bids[0][0] + asks[0][0]) / 2, lo = Math.max(0, mid - 0.15), hi = Math.min(1, mid + 0.15);
+				let cum = 0; const B = bids.filter((x: number[]) => x[0] >= lo).map((x: number[]) => [x[0], (cum += x[1])]);
+				cum = 0; const A = asks.filter((x: number[]) => x[0] <= hi).map((x: number[]) => [x[0], (cum += x[1])]);
+				const maxY = Math.max(B.at(-1)?.[1] ?? 1, A.at(-1)?.[1] ?? 1);
+				const W = 600, H = 200, X = (p: number) => ((p - lo) / (hi - lo)) * W, Y = (v: number) => H - (v / maxY) * (H - 10);
+				const step = (pts: number[][], dir: 1 | -1) => {
+					let d = `M${X(dir === 1 ? asks[0][0] : bids[0][0])},${H}`;
+					for (const [p, v] of pts) d += `L${X(p)},${Y(v)}`;
+					return d + `L${X(pts.at(-1)?.[0] ?? mid)},${H}Z`;
+				};
+				bookEl.innerHTML = `<svg viewBox="0 0 ${W} ${H + 22}" class="ra-depth" role="img" aria-label="Order book depth around ${Math.round(mid * 100)} cents">`
+					+ `<path d="${step(B, -1)}" fill="rgb(76 195 138 / .25)" stroke="#4cc38a" stroke-width="2"/>`
+					+ `<path d="${step(A, 1)}" fill="rgb(232 90 76 / .22)" stroke="#e85a4c" stroke-width="2"/>`
+					+ `<line x1="${X(mid)}" x2="${X(mid)}" y1="0" y2="${H}" stroke="var(--color-muted)" stroke-dasharray="3 3"/>`
+					+ `<text x="${X(mid)}" y="14" text-anchor="middle" class="ra-axis">${Math.round(mid * 100)}¢</text>`
+					+ [lo, (lo + mid) / 2, (mid + hi) / 2, hi].map((p, i) => `<text x="${X(p)}" y="${H + 16}" text-anchor="${i === 0 ? "start" : i === 3 ? "end" : "middle"}" class="ra-axis">${Math.round(p * 100)}¢</text>`).join("")
+					+ `</svg><div class="ra-booknums"><span style="color:#4cc38a">${money(B.at(-1)?.[1] ?? 0)} bids within 15¢</span><span>Spread ${Math.round((asks[0][0] - bids[0][0]) * 100)}¢</span><span style="color:#e85a4c">${money(A.at(-1)?.[1] ?? 0)} asks within 15¢</span></div>`;
+			} catch { bookEl.innerHTML = '<p class="ra-muted">The order book is unavailable right now.</p>'; }
+		}
+		drawBook();
+		setInterval(() => { if (!document.hidden) drawBook(); }, 30000);
+	}
+</script>
+
+<style>
+	.ra h3 { font-size: 16px; margin: 0 0 10px; }
+	.ra-sub { font-weight: 400; color: var(--color-muted); font-size: 13px; }
+	.ra-muted { color: var(--color-muted); font-size: 13.5px; margin: 0; }
+	.ra-flowbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; background: var(--color-border); margin-bottom: 8px; }
+	.ra-flowbar i { display: block; height: 100%; transition: width .8s cubic-bezier(.2,.7,.2,1); }
+	.ra-flowbar .d { background: var(--bt-d); } .ra-flowbar .r { background: var(--bt-r); }
+	.ra-flowtxt { font-size: 14px; margin-bottom: 12px; }
+	.ra-depth { width: 100%; height: auto; display: block; }
+	.ra-depth :global(.ra-axis) { fill: var(--color-muted); font: 11px var(--font-mono), monospace; }
+	.ra-booknums { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 12px var(--font-mono), monospace; color: var(--color-text-secondary); margin-top: 4px; }
+	.ra-tapehead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+	.ra-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-muted); }
+	.ra-live :global(.ra-dot) { width: 8px; height: 8px; border-radius: 50%; background: var(--bt-oth); display: inline-block; }
+	.ra-live :global(.ra-dot.on) { background: #4cc38a; box-shadow: 0 0 0 3px rgb(76 195 138 / .25); }
+	.ra-tapewrap { overflow-x: auto; }
+	.ra-tape { font-size: 13.5px; }
+	.ra-tape :global(td) { white-space: nowrap; }
+	.ra-tape :global(.ra-ex) { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; background: var(--bt-chip); }
+	.ra-tape :global(.ra-k) { color: #00dd94; } .ra-tape :global(.ra-p) { color: #6f8dff; }
+	.ra-tape :global(.ra-flash) { animation: raflash 2.4s ease; }
+	@keyframes raflash { 0% { background: rgb(255 255 255 / .12); } 100% { background: transparent; } }
+	@media (prefers-reduced-motion: reduce) { .ra-flowbar i { transition: none; } .ra-tape :global(.ra-flash) { animation: none; } }
+</style>

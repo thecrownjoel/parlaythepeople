@@ -1,9 +1,13 @@
 ---
-/** Tile map of the 50 states + DC, colored by market rating for the cycle's Senate or governor races. */
+/** 2026 map: state tiles for Senate and governor races, and a district-by-district House view. Every square links to its race. */
 import type { StateRace } from "../lib/trends";
 import { RATING_LABEL, pct } from "../lib/markets";
-interface Props { senate: StateRace[]; governor: StateRace[]; year: number }
-const { senate, governor, year } = Astro.props;
+interface Props { senate: StateRace[]; governor: StateRace[]; house?: StateRace[]; year: number }
+const { senate, governor, house = [], year } = Astro.props;
+// House: every district as a square, grouped by state (alphabetical), districts in order
+const houseByState = [...house.reduce((m, r) => m.set(r.state, [...(m.get(r.state) ?? []), r]), new Map<string, StateRace[]>()).entries()]
+	.sort(([a], [b]) => a.localeCompare(b))
+	.map(([state, rs]) => ({ state, st: rs[0].st, rs: rs.sort((a, b) => (parseInt(a.label.split("-")[1]) || 0) - (parseInt(b.label.split("-")[1]) || 0)) }));
 const GRID: Record<string, [number, number]> = {
 	AK: [0, 0], ME: [11, 0], VT: [10, 1], NH: [11, 1],
 	WA: [1, 2], ID: [2, 2], MT: [3, 2], ND: [4, 2], MN: [5, 2], IL: [6, 2], WI: [7, 2], MI: [8, 2], NY: [9, 2], RI: [10, 2], MA: [11, 2],
@@ -14,11 +18,12 @@ const GRID: Record<string, [number, number]> = {
 	HI: [0, 7], TX: [4, 7], FL: [9, 7],
 };
 const maps = [["senate", "Senate", senate], ["governor", "Governor", governor]] as const;
+const tabs = [...maps, ...(house.length ? [["house", "House", house] as const] : [])];
 const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 ---
 <div class="stm" data-stm>
 	<div class="stm-tabs" role="group" aria-label="Office shown on the map">
-		{maps.map(([k, name, rs], i) => <button type="button" data-office={k} aria-pressed={i === 0 ? "true" : "false"}>{name} <span>{rs.length}</span></button>)}
+		{tabs.map(([k, name, rs], i) => <button type="button" data-office={k} aria-pressed={i === 0 ? "true" : "false"}>{name} <span>{rs.length}</span></button>)}
 	</div>
 	{maps.map(([k, name, rs], i) => {
 		const by = new Map(rs.map((r) => [r.st, r]));
@@ -38,6 +43,23 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 			</div>
 		);
 	})}
+	{house.length > 0 && (
+		<div class="stm-house" data-map="house" hidden role="list" aria-label={`${year} House races by state`}>
+			{houseByState.map(({ state, st, rs }) => {
+				const d = rs.filter((r) => r.lead === "D").length, rep = rs.length - d;
+				return (
+					<div class="sh-state" role="listitem">
+						<div class="sh-head"><b>{state}</b><span><span style="color:var(--bt-d)">{d}</span> · <span style="color:var(--bt-r)">{rep}</span></span></div>
+						<div class="sh-seats">
+							{rs.map((r) => (
+								<a class={`sh-seat rt-${r.rating === "I" ? "T" : r.rating}`} href={r.path} title={`${r.label}: ${RATING_LABEL[r.rating]}, ${r.lead} ${pct(r.lp)}${r.who ? ` (${r.who})` : ""}`} aria-label={`${r.label}, ${RATING_LABEL[r.rating]}`}>{r.label.split("-")[1] === "AL" ? "AL" : parseInt(r.label.split("-")[1])}</a>
+							))}
+						</div>
+					</div>
+				);
+			})}
+		</div>
+	)}
 	<div class="stm-legend">{ORDER.map((r) => <span><i class={`rt-${r}`}></i>{RATING_LABEL[r]}</span>)}<span><i class="stm-none"></i>No race</span></div>
 </div>
 <script>
@@ -45,6 +67,7 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 		el.querySelectorAll<HTMLButtonElement>("[data-office]").forEach((b) => b.addEventListener("click", () => {
 			el.querySelectorAll("[data-office]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
 			el.querySelectorAll<HTMLElement>("[data-map]").forEach((m) => (m.hidden = m.dataset.map !== b.dataset.office));
+			el.dispatchEvent(new CustomEvent("stm:office", { detail: b.dataset.office, bubbles: true }));
 		}));
 	}
 </script>
@@ -65,6 +88,14 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 	.rt-lD { background: color-mix(in oklab, var(--bt-d) 30%, var(--color-surface)); } .rt-T { background: var(--bt-toss); }
 	.rt-lR { background: color-mix(in oklab, var(--bt-r) 30%, var(--color-surface)); } .rt-LR { background: color-mix(in oklab, var(--bt-r) 62%, var(--color-surface)); }
 	.rt-SR { background: var(--bt-r); color: #fff; }
+	.stm-house { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+	.stm-house[hidden] { display: none; }
+	.sh-state { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+	.sh-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+	.sh-head span { font-family: var(--font-mono), monospace; font-weight: 600; }
+	.sh-seats { display: flex; flex-wrap: wrap; gap: 3px; }
+	.sh-seat { width: 26px; height: 26px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font: 600 10.5px var(--font-mono), monospace; color: var(--color-text); text-decoration: none; transition: transform .12s; }
+	.sh-seat:hover, .sh-seat:focus-visible { transform: scale(1.18); outline: 2px solid var(--color-text); z-index: 1; }
 	.stm-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--color-text-secondary); }
 	.stm-legend span { display: inline-flex; align-items: center; gap: 6px; }
 	.stm-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }

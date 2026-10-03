@@ -15,6 +15,11 @@ import "../../../styles/data.css";
 import Sparkline from "../../../components/Sparkline.astro";
 import LunarCrushCredit from "../../../components/LunarCrushCredit.astro";
 import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
+import RaceActivity from "../../../components/RaceActivity.astro";
+import { getKalshiTrades } from "../../../lib/markets";
+import { raceSpark } from "../../../lib/trends";
+import { renderMulti, rangeOf } from "../../../lib/chart";
+import "../../../styles/charts.css";
 
 const { cycle, office, place } = Astro.params;
 if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
@@ -25,8 +30,27 @@ if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
 const c = consensus(race);
-const social = await getSocial();
+const [social, kTrades] = await Promise.all([getSocial(), getKalshiTrades()]);
+// Kalshi trades for this race's contracts (collected every 10 minutes for the most active contracts)
+const kalshiTickers = (race.k?.o ?? []).filter((o) => o.id).map((o) => ({ id: o.id!, n: o.n, pa: o.pa }));
+const kalshiByTicker = kalshiTickers.map((t) => kTrades?.trades?.[t.id] ?? []);
+// market stats from the collector
+const sum = (xs: (number | null | undefined)[]) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
+const kStats = race.k ? { v24: sum(race.k.o.map((o: any) => o.m?.v24)), oi: sum(race.k.o.map((o: any) => o.m?.oi)) } : null;
+const pLead = race.p ? ([...race.p.o].sort((a, b) => b.p - a.p)[0] as any) : null;
+const pStats = race.p ? { v24: sum(race.p.o.map((o: any) => o.m?.v24)), liq: sum(race.p.o.map((o: any) => o.m?.liq)), w: pLead?.m?.w ?? null, mo: pLead?.m?.mo ?? null, leadName: pLead?.n } : null;
 const rp = racePulse(race, pulseIndex(social));
+// 30 days: the Democrat's share of the conversation vs. Democratic odds
+let convoChart = "";
+if (rp.d && rp.r) {
+	const rByDay = new Map(rp.r.series.map(([t, v]) => [Math.floor(t / 86400), v]));
+	const share = rp.d.series.map(([t, v]) => { const o = rByDay.get(Math.floor(t / 86400)); return o != null && v + o > 0 ? { ts: t, v: v / (v + o) } : null; }).filter(Boolean) as { ts: number; v: number }[];
+	const odds = await raceSpark(race.id, 30, "D");
+	convoChart = renderMulti([
+		{ spec: { kind: "out", id: race.id, key: "convo", label: `${rp.dName?.split(" ").slice(-1)[0]}'s share of buzz`, color: "#f5b041" }, points: share },
+		{ spec: { kind: "out", id: race.id, key: "odds", label: "Democratic odds", color: "#5e92ee", dash: true }, points: odds },
+	], { range: rangeOf("1m"), title: "Conversation share vs. odds" });
+}
 const pulseSides = ([["D", rp.dName, rp.d], ["R", rp.rName, rp.r]] as const).filter(([, , p]) => p);
 const socialPosts = [...(rp.d?.top ?? []), ...(rp.r?.top ?? [])]
 	.filter((p, i, a) => a.findIndex((q) => q.u === p.u) === i)
@@ -109,6 +133,17 @@ const partyName = (p: string | null) => (p === "D" ? "Democratic" : p === "R" ? 
 const generic = (n: string) => /^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other)$/i.test(n.trim());
 ---
 <style>
+	.act-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 10px; margin-bottom: 14px; }
+	.act-stat { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+	.act-stat > span:first-child { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.act-stat b { font-family: var(--font-display); font-size: 26px; line-height: 1.05; }
+	.act-stat > span:last-child { font-size: 12px; color: var(--color-muted); }
+	.themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+	.themes-lab { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 6px; }
+	.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+	.theme { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface); }
+	.theme.D { border-color: color-mix(in oklab, var(--bt-d) 50%, var(--color-border)); }
+	.theme.R { border-color: color-mix(in oklab, var(--bt-r) 50%, var(--color-border)); }
 	.pulse-card { display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--pc); }
 	.pc-head { display: flex; align-items: center; gap: 8px; }
 	.pc-head strong { font-size: 17px; }
@@ -219,6 +254,20 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 			</div>
 		</section>
 
+		<section aria-labelledby="activity-h">
+			<h2 id="activity-h">Market activity</h2>
+			<p class="sec-note">How much is trading, where the money is going, and the live order book.</p>
+			<div class="act-stats">
+				{kStats && <div class="act-stat"><span class="x-k">Kalshi</span><b class="num">{compact(kStats.v24)}</b><span>contracts traded (24h)</span></div>}
+				{kStats && <div class="act-stat"><span class="x-k">Kalshi</span><b class="num">{compact(kStats.oi)}</b><span>contracts open</span></div>}
+				{pStats && <div class="act-stat"><span class="x-p">Polymarket</span><b class="num">{fmtVol(pStats.v24)}</b><span>traded (24h)</span></div>}
+				{pStats && <div class="act-stat"><span class="x-p">Polymarket</span><b class="num">{fmtVol(pStats.liq)}</b><span>in the order book</span></div>}
+				{pStats?.w != null && <div class="act-stat"><span>1 week</span><b class={`num ${pStats.w >= 0 ? "pc-up" : "pc-down"}`}>{pStats.w >= 0 ? "▲" : "▼"} {Math.abs(Math.round(pStats.w * 100))}¢</b><span>{pStats.leadName}</span></div>}
+				{pStats?.mo != null && <div class="act-stat"><span>1 month</span><b class={`num ${pStats.mo >= 0 ? "pc-up" : "pc-down"}`}>{pStats.mo >= 0 ? "▲" : "▼"} {Math.abs(Math.round(pStats.mo * 100))}¢</b><span>{pStats.leadName}</span></div>}
+			</div>
+			<RaceActivity race={race} kalshi={kalshiByTicker} kalshiTickers={kalshiTickers} />
+		</section>
+
 		{pulseSides.length > 0 && (
 			<section aria-labelledby="pulse-h">
 				<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
@@ -251,6 +300,20 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 							<span class="split2"><i class="d" style={`width:${rp.oddsD * 100}%`}></i><i class="r" style={`width:${(1 - rp.oddsD) * 100}%`}></i></span>
 							<span class="num">{Math.round(rp.oddsD * 100)} / {Math.round((1 - rp.oddsD) * 100)}</span>
 						</div>
+					</div>
+				)}
+				{convoChart && (
+					<div class="panel" style="margin-top:14px">
+						<h3>Conversation share vs. odds · last 30 days</h3>
+						<div class="hc-body" set:html={convoChart} />
+					</div>
+				)}
+				{pulseSides.some(([, , p]) => (p as any)?.rel?.length) && (
+					<div class="themes" style="margin-top:14px">
+						{pulseSides.map(([party, name, p]) => (p as any)?.rel?.length > 0 && (
+							<div><span class="themes-lab">What people connect with {name?.split(" ").slice(-1)[0]}</span>
+								<div class="chips">{(p as any).rel.slice(0, 10).map((t: string) => <span class={`theme ${party}`}>{t}</span>)}</div></div>
+						))}
 					</div>
 				)}
 				{socialPosts.length > 0 && (

@@ -186,3 +186,6 @@ export function latestPoint(data: CycleData, raceId: string): HistoryPoint | nul
 export interface NewsItem { title: string; source: string; url: string; ts: number; tag: string }
 /** Political headlines for the "Latest" strip (collected from Google News every 10 minutes). */
 export const getNews = () => r2json<{ generated: number; items: NewsItem[] }>("news.json");
+
+/** Recent Kalshi trades for the most active contracts: {ticker: [[unix_ts, contracts, yes_price, taker_side]]}. */
+export const getKalshiTrades = () => r2json<{ generated: number; trades: Record<string, [number, number, number | null, string][]> }>("kalshi_trades.json");

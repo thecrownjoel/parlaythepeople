@@ -1,0 +1,185 @@
+---
+/** How to use Parlay the People: every feature, how to read it, and an FAQ. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import LunarCrushCredit from "../../components/LunarCrushCredit.astro";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const origin = Astro.url.origin;
+const toc: [string, string][] = [
+	["quick-start", "Quick start"],
+	["reading-odds", "Reading the odds"],
+	["homepage", "The homepage, section by section"],
+	["race-pages", "Race pages"],
+	["the-pulse", "The Pulse: social buzz vs. odds"],
+	["live-trades", "Live trades on the map"],
+	["search", "Search"],
+	["presidency", "The presidential race"],
+	["data", "Data, history and the API"],
+	["faq", "FAQ"],
+];
+const faqs: [string, string][] = [
+	["What is Parlay the People?", `${SITE_NAME} tracks what prediction markets expect in U.S. elections. It puts Kalshi and Polymarket odds side by side for every presidential, Senate, House and governor race, records how they move, and adds social buzz from LunarCrush and political news and analysis.`],
+	["What does a 62% on Parlay the People mean?", "It means traders are pricing that outcome at about a 62% chance. A contract that pays $1 if the outcome happens is trading near 62 cents. It is a crowd forecast, not a certainty: 62% favorites lose about 4 times in 10."],
+	["Why do Kalshi and Polymarket show different odds?", "They are separate exchanges with different traders, rules and fees, so prices drift apart. Most races agree within a few points. The site shows both, the average, and the gap, and highlights the races where they disagree most."],
+	["What is The Pulse?", "The Pulse compares social conversation, measured by LunarCrush, with market odds. It shows each candidate's share of the conversation next to their share of the odds, plus interactions, how many people are posting and sentiment."],
+	["What does it mean when a candidate has more buzz than odds?", "They are being talked about more than traders are betting on them. That can mean controversy, a viral moment or enthusiasm that hasn't reached the market yet. It isn't a prediction on its own, but sustained gaps are worth watching."],
+	["Where does the social data come from?", "From LunarCrush, which collects public posts from X, Reddit, YouTube, TikTok, news sites and more, filters spam and bots, and scores sentiment. Parlay the People refreshes it about once an hour."],
+	["What does sentiment mean?", "The share of posts about a candidate that read as positive. It describes the tone of the conversation online, not how voters will vote."],
+	["How live are the trades on the map?", "Polymarket trades appear the moment they happen: a comet flies down the race's line, sized by the dollars traded. Prices across the site refresh every 10 minutes from both exchanges."],
+	["How far back does the history go?", "Daily prices go back to November 2024, the day after the last election. The last 7 days are kept every 10 minutes, and Election Day week is kept at full detail permanently."],
+	["Can I use the data?", "Yes. Every number is available as JSON or CSV from the Data & API page, free with attribution and a link."],
+	["Is this betting advice?", "No. Parlay the People reports market prices and social data. It is not affiliated with Kalshi, Polymarket or any campaign, and nothing here is betting or investment advice."],
+];
+const ld = graph(
+	organization(origin),
+	{ "@type": "HowTo", name: `How to use ${SITE_NAME}`, url: `${origin}/guide/`, step: toc.slice(0, 9).map(([id, name], i) => ({ "@type": "HowToStep", position: i + 1, name, url: `${origin}/guide/#${id}` })) },
+	breadcrumbs(origin, [["Guide", "/guide/"]]),
+	faq(faqs),
+);
+---
+<Base title="Guide: how to use Parlay the People" description="Every feature of Parlay the People explained: reading election odds, share prices, The Pulse social buzz from LunarCrush, live trades, search, price history and the data API." canonical={`${origin}/guide/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp guide">
+		<header class="dp-head">
+			<p class="eyebrow">Guide</p>
+			<h1>How to use {SITE_NAME}</h1>
+			<p class="lede">{SITE_NAME} turns election betting markets and social media into one picture: what traders expect, what people are saying, and how both change over time. Here's every feature and how to read it.</p>
+		</header>
+
+		<div class="guide-grid">
+			<nav class="guide-toc" aria-label="On this page">
+				<p class="eyebrow">On this page</p>
+				<ol>{toc.map(([id, name]) => <li><a href={`#${id}`}>{name}</a></li>)}</ol>
+			</nav>
+
+			<div class="guide-body">
+				<section id="quick-start">
+					<h2>Quick start</h2>
+					<ol class="steps">
+						<li><strong>Start at the top of the homepage.</strong> The midterms snapshot shows who's favored to control the Senate and House and how many seats each party is likely to hold.</li>
+						<li><strong>Find a race.</strong> Press <kbd>/</kbd> or tap the magnifying glass and type a state, a district like “TX-28”, or a candidate's name.</li>
+						<li><strong>Open the race page</strong> for the odds on both exchanges, live share prices, social buzz and the full price history.</li>
+					</ol>
+				</section>
+
+				<section id="reading-odds">
+					<h2>Reading the odds</h2>
+					<p>Prediction markets sell contracts that pay $1 if something happens. If a “Yes” on Troy Jackson trades at 60¢, traders collectively give him about a 60% chance. Every percentage on the site is that kind of price.</p>
+					<ul>
+						<li><strong>Two exchanges, side by side.</strong> We show Kalshi and Polymarket separately, plus their average. When they disagree by several points, we flag it.</li>
+						<li><strong>Ratings.</strong> Safe means the leader is at 90% or more, Likely 75–90%, Lean 60–75%, and Toss-up below 60%.</li>
+						<li><strong>Share prices.</strong> Race pages show each contract's price, the best bid (what buyers will pay), the best ask (what sellers want), the last trade and the 24-hour change, in cents.</li>
+						<li><strong>Odds aren't certainties.</strong> A 70% favorite loses 3 times in 10. Treat prices as the crowd's best guess, updated in real time.</li>
+					</ul>
+				</section>
+
+				<section id="homepage">
+					<h2>The homepage, section by section</h2>
+					<dl class="defs">
+						<div><dt>Midterms snapshot</dt><dd>Gauges for Senate and House control, the most likely seat counts, the chance of a sweep, the national House vote, toss-ups and money traded.</dd></div>
+						<div><dt>Latest</dt><dd>A scrolling strip of political headlines and live market headlines. Hover to pause; click to read the story.</dd></div>
+						<div><dt>The big picture</dt><dd>Headline odds with their 30-day change and a 90-day trend line.</dd></div>
+						<div><dt>What's moving the markets</dt><dd>Lead changes (races where the favorite flipped in the last 30 or 90 days), and the presidential candidates gaining or losing the most ground.</dd></div>
+						<div><dt>The Pulse</dt><dd>Social buzz from LunarCrush against market odds. <a href="#the-pulse">More below.</a></dd></div>
+						<div><dt>The live map</dt><dd>A line from Washington to every Senate, House and governor race, colored by the favored party and glowing with money traded. Live trades flash across it.</dd></div>
+						<div><dt>The 2026 map</dt><dd>Switch between Senate, Governor and House. The House view shows every district as a square, grouped by state. Tap any state or district for its race page.</dd></div>
+						<div><dt>Moves, close races, disagreements</dt><dd>The week's biggest odds swings, the closest races, and where Kalshi and Polymarket differ most.</dd></div>
+						<div><dt>Who wins the White House</dt><dd>The top presidential contenders with 90-day trends and both parties' nomination leaders.</dd></div>
+						<div><dt>Analysis</dt><dd>Our latest articles, newest first, with the author and date.</dd></div>
+					</dl>
+				</section>
+
+				<section id="race-pages">
+					<h2>Race pages</h2>
+					<p>Every race has its own page, for example <a href="/2026/senate/maine/">Maine Senate</a> or <a href="/2026/house/ca-22/">CA-22</a>. From top to bottom:</p>
+					<ul>
+						<li><strong>The answer first</strong>: one sentence on who's favored, by how much, on each exchange.</li>
+						<li><strong>Current odds</strong> with the rating, each exchange's number and the gap between them.</li>
+						<li><strong>Share prices</strong>: a quote board for each exchange.</li>
+						<li><strong>Market activity</strong>: 24-hour volume, open interest, order-book liquidity and weekly moves; a money-flow bar showing which candidate the last day's dollars backed; a live order-book depth chart; and a trade tape with Polymarket trades as they happen and Kalshi trades every 10 minutes.</li>
+						<li><strong>Social pulse</strong>: each candidate's buzz, sentiment and top posts (see <a href="#the-pulse">The Pulse</a>).</li>
+						<li><strong>Price history</strong> with range buttons: <kbd>24H</kbd> <kbd>1W</kbd> <kbd>1M</kbd> <kbd>3M</kbd> <kbd>1Y</kbd> <kbd>All</kbd>. A red line marks Election Day when it's in range.</li>
+						<li><strong>Every candidate</strong> on each exchange, related races, a short FAQ and links to the raw data.</li>
+					</ul>
+				</section>
+
+				<section id="the-pulse">
+					<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><h2>The Pulse: social buzz vs. odds</h2><LunarCrushCredit /></div>
+					<p>Markets show where the money is. Social media shows where the attention is. The Pulse puts them side by side, using data from <a href="https://lunarcrush.com/?utm_source=parlaythepeople&utm_medium=referral&utm_campaign=guide" target="_blank" rel="noopener">LunarCrush</a>, which measures public conversation across X, Reddit, YouTube, TikTok, news and more, with spam and bots filtered out.</p>
+					<h3>What we measure</h3>
+					<dl class="defs">
+						<div><dt>Interactions (24h)</dt><dd>Likes, replies, reposts, views and other engagement on posts about the candidate in the last day.</dd></div>
+						<div><dt>People posting</dt><dd>How many distinct accounts posted about them.</dd></div>
+						<div><dt>Sentiment</dt><dd>The share of posts that read as positive. It's the tone online, not a poll of voters.</dd></div>
+						<div><dt>This week vs. last</dt><dd>How much the conversation grew or shrank compared with the week before.</dd></div>
+						<div><dt>Share of conversation</dt><dd>In a two-candidate race, each candidate's slice of the combined interactions.</dd></div>
+					</dl>
+					<h3>How to read it</h3>
+					<ul>
+						<li><strong>Buzz well above odds</strong> (“60% of the buzz, 41% of the odds”): lots of attention that traders aren't buying. Often controversy or a viral moment; sometimes enthusiasm the market hasn't priced yet.</li>
+						<li><strong>Odds well above buzz</strong>: quiet confidence. Traders expect a win even though few people are talking about it.</li>
+						<li><strong>Buzz rising fast</strong>: watch the odds next. Big jumps in conversation sometimes come before the market moves, and sometimes fade.</li>
+					</ul>
+					<p>On race pages you'll also see a <strong>30-day chart of conversation share against the odds</strong>, so you can spot when buzz moved before the market, and the <strong>themes people connect with each candidate</strong>.</p>
+					<p>Find The Pulse on the homepage (head-to-heads, the most talked-about candidates, buzz rising), on every race page, and in search.</p>
+				</section>
+
+				<section id="live-trades">
+					<h2>Live trades on the map</h2>
+					<p>When someone trades a 2026 race on Polymarket, a comet flies from Washington down that race's line and a ring opens at the state. Bigger trades make bigger comets. Blue backs the Democrat (buying their “Yes” or selling the Republican's), red backs the Republican. The <strong>Live trades</strong> list beside the map shows each one with the amount, the candidate and how long ago it happened. Markets are quiet overnight; the list starts with the latest real trades so you can see recent activity.</p>
+				</section>
+
+				<section id="search">
+					<h2>Search</h2>
+					<p>Press <kbd>/</kbd> or <kbd>⌘K</kbd>, or tap the magnifying glass. Search finds races, candidates and articles:</p>
+					<ul>
+						<li>A state (“Ohio”), a district (“CA-22”) or an office (“Texas governor”).</li>
+						<li>A candidate's name: results show their odds and today's social buzz.</li>
+						<li>With nothing typed, you'll see <strong>Trending on social</strong>: the candidates people are talking about most right now.</li>
+					</ul>
+					<p>Use the arrow keys to move through results and Enter to open one.</p>
+				</section>
+
+				<section id="presidency">
+					<h2>The presidential race</h2>
+					<p>The <a href="/2028/president/">2028 presidency page</a> shows which party is favored, every candidate's chance of winning, both nomination races, and charts of how the field has moved since November 2024.</p>
+				</section>
+
+				<section id="data">
+					<h2>Data, history and the API</h2>
+					<p>Prices refresh every 10 minutes. History is kept every 10 minutes for a week, hourly for 90 days and daily forever, with Election Day week kept in full. Everything is downloadable as JSON or CSV from <a href="/data/">Data &amp; API</a>; the <a href="/methodology/">methodology</a> explains exactly how each number is calculated.</p>
+				</section>
+
+				<section id="faq">
+					<h2>FAQ</h2>
+					<div class="faq">{faqs.map(([q, a], i) => <details open={i < 3}><summary>{q}</summary><p>{a}</p></details>)}</div>
+				</section>
+			</div>
+		</div>
+	</div>
+</Base>
+
+<style>
+	.guide-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
+	.guide-toc { position: sticky; top: calc(var(--nav-height, 64px) + 20px); }
+	.guide-toc ol { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+	.guide-toc a { color: var(--color-text-secondary); text-decoration: none; }
+	.guide-toc a:hover { color: var(--color-text); text-decoration: underline; }
+	.guide-body { display: flex; flex-direction: column; gap: 36px; max-width: 760px; }
+	.guide-body section { scroll-margin-top: calc(var(--nav-height, 64px) + 16px); }
+	.guide-body p, .guide-body li, .guide-body dd { line-height: 1.6; color: var(--color-text-secondary); }
+	.guide-body p { margin: 0 0 12px; }
+	.guide-body ul, .guide-body ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+	.guide-body strong { color: var(--color-text); }
+	.guide-body h3 { font-size: 17px; margin: 18px 0 8px; }
+	.guide-body a { color: var(--color-text); }
+	.steps li::marker { font-family: var(--font-display); font-weight: 800; color: #a3262a; }
+	.defs { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+	.defs div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.defs dt { font-weight: 700; color: var(--color-text); }
+	.defs dd { margin: 0; }
+	kbd { font-family: var(--font-mono), monospace; font-size: 12px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--bt-chip); color: var(--color-text); }
+	@media (max-width: 860px) { .guide-grid { grid-template-columns: 1fr; } .guide-toc { position: static; } .defs div { grid-template-columns: 1fr; } }
+</style>
