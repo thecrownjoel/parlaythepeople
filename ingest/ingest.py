@@ -243,7 +243,9 @@ def k_outcomes(e):
         p, _thin, vol, d = kprice(m)
         par = party_of(m.get("subtitle")) or {"D": "D", "R": "R", "I": "I"}.get(m["ticker"].rsplit("-", 1)[-1])
         out.append({"id": m["ticker"], "n": m.get("yes_sub_title") or m["ticker"], "pa": par,
-                    "p": round(p, 4), "d": d, "v": round(vol)})
+                    "p": round(p, 4), "d": d, "v": round(vol),
+                    # share prices in dollars: best bid, best ask, last trade (for the race pages' quote board)
+                    "q": [fnum(m.get("yes_bid_dollars")), fnum(m.get("yes_ask_dollars")), fnum(m.get("last_price_dollars"))]})
     return out
 
 
@@ -261,6 +263,7 @@ def p_outcomes(e):
         if name in ("Republican Party", "Republicans", "Republican"):
             name = "Republicans"
         out.append({"tok": ptoken(m), "n": name, "pa": par, "p": round(p, 4),
+                    "q": [fnum(m.get("bestBid")), fnum(m.get("bestAsk")), fnum(m.get("lastTradePrice"))],
                     "d": m.get("oneDayPriceChange"), "v": round(float(m.get("volume") or 0))})
     return out
 
