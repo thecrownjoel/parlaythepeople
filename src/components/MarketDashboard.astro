@@ -533,7 +533,7 @@ renderAll();
 .bt-dash .rt-SR,.bt-dash .lbar button.rt-SR{background:var(--r)}
 .bt-dash .rt-I,.bt-dash .lbar button.rt-I{background:color-mix(in oklab,var(--oth) 45%,var(--surface))}
 /* toolbar */
-.bt-dash .toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line)}
+.bt-dash .toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;position:sticky;top:calc(var(--nav-height, 64px) + 3px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line)}
 .bt-dash .seg{display:inline-flex;background:var(--chip);border-radius:8px;padding:3px;gap:2px}
 .bt-dash .seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:6px;font-weight:600;font-size:13px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:baseline}
 .bt-dash .seg button .c{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);font-weight:400}

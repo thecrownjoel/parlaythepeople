@@ -1,0 +1,79 @@
+---
+/** Header country menu. Lists COUNTRIES; marks the one being viewed. */
+import { COUNTRIES, DEFAULT_COUNTRY } from "../lib/countries";
+interface Props { current?: string }
+const { current = DEFAULT_COUNTRY } = Astro.props;
+const active = COUNTRIES.find((c) => c.code === current) ?? COUNTRIES[0];
+---
+<details class="cs" data-country-switcher>
+	<summary class="cs-btn" aria-label={`Country: ${active.name}. Change country`}>
+		<span class="cs-flag" set:html={active.flag} />
+		<span class="cs-code">{active.short}</span>
+		<svg class="cs-caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+	</summary>
+	<div class="cs-menu">
+		<p class="cs-head">Elections in</p>
+		<ul>
+			{COUNTRIES.map((c) => (
+				<li>
+					<a href={c.href} aria-current={c.code === active.code ? "true" : undefined} lang="en">
+						<span class="cs-flag" set:html={c.flag} />
+						<span class="cs-name">{c.name}</span>
+						{c.code === active.code && <svg class="cs-check" viewBox="0 0 12 10" aria-hidden="true"><path d="M1 5l3.5 3.5L11 1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>}
+					</a>
+				</li>
+			))}
+		</ul>
+		{COUNTRIES.length === 1 && <p class="cs-note">More countries are on the way.</p>}
+	</div>
+</details>
+
+<script>
+	// Close on outside click or Escape; native <details> handles opening and keyboard toggling.
+	for (const el of document.querySelectorAll<HTMLDetailsElement>("[data-country-switcher]")) {
+		document.addEventListener("click", (e) => {
+			if (el.open && !el.contains(e.target as Node)) el.open = false;
+		});
+		el.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && el.open) {
+				el.open = false;
+				el.querySelector("summary")?.focus();
+			}
+		});
+	}
+</script>
+
+<style>
+	.cs { position: relative; }
+	.cs-btn {
+		list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+		padding: 6px 9px; border: 1px solid #2c3440; border-radius: 8px; background: #1b212b;
+		color: #e8ebf0; font-size: 13px; font-weight: 600; letter-spacing: 0.03em; line-height: 1; user-select: none;
+	}
+	.cs-btn::-webkit-details-marker { display: none; }
+	.cs-btn:hover { border-color: #3d4756; }
+	.cs-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+	.cs[open] .cs-btn { border-color: #a3262a; }
+	.cs-flag { display: inline-flex; width: 22px; height: 12px; border-radius: 2px; overflow: hidden; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18); flex: none; }
+	.cs-flag :global(svg) { width: 100%; height: 100%; display: block; }
+	.cs-caret { width: 10px; height: 6px; transition: transform 0.15s; }
+	.cs[open] .cs-caret { transform: rotate(180deg); }
+	.cs-menu {
+		position: absolute; right: 0; top: calc(100% + 8px); z-index: 200; min-width: 220px;
+		background: var(--color-surface, #fff); color: var(--color-text, #151a22);
+		border: 1px solid var(--color-border, #e1e4ea); border-radius: 10px; padding: 8px;
+		box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+	}
+	.cs-head { margin: 4px 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted, #6f7787); }
+	.cs-menu ul { list-style: none; margin: 0; padding: 0; }
+	.cs-menu a {
+		display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px;
+		color: var(--color-text, #151a22) !important; text-decoration: none; font-size: 14px;
+	}
+	.cs-menu a:hover, .cs-menu a:focus-visible { background: var(--bt-hover, #eff1f5); outline: none; }
+	.cs-menu a[aria-current] { font-weight: 600; }
+	.cs-name { flex: 1; }
+	.cs-check { width: 12px; height: 10px; color: var(--color-text-secondary, #4a5262); }
+	.cs-note { margin: 6px 8px 2px; font-size: 12px; color: var(--color-muted, #6f7787); }
+	@media (prefers-reduced-motion: reduce) { .cs-caret { transition: none; } }
+</style>

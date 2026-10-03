@@ -1,0 +1,151 @@
+---
+/**
+ * Header search: a magnifying-glass button that opens a full-page overlay.
+ * Searches race pages (from /api/v1/search-index.json) and analysis posts/pages (EmDash search API).
+ * Opens with the button, "/" or Cmd/Ctrl+K.
+ */
+---
+<button type="button" class="so-btn" data-search-open aria-haspopup="dialog" aria-label="Search races and analysis" title="Search ( / )">
+	<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="2" /><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+</button>
+
+<dialog class="so" data-search-dialog aria-label="Search Parlay the People">
+	<div class="so-panel">
+		<form class="so-bar" role="search" data-search-form>
+			<svg class="so-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="2" /><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+			<input id="site-search-q" class="so-input" type="search" name="q" placeholder="Search a state, district, candidate or article" autocomplete="off" spellcheck="false" aria-controls="so-results" aria-describedby="so-hint" />
+			<button type="button" class="so-close" data-search-close aria-label="Close search">Esc</button>
+		</form>
+		<div id="so-results" class="so-results" aria-live="polite" data-search-results>
+			<p class="so-empty" id="so-hint">Try “Maine”, “CA-22”, “Collins” or “2028 president”.</p>
+		</div>
+	</div>
+</dialog>
+
+<script>
+	type Race = { t: string; s: string; p: string; k: string; y: number };
+	type Post = { collection: string; slug: string | null; title?: string; snippet?: string };
+
+	const dialog = document.querySelector<HTMLDialogElement>("[data-search-dialog]")!;
+	const input = dialog.querySelector<HTMLInputElement>(".so-input")!;
+	const out = dialog.querySelector<HTMLElement>("[data-search-results]")!;
+	const hint = out.innerHTML;
+	let races: Race[] | null = null;
+	let seq = 0;
+	const thisYear = new Date().getFullYear();
+
+	async function loadRaces() {
+		if (races) return races;
+		try { races = (await (await fetch("/api/v1/search-index.json")).json()) as Race[]; } catch { races = []; }
+		return races;
+	}
+	function open() {
+		if (dialog.open) return;
+		dialog.showModal();
+		document.documentElement.classList.add("so-lock");
+		input.focus();
+		input.select();
+		loadRaces();
+	}
+	function close() { dialog.close(); }
+	dialog.addEventListener("close", () => document.documentElement.classList.remove("so-lock"));
+
+	document.querySelectorAll("[data-search-open]").forEach((b) => b.addEventListener("click", open));
+	dialog.querySelector("[data-search-close]")!.addEventListener("click", close);
+	dialog.addEventListener("click", (e) => { if (e.target === dialog) close(); }); // backdrop
+	document.addEventListener("keydown", (e) => {
+		const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable;
+		if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) { e.preventDefault(); open(); }
+	});
+
+	const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+	const strip = (s = "") => s.replace(/<[^>]*>/g, "");
+
+	function rankRaces(q: string, list: Race[]) {
+		const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+		return list
+			.filter((r) => words.every((w) => r.k.includes(w)))
+			.map((r) => ({ r, score: (r.t.toLowerCase().startsWith(words[0]) ? 0 : 1) + (r.y >= thisYear ? 0 : 0.5) + (r.y - thisYear) / 100 }))
+			.sort((a, b) => a.score - b.score)
+			.slice(0, 8)
+			.map((x) => x.r);
+	}
+
+	async function search(q: string) {
+		const my = ++seq;
+		if (q.trim().length < 2) { out.innerHTML = hint; return; }
+		const [list, posts] = await Promise.all([
+			loadRaces(),
+			fetch(`/_emdash/api/search?${new URLSearchParams({ q, limit: "6", collections: "posts,pages" })}`)
+				.then((r) => (r.ok ? r.json() : null))
+				.then((d) => (d?.data?.items ?? d?.items ?? []) as Post[])
+				.catch(() => [] as Post[]),
+		]);
+		if (my !== seq) return; // a newer query finished first
+		const rs = rankRaces(q, list);
+		const ps = posts.filter((p) => p.slug);
+		const block = (title: string, html: string) => `<section><h2 class="so-h">${title}</h2><ul>${html}</ul></section>`;
+		let html = "";
+		if (rs.length) html += block("Races", rs.map((r) => `<li><a class="so-item" href="${esc(r.p)}"><span class="so-t">${esc(r.t)}</span><span class="so-s">${esc(r.s)}</span></a></li>`).join(""));
+		if (ps.length) html += block("Analysis", ps.map((p) => `<li><a class="so-item" href="/${p.collection === "pages" ? "pages" : "posts"}/${esc(p.slug!)}"><span class="so-t">${esc(strip(p.title) || p.slug!)}</span>${p.snippet ? `<span class="so-s">${esc(strip(p.snippet))}</span>` : ""}</a></li>`).join(""));
+		out.innerHTML = html || `<p class="so-empty">No races or articles match “${esc(q)}”. Try a state name, a district like “TX-28”, or a candidate's last name.</p>`;
+	}
+
+	let t: number | undefined;
+	input.addEventListener("input", () => { clearTimeout(t); t = window.setTimeout(() => search(input.value), 120); });
+	dialog.querySelector("[data-search-form]")!.addEventListener("submit", (e) => {
+		e.preventDefault();
+		const first = out.querySelector<HTMLAnchorElement>(".so-item");
+		if (first) location.href = first.href;
+	});
+	// Escape always closes (a search input's own Escape would only clear the text)
+	dialog.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") { e.preventDefault(); close(); }
+	});
+	// Arrow keys move between the input and the results
+	dialog.addEventListener("keydown", (e) => {
+		if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+		const items = [input, ...out.querySelectorAll<HTMLAnchorElement>(".so-item")];
+		const i = items.indexOf(document.activeElement as HTMLInputElement);
+		const next = items[Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+		if (next) { e.preventDefault(); next.focus(); }
+	});
+</script>
+
+<style>
+	.so-btn {
+		all: unset; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+		width: 34px; height: 34px; border-radius: 8px; border: 1px solid #2c3440; background: #1b212b; color: #e8ebf0;
+	}
+	.so-btn:hover { border-color: #3d4756; color: #fff; }
+	.so-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+	.so-btn svg { width: 17px; height: 17px; }
+
+	.so { border: 0; padding: 0; margin: 0; width: 100%; max-width: 100%; height: 100%; max-height: 100%; background: transparent; }
+	.so::backdrop { background: rgb(8 10 14 / 0.72); backdrop-filter: blur(4px); }
+	.so-panel {
+		width: min(720px, calc(100% - 32px)); margin: min(12vh, 96px) auto 0; background: var(--color-surface);
+		color: var(--color-text); border-radius: 14px; border: 1px solid var(--color-border); box-shadow: 0 24px 60px rgb(0 0 0 / 0.4);
+		overflow: hidden; display: flex; flex-direction: column; max-height: calc(100% - min(12vh, 96px) - 24px);
+	}
+	.so-bar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--color-border); }
+	.so-icon { width: 20px; height: 20px; color: var(--color-muted); flex: none; }
+	.so-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-text); font: inherit; font-size: 18px; }
+	.so-input::-webkit-search-cancel-button { display: none; }
+	.so-close { all: unset; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-muted); border: 1px solid var(--color-border); border-radius: 6px; padding: 3px 7px; }
+	.so-close:focus-visible { outline: 2px solid var(--color-text); }
+	.so-results { overflow-y: auto; padding: 8px 8px 12px; }
+	.so-results :global(section + section) { margin-top: 6px; }
+	.so-results :global(.so-h) { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted); margin: 8px 10px 4px; }
+	.so-results :global(ul) { list-style: none; margin: 0; padding: 0; }
+	.so-results :global(.so-item) { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border-radius: 8px; text-decoration: none; color: var(--color-text); }
+	.so-results :global(.so-item:hover), .so-results :global(.so-item:focus-visible) { background: var(--bt-hover); outline: none; }
+	.so-results :global(.so-t) { font-weight: 600; font-size: 15px; }
+	.so-results :global(.so-s) { font-size: 13px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.so-results :global(.so-empty), .so-empty { color: var(--color-text-secondary); font-size: 14px; margin: 12px 10px; }
+	:global(html.so-lock) { overflow: hidden; }
+	@media (max-width: 640px) {
+		.so-panel { width: calc(100% - 16px); margin-top: 8px; max-height: calc(100% - 16px); }
+		.so-input { font-size: 16px; }
+	}
+</style>

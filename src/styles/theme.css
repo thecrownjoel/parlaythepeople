@@ -53,9 +53,11 @@
 
 h1, h2, h3 { text-wrap: balance; }
 /* Brand header: always the logo's near-black, in both themes */
-.site-header { background: #11151c; color: #f3f4f6; border-bottom: 3px solid #a3262a; }
-.site-header a, .site-header .nav-links a { color: #e8ebf0; }
-.site-header .nav-links a:hover { color: #ffffff; }
+/* The layout's own header styles are Astro-scoped (.site-header[data-astro-cid-…]), so these
+   doubled-class selectors are needed to outrank them. */
+html body header.site-header.site-header { background: #11151c; color: #f3f4f6; border-bottom: 3px solid #a3262a; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html body .site-header.site-header a, html body .site-header.site-header .nav-links.nav-links a { color: #e8ebf0; }
+html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
 .brand-mark { width: 40px; height: 40px; border-radius: 6px; display: block; }
 .brand-word { display: flex; flex-direction: column; font-family: var(--font-display); font-weight: 800; text-transform: uppercase; line-height: 0.95; letter-spacing: 0.02em; color: #ffffff; }
@@ -63,7 +65,21 @@ h1, h2, h3 { text-wrap: balance; }
 .brand-word span:last-child { font-size: 12.5px; letter-spacing: 0.06em; }
 .site-header .site-search-input { background: #1b212b; border-color: #2c3440; color: #e8ebf0; }
 
+/* Country menu (and Admin link when signed in) sit at the far right; beside the logo on phones. */
+.nav-end { display: flex; align-items: center; gap: var(--spacing-4); margin-inline-start: var(--spacing-5); }
+@media (max-width: 640px) {
+	.nav-end { grid-column: 2; grid-row: 1; justify-self: end; margin-inline-start: 0; gap: var(--spacing-3); }
+}
+
 /* Keep the signed-in Admin link separated from the primary navigation. */
 .nav-admin {
 	margin-inline-start: var(--spacing-5);
 }
+
+.nav-end .nav-admin { margin-inline-start: 0; }
+
+/* Footer: credit line above the market-data note */
+.footer-meta { display: flex; flex-direction: column; gap: var(--spacing-2); }
+@media (max-width: 640px) { .footer-meta { align-items: center; } }
+.nav-end { gap: var(--spacing-2); }
+.nav-end .nav-admin { margin-inline-end: var(--spacing-2); }
