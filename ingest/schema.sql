@@ -34,3 +34,12 @@ CREATE TABLE IF NOT EXISTS outcome_history (
   PRIMARY KEY (group_id, outcome, ts)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS outcome_history_ts ON outcome_history (ts);
+
+-- LunarCrush social pulse, one row per topic per day (topic = lowercase name, e.g. "susan collins")
+CREATE TABLE IF NOT EXISTS social_history (
+  topic TEXT NOT NULL,
+  ts INTEGER NOT NULL,          -- day start, unix seconds
+  interactions INTEGER,
+  sentiment REAL,               -- % of posts that are positive
+  PRIMARY KEY (topic, ts)
+) WITHOUT ROWID;

@@ -22,6 +22,10 @@ jobs:
           python-version: '3.12'
       - name: Pull Kalshi and Polymarket
         run: python3 ingest/ingest.py
+      - name: Social pulse (LunarCrush, about once an hour)
+        env:
+          LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
+        run: python3 ingest/social.py || echo "social fetch failed; keeping the previous pulse"
       - name: Pull political headlines (Google News)
         run: python3 ingest/news.py || echo "news fetch failed; keeping the previous headlines"
       - name: Publish to Cloudflare

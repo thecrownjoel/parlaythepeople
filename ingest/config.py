@@ -41,3 +41,11 @@ NEWS_QUERIES = [
     ("Democrats", '"Democrats" Congress', 2),
 ]
 NEWS_MAX_AGE_HOURS = 48
+
+# LunarCrush social data ("The Pulse"). Candidates are taken from the race data automatically:
+# every Senate and governor candidate, House candidates in competitive races (leader below
+# SOCIAL_HOUSE_MAX_LEAD), and the top presidential contenders. Fetched about once an hour.
+SOCIAL_HOUSE_MAX_LEAD = 0.80
+SOCIAL_PRES_TOP = 12
+SOCIAL_EXTRA_TOPICS = ["midterms", "white house", "donald trump", "republicans", "democrats", "congress", "senate", "polymarket", "kalshi"]
+SOCIAL_POSTS_PER_TOPIC = 4
