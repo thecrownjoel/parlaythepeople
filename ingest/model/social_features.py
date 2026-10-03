@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from social import lc  # noqa: E402  (uses LUNARCRUSH_API_KEY)
@@ -24,7 +25,7 @@ GENERIC = re.compile(r"^(democrat|democrats|democratic|republican|republicans|re
 
 
 def history(name, t0, t1):
-    d = lc(f"/topic/{name.lower()}/time-series/v2", {"bucket": "day", "start": t0, "end": t1}) or {}
+    d = lc(f"/topic/{urllib.parse.quote(name.lower())}/time-series/v2", {"bucket": "day", "start": t0, "end": t1}) or {}
     out = {}
     for p in d.get("data") or []:
         ts = p.get("time")
@@ -39,7 +40,7 @@ def probe():
         for params in ({"bucket": "day", "start": 1720000000, "end": 1730851200},
                        {"bucket": "day", "interval": "all"},
                        {"bucket": "day", "interval": "1y"}):
-            d = lc(f"/topic/{topic}/time-series/v2", params) or {}
+            d = lc(f"/topic/{urllib.parse.quote(topic)}/time-series/v2", params) or {}
             data = d.get("data") or []
             first = data[0] if data else None
             print(f"probe {topic!r} {params}: keys={list(d)[:6]} points={len(data)} "
