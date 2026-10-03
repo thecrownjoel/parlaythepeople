@@ -38,5 +38,16 @@ export const GET: APIRoute = async () => {
 				k: `${cy.year} president presidential election nominee white house ${[...new Set(names)].join(" ")}`.toLowerCase() });
 		}
 	}
+	// site pages people look for by topic
+	const today = new Date().toISOString().slice(0, 10);
+	const pages: [string, string, string, string][] = [
+		["The Parlay estimate", "Our model's odds for every race, and how it was tested", "/model/", "model forecast prediction estimate parlay accuracy track record"],
+		["Daily market report", "What moved the election markets today", `/daily/${today}/`, "daily report today yesterday moves money news recap"],
+		["Where the money went", "Money traded and the biggest trades", "/#money-went-h", "money traded volume dollars biggest trades whales"],
+		["Guide", "How to use Parlay the People", "/guide/", "guide help how faq tutorial pulse lunarcrush"],
+		["Methodology", "How the numbers are made", "/methodology/", "methodology how odds probability ratings data"],
+		["Data & API", "Free JSON and CSV feeds", "/data/", "data api json csv download feed"],
+	];
+	for (const [t, sub, p, k] of pages) items.push({ t, s: sub, p, y: new Date().getUTCFullYear(), k: `${t} ${k}`.toLowerCase() });
 	return Response.json(items, { headers: { "cache-control": "public, max-age=600" } });
 };
