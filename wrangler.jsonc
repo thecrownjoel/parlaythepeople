@@ -25,10 +25,13 @@
 			"database_id": "0b9797e9-685b-4549-ac2b-fa65f6be8957",
 		},
 	],
+	"ai": { "binding": "AI" },
 	"r2_buckets": [
 		{ "binding": "MEDIA", "bucket_name": "ballottape-media" },
 		// Full per-cycle data files (cycles/<year>.json, index.json), written by the collector
 		{ "binding": "DATA", "bucket_name": "ballottape-data" },
+		// Research documents (race dossiers, headline digests, analysis) indexed by AI Search "parlay"
+		{ "binding": "KNOWLEDGE", "bucket_name": "parlay-knowledge" },
 	],
 	"observability": { "enabled": true },
 	// Custom domains (Cloudflare creates the DNS records and certificates)

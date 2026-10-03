@@ -94,3 +94,13 @@ CREATE TABLE IF NOT EXISTS forecasts (
   version TEXT,                 -- model version (see ingest/model/coef.json)
   PRIMARY KEY (race_id, ts)
 ) WITHOUT ROWID;
+
+-- AI analyst usage per visitor per day (hashed IP), for the free daily limit; and every question asked.
+CREATE TABLE IF NOT EXISTS ai_usage (
+  who TEXT NOT NULL, day INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (who, day)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS ai_log (
+  ts INTEGER NOT NULL, who TEXT, question TEXT, tools TEXT, ms INTEGER, input_tokens INTEGER, output_tokens INTEGER, ok INTEGER
+);
+CREATE INDEX IF NOT EXISTS ai_log_ts ON ai_log (ts);

@@ -1,0 +1,180 @@
+---
+/**
+ * The AI analyst: ask anything about the races; answers come from our own data (live odds, trades,
+ * social pulse, the Parlay estimate) and research library, with links. Research, not betting advice.
+ */
+import { env } from "cloudflare:workers";
+import Base from "../../layouts/Base.astro";
+import PeriodPicker from "../../components/PeriodPicker.astro";
+import MoneyBody from "../../components/home/MoneyBody.astro";
+import { homeData } from "../../lib/home";
+import { parsePeriod } from "../../lib/period";
+import { consensus, pct } from "../../lib/markets";
+import { parlayD } from "../../lib/model";
+import { raceName } from "../../lib/home";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+import "../../styles/home.css";
+
+const configured = !!(env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY;
+const origin = Astro.url.origin;
+const d = await homeData();
+const money = parsePeriod("24h", "24h");
+const edges = d.races
+	.filter((r) => r.kind !== "control")
+	.map((r) => { const c = consensus(r); const m = c.D / (c.D + c.R || 1); const e = parlayD(c.D, c.R)!; return { r, m, e, lead: m >= 0.5 ? "D" : "R" }; })
+	.filter((x) => Math.abs(x.m - 0.5) < 0.4 && Math.abs(x.e - x.m) > 0.02)
+	.sort((a, b) => Math.abs(b.e - b.m) - Math.abs(a.e - a.m))
+	.slice(0, 8);
+const examples = [
+	"Who's favored in the Maine Senate race, and why has it moved?",
+	"Where did the most money go in the last 24 hours?",
+	"Which House races flipped favorites this month?",
+	"Which races does the Parlay estimate see differently from the markets?",
+	"What's the online buzz around Susan Collins, and does it match her odds?",
+	"Who leads the 2028 Republican nomination, and how much has traded?",
+];
+---
+<Base title={`AI election analyst | ${SITE_NAME}`} description="Ask anything about the 2026 midterms and 2028 race. Answers come from live Kalshi and Polymarket odds, every trade, LunarCrush social data and our forecasting model, with links to the source." canonical={`${origin}/ai/`} robots={configured ? null : "noindex, follow"}>
+	<div class="dp ai">
+		<header class="dp-head">
+			<p class="eyebrow">AI analyst{configured ? " · beta" : " · opening soon"}</p>
+			<h1>Ask the analyst</h1>
+			<p class="lede">Ask anything about the races. Answers come from our own data: live odds on both exchanges, every trade, LunarCrush social data, the Parlay estimate and our research library, with links to the source.</p>
+		</header>
+
+		<section class="ai-chat" data-ai data-configured={configured ? "1" : "0"} aria-label="Chat with the analyst">
+			<ol class="ai-log" aria-live="polite" data-ai-log>
+				<li class="ai-msg ai-bot">
+					<div class="ai-body">{configured
+						? "Hi! Ask me about any race, candidate or market move. I'll look up the numbers and show you where they come from."
+						: "The AI analyst opens soon. Until then, the boards below show what it will draw on: where our model and the markets differ, and where the money is going."}</div>
+				</li>
+			</ol>
+			<div class="ai-examples" data-ai-examples>
+				{examples.map((q) => <button type="button" data-q={q} disabled={!configured}>{q}</button>)}
+			</div>
+			<form class="ai-form" data-ai-form>
+				<label class="sr-only" for="ai-q">Your question</label>
+				<textarea id="ai-q" rows="2" maxlength="2000" placeholder={configured ? "Ask about a race, a candidate or a market move…" : "The analyst opens soon"} disabled={!configured} required></textarea>
+				<button type="submit" disabled={!configured}>Ask</button>
+			</form>
+			<p class="ai-fine">Research, not betting advice. The analyst can be wrong; check the linked pages. Questions are logged anonymously to improve answers.</p>
+		</section>
+
+		{edges.length > 0 && (
+			<section class="panel">
+				<h2 style="font-size:22px">Where our model and the markets differ</h2>
+				<p class="sec-note">Races where the <a href="/model/">Parlay estimate</a> differs most from the market odds.</p>
+				<ul class="racelist" style="grid-template-columns:1fr">
+					{edges.map(({ r, m, e, lead }) => <li><a href={r.path}>{raceName(r)}</a><span class="num">market {lead} {pct(Math.max(m, 1 - m))} · <b>Parlay {lead} {pct(Math.max(e, 1 - e))}</b></span></li>)}
+				</ul>
+			</section>
+		)}
+
+		<section data-period-section="money">
+			<div class="sec-head"><h2>Where the money went</h2><PeriodPicker section="money" period={money} /></div>
+			<div data-period-body><MoneyBody d={d} period={money} /></div>
+		</section>
+	</div>
+</Base>
+
+<script>
+	const root = document.querySelector<HTMLElement>("[data-ai]");
+	const log = root?.querySelector<HTMLOListElement>("[data-ai-log]");
+	const form = root?.querySelector<HTMLFormElement>("[data-ai-form]");
+	const box = form?.querySelector<HTMLTextAreaElement>("textarea");
+	const history: { role: "user" | "assistant"; content: string }[] = [];
+
+	const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+	/** Minimal, safe markdown: paragraphs, bullets, bold, links (http/https and site paths only). */
+	function md(s: string) {
+		const inline = (t: string) => esc(t)
+			.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+			.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g, (_m, a, h) => `<a href="${h}"${h.startsWith("/") || h.includes("parlaythepeople.com") ? "" : ' target="_blank" rel="noopener nofollow"'}>${a}</a>`);
+		return s.trim().split(/\n{2,}/).map((block) => {
+			const lines = block.split("\n");
+			if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) return `<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*•]\s+/, ""))}</li>`).join("")}</ul>`;
+			if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) return `<ol>${lines.map((l) => `<li>${inline(l.replace(/^\s*\d+[.)]\s+/, ""))}</li>`).join("")}</ol>`;
+			if (/^#{1,4}\s/.test(block)) return `<p><strong>${inline(block.replace(/^#{1,4}\s+/, ""))}</strong></p>`;
+			return `<p>${lines.map(inline).join("<br>")}</p>`;
+		}).join("");
+	}
+	function add(role: "user" | "bot", html: string) {
+		const li = document.createElement("li");
+		li.className = `ai-msg ai-${role}`;
+		li.innerHTML = `<div class="ai-body">${html}</div>`;
+		log!.appendChild(li);
+		li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+		return li;
+	}
+	async function ask(q: string) {
+		if (!q.trim() || !form) return;
+		add("user", esc(q));
+		history.push({ role: "user", content: q });
+		const pending = add("bot", `<span class="ai-status">Thinking…</span>`);
+		form.querySelectorAll("textarea, button").forEach((el) => ((el as HTMLButtonElement).disabled = true));
+		try {
+			const r = await fetch("/api/v1/ai/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: history }) });
+			if (r.status === 429) throw new Error("You've reached today's free question limit. Come back tomorrow.");
+			if (!r.ok || !r.body) throw new Error("The analyst is unavailable right now. Please try again in a minute.");
+			const reader = r.body.getReader();
+			const dec = new TextDecoder();
+			let buf = "", answer = "";
+			for (;;) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buf += dec.decode(value, { stream: true });
+				let i;
+				while ((i = buf.indexOf("\n\n")) >= 0) {
+					const line = buf.slice(0, i).replace(/^data: /, "");
+					buf = buf.slice(i + 2);
+					try {
+						const ev = JSON.parse(line);
+						if (ev.type === "status") pending.querySelector(".ai-body")!.innerHTML = `<span class="ai-status">${esc(ev.text)}…</span>`;
+						if (ev.type === "answer") { answer = ev.text; pending.querySelector(".ai-body")!.innerHTML = md(answer); }
+						if (ev.type === "error") throw new Error(ev.text);
+					} catch (e) { if (e instanceof Error && !(e instanceof SyntaxError)) throw e; }
+				}
+			}
+			if (answer) history.push({ role: "assistant", content: answer });
+		} catch (e) {
+			pending.querySelector(".ai-body")!.innerHTML = `<span class="ai-err">${esc((e as Error).message)}</span>`;
+			history.pop();
+		} finally {
+			form.querySelectorAll("textarea, button").forEach((el) => ((el as HTMLButtonElement).disabled = false));
+			box?.focus();
+		}
+	}
+	if (root?.dataset.configured === "1") {
+		form?.addEventListener("submit", (e) => { e.preventDefault(); const q = box!.value; box!.value = ""; ask(q); });
+		box?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form!.requestSubmit(); } });
+		root.querySelectorAll<HTMLButtonElement>("[data-q]").forEach((b) => b.addEventListener("click", () => ask(b.dataset.q!)));
+	}
+</script>
+
+<style>
+	.ai { max-width: 960px; }
+	.ai-chat { background: #11151c; border: 1px solid #222a35; border-radius: 16px; padding: clamp(14px, 3vw, 22px); display: flex; flex-direction: column; gap: 14px; }
+	.ai-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; }
+	.ai-msg { display: flex; }
+	.ai-user { justify-content: flex-end; }
+	.ai-body { max-width: min(680px, 92%); padding: 12px 14px; border-radius: 12px; line-height: 1.55; font-size: 15px; }
+	.ai-bot .ai-body { background: #161c25; border: 1px solid #222a35; color: #e8ebf0; }
+	.ai-user .ai-body { background: #a3262a; color: #fff; }
+	.ai-body :global(p) { margin: 0 0 8px; } .ai-body :global(p:last-child) { margin: 0; }
+	.ai-body :global(ul), .ai-body :global(ol) { margin: 0 0 8px; padding-left: 20px; }
+	.ai-body :global(a) { color: #8fb4ff; }
+	.ai-body :global(.ai-status) { color: #a9b0bc; font-style: italic; }
+	.ai-body :global(.ai-err) { color: #ef7b6f; }
+	.ai-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+	.ai-examples button { all: unset; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 999px; border: 1px solid #2c3440; color: #c3c9d3; }
+	.ai-examples button:hover:not(:disabled) { border-color: #4a5566; color: #fff; }
+	.ai-examples button:disabled { opacity: .45; cursor: default; }
+	.ai-form { display: flex; gap: 8px; align-items: flex-end; }
+	.ai-form textarea { flex: 1; resize: vertical; min-height: 46px; padding: 11px 12px; border-radius: 10px; border: 1px solid #2c3440; background: #0b0f15; color: #e8ebf0; font: inherit; font-size: 15px; }
+	.ai-form button { all: unset; cursor: pointer; padding: 12px 18px; border-radius: 10px; background: #a3262a; color: #fff; font-weight: 700; }
+	.ai-form button:disabled, .ai-form textarea:disabled { opacity: .5; cursor: default; }
+	.ai-fine { margin: 0; font-size: 12px; color: #7c8492; }
+	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

@@ -37,6 +37,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ece401f47370ecab76cbc85bf2a7054c
         run: python3 ingest/archive.py || echo "archive step failed; prices still publish"
+      - name: Refresh the AI analyst's research documents (every 6 hours)
+        env:
+          KNOWLEDGE_TOKEN: ${{ secrets.KNOWLEDGE_TOKEN }}
+        run: |
+          if [ $(( $(date -u +%H) % 6 )) -eq 1 ] && [ $(date -u +%M) -lt 10 ]; then
+            curl -s -X POST -H "Authorization: Bearer $KNOWLEDGE_TOKEN" https://parlaythepeople.com/api/internal/knowledge || echo "knowledge refresh failed"
+          fi
       - name: Publish to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
