@@ -140,6 +140,14 @@ def ptoken(m):
         return None
 
 
+def ptoken_no(m):
+    """The market's "No" token (trades on it are bets against the outcome)."""
+    try:
+        return json.loads(m["clobTokenIds"])[1]
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
 def p_active(e):
     return [m for m in e.get("markets", []) if m.get("active") and not m.get("closed") and m.get("outcomePrices")]
 
@@ -262,7 +270,7 @@ def p_outcomes(e):
             name = "Democrats"
         if name in ("Republican Party", "Republicans", "Republican"):
             name = "Republicans"
-        out.append({"tok": ptoken(m), "n": name, "pa": par, "p": round(p, 4),
+        out.append({"tok": ptoken(m), "tokn": ptoken_no(m), "cid": m.get("conditionId"), "n": name, "pa": par, "p": round(p, 4),
                     "q": [fnum(m.get("bestBid")), fnum(m.get("bestAsk")), fnum(m.get("lastTradePrice"))],
                     "d": m.get("oneDayPriceChange"), "v": round(float(m.get("volume") or 0))})
     return out
