@@ -1,0 +1,51 @@
+---
+/** Every cycle Parlay the People tracks: the next one first, then later cycles, then the archive. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { getIndex, fmtDate, daysUntil } from "../../lib/markets";
+import { organization, breadcrumbs, graph } from "../../lib/site";
+import "../../styles/data.css";
+
+const index = await getIndex();
+const origin = Astro.url.origin;
+const today = new Date().toISOString().slice(0, 10);
+const upcoming = (index?.cycles ?? []).filter((c) => c.election_day >= today);
+const past = (index?.cycles ?? []).filter((c) => c.election_day < today).reverse();
+const officeWord: Record<string, string> = { president: "President", senate: "Senate", house: "House", governor: "Governor", control: "Control of Congress" };
+const lede = upcoming.length
+	? `Parlay the People tracks prediction-market odds for ${upcoming.length} upcoming U.S. election cycle${upcoming.length > 1 ? "s" : ""}, starting with ${upcoming[0].year}. New cycles are added automatically as Kalshi and Polymarket list them.`
+	: "Parlay the People tracks prediction-market odds for U.S. elections. New cycles are added automatically as Kalshi and Polymarket list them.";
+const ld = graph(organization(origin), { "@type": "CollectionPage", url: `${origin}/elections/`, name: "U.S. elections tracked by Parlay the People", description: lede }, breadcrumbs(origin, [["Elections", "/elections/"]]));
+---
+<Base title="U.S. election odds by year" description={lede} canonical={`${origin}/elections/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp">
+		<header class="dp-head">
+			<p class="eyebrow">All elections</p>
+			<h1>U.S. election odds, by year</h1>
+			<p class="lede">{lede}</p>
+		</header>
+		<section>
+			<h2>Upcoming</h2>
+			<div class="grid3">
+				{upcoming.map((c) => {
+					const d = daysUntil(c.election_day);
+					return (
+						<a class="panel" href={c.offices.includes("president") && c.races < 5 ? `/${c.year}/president/` : `/${c.year}/`} style="text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:8px">
+							<span class="eyebrow">{d} days · {fmtDate(c.election_day + "T12:00:00-05:00", false)}</span>
+							<strong style="font-family:var(--font-display);font-size:30px;line-height:1">{c.year}</strong>
+							<span style="color:var(--color-text-secondary);font-size:14px">{c.offices.map((o) => officeWord[o] ?? o).join(" · ")}</span>
+							<span class="num" style="font-size:13px;color:var(--color-muted)">{c.races} races{c.ballots ? ` · ${c.ballots} ballot measures` : ""}</span>
+						</a>
+					);
+				})}
+			</div>
+		</section>
+		{past.length > 0 && (
+			<section>
+				<h2>Archive</h2>
+				<ul class="racelist">{past.map((c) => <li><a href={`/${c.year}/`}>{c.year}</a><span class="num">{c.races} races</span></li>)}</ul>
+			</section>
+		)}
+	</div>
+</Base>

@@ -1,0 +1,136 @@
+---
+/**
+ * One election cycle: /2026/, /2028/ …
+ * A crawlable summary and full race index, followed by the interactive dashboard.
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import MarketDashboard from "../../components/MarketDashboard.astro";
+import { getCycle, consensus, shares, pct, fmtDate, daysUntil, PARTY_PLURAL, type Race } from "../../lib/markets";
+import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const { cycle } = Astro.params;
+if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
+const data = await getCycle(Number(cycle));
+if (!data) return Astro.rewrite("/404");
+
+const origin = Astro.url.origin;
+const year = data.meta.cycle;
+const races = data.races;
+const by = (k: string) => races.filter((r) => r.kind === k);
+const senC = races.find((r) => r.id === `${year}-senate-control`);
+const houseC = races.find((r) => r.id === `${year}-house-control`);
+const hasPres = !!(data.pres.party || data.pres.winner);
+const presParty = (() => {
+	const m = data.pres.party; if (!m) return null;
+	const arr = (["k", "p"] as const).map((x) => m[x]).filter(Boolean).map((s) => shares(s as any)!);
+	if (!arr.length) return null;
+	return { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length };
+})();
+const midterm = year % 4 === 2;
+const days = daysUntil(data.meta.election_day);
+const when = fmtDate(data.meta.generated, false);
+
+const ctl = (r: Race | undefined, ch: string) => {
+	if (!r) return null;
+	const c = consensus(r);
+	return `${PARTY_PLURAL[c.lead as "D" | "R"]} are ${pct(c.lp)} to control the ${ch}`;
+};
+const parts = [
+	presParty && `${presParty.D >= presParty.R ? "Democrats" : "Republicans"} are ${pct(Math.max(presParty.D, presParty.R))} to win the presidency`,
+	ctl(senC, "Senate"), ctl(houseC, "House"),
+].filter(Boolean) as string[];
+const lede = parts.length
+	? `As of ${when}, prediction markets say ${parts.join(", ").replace(/, ([^,]*)$/, " and $1")}. Parlay the People tracks ${races.length} ${year} races on Kalshi and Polymarket${hasPres ? ", plus the presidential race" : ""}.`
+	: `Parlay the People tracks ${races.length} ${year} races on Kalshi and Polymarket. Odds update every 10 minutes as the exchanges list more markets.`;
+
+const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 12);
+const officesHere = (["senate", "governor", "house"] as const).filter((k) => by(k).length);
+const officeNames = { senate: "Senate", governor: "Governor", house: "House" };
+const h1 = `${year} election odds${midterm ? ": Senate, House and governors" : hasPres ? ": president, Senate and governors" : ""}`;
+const title = `${year} ${midterm ? "midterm" : ""} election odds: ${hasPres ? "president, " : ""}${officesHere.map((k) => officeNames[k]).join(", ")} | Kalshi vs. Polymarket`.replace("  ", " ");
+
+const faqs: [string, string][] = [
+	...(senC ? [[`Who will win the Senate in ${year}?`, `${consensus(senC).lead === "D" ? "Democrats" : "Republicans"} are favored, at ${pct(consensus(senC).lp)} on average across Kalshi and Polymarket as of ${when}.`] as [string, string]] : []),
+	...(houseC ? [[`Who will win the House in ${year}?`, `${consensus(houseC).lead === "D" ? "Democrats" : "Republicans"} are favored, at ${pct(consensus(houseC).lp)} on average across Kalshi and Polymarket as of ${when}.`] as [string, string]] : []),
+	[`What are the closest ${year} races?`, `By market odds, the closest are ${closest.slice(0, 5).map(({ r, c }) => `${r.kind === "house" ? r.label : r.state + " " + (r.kind === "senate" ? "Senate" : "governor")} (${c.lead} ${pct(c.lp)})`).join(", ")}.`],
+	[`When is the ${year} election?`, `Election Day is ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}${days > 0 ? `, ${days} days away` : ""}.`],
+];
+const crumbs: [string, string][] = [["Elections", "/elections/"], [String(year), `/${year}/`]];
+const ld = graph(
+	organization(origin),
+	{ "@type": "CollectionPage", "@id": `${origin}/${year}/#page`, url: `${origin}/${year}/`, name: h1, description: lede, dateModified: data.meta.generated },
+	breadcrumbs(origin, crumbs),
+	faq(faqs),
+	dataset(origin, {
+		name: `${year} U.S. election prediction-market odds`,
+		description: `Win probabilities from Kalshi and Polymarket for every ${year} race ${SITE_NAME} tracks, updated every 10 minutes.`,
+		path: `/${year}/`, json: `/api/v1/${year}.json`, csv: `/api/v1/${year}/races.csv`, modified: data.meta.generated,
+		keywords: [String(year), "election odds", "Senate", "House", "governor", "Kalshi", "Polymarket"],
+	}),
+);
+const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+---
+<Base title={title} description={description} canonical={`${origin}/${year}/`} modifiedTime={data.meta.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/elections/">Elections</a><span aria-hidden="true">/</span><span aria-current="page">{year}</span></nav>
+		<header class="dp-head">
+			<p class="eyebrow">{midterm ? "Midterm elections" : hasPres ? "Presidential election year" : "Elections"} · {days > 0 ? `${days} days to Election Day` : `Election Day was ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}`}</p>
+			<h1>{h1}</h1>
+			<p class="lede">{lede}</p>
+			<p class="updated">Updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time></p>
+		</header>
+
+		{hasPres && (
+			<a class="panel" href={`/${year}/president/`} style="text-decoration:none;color:inherit;display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap">
+				<span><span class="eyebrow">Presidency</span><br /><strong style="font-size:20px;font-family:var(--font-display)">{year} presidential election odds →</strong></span>
+				{presParty && <span class="num" style="font-size:15px"><span style="color:var(--bt-d)">D {pct(presParty.D)}</span> · <span style="color:var(--bt-r)">R {pct(presParty.R)}</span></span>}
+			</a>
+		)}
+
+		{closest.length > 0 && (
+			<section>
+				<h2>Closest races</h2>
+				<ul class="racelist">
+					{closest.map(({ r, c }) => (
+						<li><a href={r.path}>{r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>
+					))}
+				</ul>
+			</section>
+		)}
+
+		<MarketDashboard data={data} />
+
+		<section>
+			<h2>All {year} races</h2>
+			<p class="sec-note">Every race Parlay the People tracks this cycle, with the favored party and its average odds across both exchanges.</p>
+			{senC || houseC ? (
+				<ul class="racelist" style="margin-bottom:18px">
+					{[senC, houseC].filter(Boolean).map((r) => { const c = consensus(r!); return <li><a href={r!.path}>{r!.label}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>; })}
+				</ul>
+			) : null}
+			{officesHere.map((k) => (
+				<details open={k !== "house"} style="margin-bottom:14px">
+					<summary style="cursor:pointer"><h3 style="display:inline;font-size:18px">{officeNames[k]} <span class="num" style="color:var(--color-muted);font-weight:400">({by(k).length})</span></h3></summary>
+					<ul class="racelist" style="margin-top:10px">
+						{by(k).sort((a, b) => a.label.localeCompare(b.label)).map((r) => { const c = consensus(r); return (
+							<li><a href={r.path}>{k === "house" ? r.label : r.state}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>
+						); })}
+					</ul>
+				</details>
+			))}
+		</section>
+
+		<section>
+			<h2>Questions about {year}</h2>
+			<div class="faq">{faqs.map(([q, a]) => <details><summary>{q}</summary><p>{a}</p></details>)}</div>
+		</section>
+
+		<section>
+			<h2>Data</h2>
+			<p class="datalinks"><a href={`/api/v1/${year}.json`}>{year} data (JSON)</a><a href={`/api/v1/${year}/races.csv`}>{year} races (CSV)</a><a href="/methodology/">Methodology</a><a href="/data/">API docs</a></p>
+		</section>
+	</div>
+</Base>

@@ -1,0 +1,132 @@
+---
+/** Home: the next election at a glance, the presidency, closest races, market disagreements, latest analysis. */
+import { getEmDashCollection } from "emdash";
+import Base from "../layouts/Base.astro";
+import JsonLd from "../components/JsonLd.astro";
+import { getIndex, getCycle, consensus, shares, pct, fmtDate, daysUntil, PARTY_PLURAL, type Race, type CycleData } from "../lib/markets";
+import { organization, graph, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
+import "../styles/data.css";
+
+const origin = Astro.url.origin;
+const index = await getIndex();
+const nextYear = index?.next;
+const [next, posts] = await Promise.all([
+	nextYear ? getCycle(nextYear) : Promise.resolve(null),
+	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 3 }),
+]);
+if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
+// the next cycle that has a presidential race
+const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
+const presCycle = presYear ? (presYear === nextYear ? next : await getCycle(presYear)) : null;
+const presParty = (() => {
+	const m = presCycle?.pres.party; if (!m) return null;
+	const arr = (["k", "p"] as const).map((x) => m[x]).filter(Boolean).map((s) => shares(s as any)!);
+	return arr.length ? { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length } : null;
+})();
+
+const races = next?.races ?? [];
+const ctl = (id: string) => races.find((r) => r.id === id);
+const senC = nextYear ? ctl(`${nextYear}-senate-control`) : undefined;
+const houseC = nextYear ? ctl(`${nextYear}-house-control`) : undefined;
+const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 8);
+const gaps = races.filter((r) => r.k && r.p).map((r) => ({ r, g: Math.abs(shares(r.k)!.D - shares(r.p)!.D) })).sort((a, b) => b.g - a.g).slice(0, 5);
+const days = next ? daysUntil(next.meta.election_day) : null;
+const when = next ? fmtDate(next.meta.generated, false) : "";
+const name = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
+
+const favored: { party: "D" | "R"; what: string; p: number }[] = [];
+if (senC) favored.push({ party: consensus(senC).lead as "D" | "R", what: "the Senate", p: consensus(senC).lp });
+if (houseC) favored.push({ party: consensus(houseC).lead as "D" | "R", what: "the House", p: consensus(houseC).lp });
+if (presParty) favored.push({ party: presParty.D >= presParty.R ? "D" : "R", what: `the ${presYear} presidency`, p: Math.max(presParty.D, presParty.R) });
+const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const summary = (["D", "R"] as const)
+	.map((pa) => favored.filter((f) => f.party === pa))
+	.filter((fs) => fs.length)
+	.map((fs) => `${PARTY_PLURAL[fs[0].party]} are favored to win ${list(fs.map((f) => `${f.what} (${pct(f.p)})`))}`);
+const lede = summary.length
+	? `As of ${when}, prediction markets say ${summary.join("; ")}. Parlay the People tracks every race on Kalshi and Polymarket, side by side, and keeps the price history.`
+	: SITE_DESCRIPTION;
+const ld = graph(organization(origin), {
+	"@type": "WebSite", "@id": `${origin}/#site`, url: `${origin}/`, name: SITE_NAME, description: SITE_DESCRIPTION, publisher: { "@id": `${origin}/#org` },
+	potentialAction: { "@type": "SearchAction", target: `${origin}/search?q={query}`, "query-input": "required name=query" },
+});
+function ControlCard(r: Race | undefined, label: string) { return r ? { r, c: consensus(r), label } : null; }
+const cards = [ControlCard(senC, "Senate control"), ControlCard(houseC, "House control")].filter(Boolean) as { r: Race; c: ReturnType<typeof consensus>; label: string }[];
+---
+<Base title={`${SITE_NAME}: election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp">
+		<header class="dp-head">
+			<p class="eyebrow">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
+			<h1>Election odds from Kalshi and Polymarket, race by race</h1>
+			<p class="lede">{lede}</p>
+			{next && <p class="updated">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
+		</header>
+
+		<div class="grid3">
+			{cards.map(({ r, c, label }) => (
+				<a class="panel duel" href={r.path} style="text-decoration:none;color:inherit">
+					<span class="eyebrow">{nextYear} · {label}</span>
+					<div class="duel-top">
+						<div class="duel-side"><span class="duel-name">Democrats</span><span class="duel-pct" style="color:var(--bt-d)">{pct(c.D)}</span></div>
+						<div class="duel-side r"><span class="duel-name">Republicans</span><span class="duel-pct" style="color:var(--bt-r)">{pct(c.R)}</span></div>
+					</div>
+					<div class="bar mid"><i class="D" style={`width:${c.D * 100}%`}></i><i class="R" style={`width:${c.R * 100}%`}></i></div>
+				</a>
+			))}
+			{presParty && (
+				<a class="panel duel" href={`/${presYear}/president/`} style="text-decoration:none;color:inherit">
+					<span class="eyebrow">{presYear} · Presidency</span>
+					<div class="duel-top">
+						<div class="duel-side"><span class="duel-name">Democrats</span><span class="duel-pct" style="color:var(--bt-d)">{pct(presParty.D)}</span></div>
+						<div class="duel-side r"><span class="duel-name">Republicans</span><span class="duel-pct" style="color:var(--bt-r)">{pct(presParty.R)}</span></div>
+					</div>
+					<div class="bar mid"><i class="D" style={`width:${presParty.D * 100}%`}></i><i class="R" style={`width:${presParty.R * 100}%`}></i></div>
+				</a>
+			)}
+		</div>
+
+		<div class="grid2">
+			{closest.length > 0 && (
+				<section class="panel">
+					<h2 style="font-size:22px">Closest {nextYear} races</h2>
+					<ul class="racelist" style="grid-template-columns:1fr">
+						{closest.map(({ r, c }) => <li><a href={r.path}>{name(r)}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>)}
+					</ul>
+					<p class="datalinks" style="margin-top:10px"><a href={`/${nextYear}/`}>All {nextYear} races →</a></p>
+				</section>
+			)}
+			{gaps.length > 0 && (
+				<section class="panel">
+					<h2 style="font-size:22px">Where the exchanges disagree</h2>
+					<p class="sec-note" style="margin:0 0 8px">Largest gaps in Democratic odds between Kalshi and Polymarket.</p>
+					<ul class="racelist" style="grid-template-columns:1fr">
+						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">K {pct(shares(r.k)!.D)} · P {pct(shares(r.p)!.D)} · {(g * 100).toFixed(1)} pts</span></li>)}
+					</ul>
+				</section>
+			)}
+		</div>
+
+		{posts.entries.length > 0 && (
+			<section>
+				<h2>Latest analysis</h2>
+				<div class="grid3">
+					{posts.entries.map((p) => (
+						<a class="panel" href={`/posts/${p.id}`} style="text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:6px">
+							<strong style="font-size:18px">{p.data.title}</strong>
+							{p.data.excerpt && <span style="color:var(--color-text-secondary);font-size:14px">{p.data.excerpt}</span>}
+						</a>
+					))}
+				</div>
+			</section>
+		)}
+
+		<section>
+			<h2>Explore</h2>
+			<p class="datalinks">
+				{(index?.cycles ?? []).map((c) => <a href={c.offices.includes("president") && c.races < 5 ? `/${c.year}/president/` : `/${c.year}/`}>{c.year} elections</a>)}
+				<a href="/methodology/">Methodology</a><a href="/data/">Data &amp; API</a>
+			</p>
+		</section>
+	</div>
+</Base>

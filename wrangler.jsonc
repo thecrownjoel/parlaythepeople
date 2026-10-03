@@ -1,0 +1,34 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "parlaythepeople",
+	"main": "./src/worker.ts",
+	"compatibility_date": "2026-02-24",
+	"compatibility_flags": ["nodejs_compat"],
+	"account_id": "ece401f47370ecab76cbc85bf2a7054c",
+	"d1_databases": [
+		{
+			// EmDash CMS content (posts, pages, users, settings)
+			"binding": "DB",
+			"database_name": "ballottape-cms",
+			"database_id": "eb8d63c8-68c7-486f-9961-e3177f7a5fa3",
+		},
+		{
+			// Market data: races index and price history, written by the collector
+			"binding": "MARKETS",
+			"database_name": "ballottape-markets",
+			"database_id": "788f4e77-c852-4a19-8e16-c1a9df33999d",
+		},
+	],
+	"r2_buckets": [
+		{ "binding": "MEDIA", "bucket_name": "ballottape-media" },
+		// Full per-cycle data files (cycles/<year>.json, index.json), written by the collector
+		{ "binding": "DATA", "bucket_name": "ballottape-data" },
+	],
+	"observability": { "enabled": true },
+	// Sandboxed plugins require Worker Loader, available on Workers paid plans. Uncomment to enable:
+	// "worker_loaders": [{ "binding": "LOADER" }],
+	// General maintenance cron trigger (EmDash scheduled publishing etc.)
+	"triggers": {
+		"crons": ["* * * * *"],
+	},
+}

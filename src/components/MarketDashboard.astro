@@ -1,0 +1,692 @@
+---
+/**
+ * Interactive market dashboard for one cycle: source tabs, control cards, big-picture
+ * charts, race ratings, the sortable race board and ballot measures.
+ * The page that uses it renders the crawlable summary; this adds the interactive view.
+ */
+import type { CycleData } from "../lib/markets";
+interface Props { data: CycleData }
+const { data } = Astro.props;
+const json = JSON.stringify(data).replace(/</g, "\\u003c");
+---
+<div class="bt-dash" id="bt-dash">
+  <p class="dash-stamp"><span id="asof" class="asof"></span><span id="freshness"></span></p>
+  <nav class="srctabs" role="tablist" aria-label="Market source" id="srctabs"></nav>
+
+  <section class="control" id="control" aria-label="Chamber control"></section>
+
+  <section id="big-sec">
+    <div class="section-h">
+      <h2>The big picture</h2>
+      <p>How the night could end up overall: who holds each chamber, how many seats Republicans end with, and the national House vote. Tap a bar for its exact odds.</p>
+    </div>
+    <div class="bigs" id="bigs"></div>
+  </section>
+
+  <section id="ladder-sec">
+    <div class="section-h">
+      <h2>Race ratings by market odds</h2>
+      <p id="ladder-note">Each race is rated from the leading party's odds. Click a segment to filter the board.</p>
+    </div>
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <section id="races-sec">
+    <div class="section-h">
+      <h2>Every race</h2>
+      <p>Click a column to sort, or a row to see every candidate's price on each market.</p>
+    </div>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Office" id="seg"></div>
+      <label class="search"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="q" type="search" placeholder="State, district or candidate" aria-label="Search races"></label>
+      <div class="chips">
+        <button class="chip" id="f-comp" aria-pressed="false">Competitive (15–85%)</button>
+        <button class="chip" id="f-both" aria-pressed="false">On both markets</button>
+        <button class="chip" id="f-gap" aria-pressed="false">Markets disagree ≥ 3 pts</button>
+      </div>
+      <label class="sortsel"><span>Sort</span><select id="sortsel" aria-label="Sort races"></select></label>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="board" style="margin-top:12px">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ballots-sec">
+    <div class="section-h">
+      <h2>Ballot measures</h2>
+      <p id="ballot-note">The chance each state measure passes. Markets marked thin have a wide bid–ask spread or under $500 traded, so treat their odds as rough.</p>
+    </div>
+    <div class="toolbar toolbar-b">
+      <label class="search"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="bq" type="search" placeholder="State or measure" aria-label="Search ballot measures"></label>
+      <div class="chips"><button class="chip" id="f-thin" aria-pressed="false">Hide thin markets</button></div>
+      <label class="sortsel"><span>Sort</span><select id="bsortsel" aria-label="Sort ballot measures"></select></label>
+      <span class="count" id="bcount"></span>
+    </div>
+    <div class="board" style="margin-top:12px">
+      <table class="btable">
+        <thead><tr id="bthead"></tr></thead>
+        <tbody id="btbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="tip" id="tip" role="status" hidden></div>
+
+</div>
+<script type="application/json" id="bt-data" set:html={json}></script>
+<script is:inline>
+(function(){
+const DATA=JSON.parse(document.getElementById('bt-data').textContent);
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct=(x,d=0)=>x==null?'—':(x*100).toFixed(d)+'%';
+const GENERIC=/^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other|democratic|party [a-z])$/i;
+const RT={SD:'Safe D',LD:'Likely D',lD:'Lean D',T:'Toss-up',lR:'Lean R',LR:'Likely R',SR:'Safe R',I:'Leans Ind.'};
+const RT_ORDER=['SD','LD','lD','T','lR','LR','SR'];
+const STRONG=new Set(['SD','SR']);
+
+// ---- derive per-race fields ----
+function srcShares(s){
+  if(!s) return null;
+  const tot=s.o.reduce((a,o)=>a+o.p,0)||1;
+  let D=0,R=0,O=0;
+  for(const o of s.o){ if(o.pa==='D')D+=o.p; else if(o.pa==='R')R+=o.p; else O+=o.p; }
+  return {D:D/tot,R:R/tot,O:O/tot};
+}
+function bestName(r,party){
+  for(const src of ['p','k']){ const s=r[src]; if(!s)continue;
+    for(const o of s.o) if(o.pa===party && !GENERIC.test(o.n.trim())) return o.n; }
+  return party==='D'?'Democrat':party==='R'?'Republican':'Other';
+}
+function dChange(s){
+  if(!s) return null;
+  const ds=s.o.filter(o=>o.pa==='D'&&o.d!=null);
+  return ds.length?ds.reduce((a,o)=>a+o.d,0):null;
+}
+const SRC={k:'Kalshi',p:'Polymarket',avg:'Compare'};
+function derive(r,mode){
+  const k=srcShares(r.k), p=srcShares(r.p);
+  const arr=mode==='k'?[k].filter(Boolean):mode==='p'?[p].filter(Boolean):[k,p].filter(Boolean);
+  if(!arr.length) return null;
+  const avg=f=>arr.reduce((a,x)=>a+x[f],0)/arr.length;
+  const D=avg('D'),R=avg('R'),O=Math.max(0,1-D-R);
+  const lead=D>=R&&D>=O?'D':R>=O?'R':'I';
+  const lp=Math.max(D,R,O);
+  let rt;
+  if(lp<0.6) rt='T';
+  else if(lead==='I') rt='I';
+  else rt=(lp>=0.9?'S':lp>=0.75?'L':'l')+lead;
+  const ch=(mode==='k'?[dChange(r.k)]:mode==='p'?[dChange(r.p)]:[dChange(r.k),dChange(r.p)]).filter(x=>x!=null);
+  const distNum=r.dist==null?0:(r.dist==='AL'?0:+r.dist);
+  const names=[];for(const s of [r.k,r.p]) if(s) for(const o of s.o) names.push(o.n);
+  return {...r,kS:k,pS:p,D,R,O,lead,lp,rt,
+    gap:(k&&p)?Math.abs(k.D-p.D):null,
+    chg:ch.length?ch.reduce((a,b)=>a+b,0)/ch.length:null,
+    vol:mode==='k'?(r.k?r.k.v:0):mode==='p'?(r.p?r.p.v:0):(r.k?r.k.v:0)+(r.p?r.p.v:0),
+    dName:bestName(r,'D'),rName:bestName(r,'R'),
+    sortRace:r.state+' '+(r.kind==='senate'?'0':r.kind==='governor'?'1':'2')+String(distNum).padStart(3,'0'),
+    hay:(r.label+' '+r.state+' '+r.st+' '+names.join(' ')).toLowerCase()};
+}
+const BY={};for(const m of ['k','p','avg']) BY[m]=DATA.races.map(r=>derive(r,m)).filter(Boolean);
+let ctrl,board;
+
+// ---- freshness ----
+let gen=new Date(DATA.meta.generated);
+function renderStamp(){
+  $('#asof').innerHTML=`<span class="dot" aria-hidden="true"></span>Prices as of ${esc(gen.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}))}`;
+  $('#freshness').textContent='Updates every 10 minutes; this page refreshes itself while open.';
+}
+renderStamp();
+
+// ---- control cards ----
+function splitBar(D,R,O,cls=''){
+  const t=D+R+O||1;
+  return `<div class="split ${cls}" role="img" aria-label="Democrats ${pct(D)}, Republicans ${pct(R)}">
+    <i class="D" style="width:${D/t*100}%"></i>${O>0.005?`<i class="O" style="width:${O/t*100}%"></i>`:''}<i class="R" style="width:${R/t*100}%"></i></div>`;
+}
+function renderControl(){
+$('#control').innerHTML=['CTRL-SEN','CTRL-HOUSE'].map(id=>{
+  const r=ctrl.find(x=>x.id===id); if(!r) return '';
+  const line=(nm,s,src)=>s?`<span class="lab ${(st.src==='k'&&nm==='Kalshi')||(st.src==='p'&&nm==='Polymarket')?'on':''}">${nm}</span><span class="vals num">D ${pct(s.D,1)} · R ${pct(s.R,1)}</span><a href="${esc(src.url)}" target="_blank" rel="noopener">Open ↗</a>`:'';
+  return `<article class="ctl">
+    <div class="ctl-head"><h2>${id==='CTRL-SEN'?'Senate':'House'} control · ${st.src==='avg'?'average of both':SRC[st.src]}</h2><span class="num" style="color:var(--ink-3);font-size:12px">${fmtVol(r.vol)} traded</span></div>
+    <div class="big">
+      <div class="side"><span class="who"><span class="sw D"></span>Democrats</span><span class="pct">${pct(r.D)}</span></div>
+      <div class="side right"><span class="who">Republicans<span class="sw R"></span></span><span class="pct">${pct(r.R)}</span></div>
+    </div>
+    <div class="mid50">${splitBar(r.D,r.R,0)}</div>
+    <div class="src">${line('Kalshi',r.kS,r.k)}${line('Polymarket',r.pS,r.p)}</div>
+  </article>`;
+}).join('');
+}
+
+function fmtVol(v){ if(!v) return '—'; return v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+Math.round(v/1e3)+'K':'$'+Math.round(v); }
+
+// ---- state ----
+const st={src:'k',kind:'all',q:'',comp:false,both:false,gapf:false,rt:null,sort:'close',dir:1,open:new Set()};
+try{const s=JSON.parse(localStorage.getItem('mm-view')||'{}'); if(s.kind)st.kind=s.kind; if(SRC[s.src])st.src=s.src; if(s.sort){st.sort=s.sort;st.dir=s.dir||1;}}catch(e){}
+const save=()=>{try{localStorage.setItem('mm-view',JSON.stringify({src:st.src,kind:st.kind,sort:st.sort,dir:st.dir}))}catch(e){}};
+
+// ---- source tabs ----
+function renderTabs(){
+  const nr=m=>BY[m].filter(r=>r.kind!=='control').length;
+  const sub={k:nr('k')+' races',p:nr('p')+' races',avg:'Both, side by side'};
+  $('#srctabs').innerHTML=['k','p','avg'].map(m=>`<button role="tab" data-m="${m}" aria-selected="${st.src===m}" tabindex="${st.src===m?0:-1}"><span class="t">${SRC[m]}</span><span class="s">${sub[m]}</span></button>`).join('');
+}
+$('#srctabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;st.src=b.dataset.m;st.open.clear();
+  if(st.src!=='avg'&&['kD','pD','gap'].includes(st.sort)){st.sort='close';st.dir=1;}
+  save();renderAll();});
+$('#srctabs').addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const o=['k','p','avg'];let i=o.indexOf(st.src)+(e.key==='ArrowRight'?1:-1);st.src=o[(i+3)%3];save();renderAll();$('#srctabs button[aria-selected="true"]').focus();});
+
+// ---- ratings ladder ----
+const KINDS=[['senate','Senate'],['governor','Governor'],['house','House']];
+function renderLadder(){
+  $('#ladder').innerHTML=KINDS.filter(([k])=>board.some(r=>r.kind===k)).map(([k,nm])=>{
+    const rs=board.filter(r=>r.kind===k);
+    const c={};for(const r of rs){const key=r.rt==='I'?'T':r.rt;c[key]=(c[key]||0)+1;}
+    const dF=rs.filter(r=>r.lead==='D'&&r.rt!=='T').length, rF=rs.filter(r=>r.lead==='R'&&r.rt!=='T').length, t=c.T||0;
+    const segs=RT_ORDER.filter(x=>c[x]).map(x=>{
+      const sel=st.rt&&st.rt.k===k&&st.rt.r===x;
+      return `<button class="rt-${x} ${STRONG.has(x)?'on-strong':''} ${sel?'sel':''}" style="flex:${c[x]} 1 0" data-k="${k}" data-r="${x}" title="${nm}: ${c[x]} ${RT[x]}" aria-label="${nm}: ${c[x]} rated ${RT[x]}">${c[x]>=(k==='house'?14:2)?c[x]:''}</button>`;}).join('');
+    return `<div class="lrow"><span class="nm">${nm} <span class="num" style="color:var(--ink-3);font-weight:400;font-size:12px">${rs.length}</span></span>
+      <div class="lbar">${segs}</div>
+      <span class="tally num"><b style="color:var(--d)">D ${dF}</b> · ${t} toss · <b style="color:var(--r)">R ${rF}</b></span></div>`;
+  }).join('')+`<div class="legend">${RT_ORDER.map(x=>`<span><i class="sw rt-${x}"></i>${RT[x]}</span>`).join('')}<span style="margin-left:auto">Safe ≥ 90% · Likely ≥ 75% · Lean ≥ 60%</span></div>`;
+}
+$('#ladder').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-r]'); if(!b) return;
+  const same=st.rt&&st.rt.k===b.dataset.k&&st.rt.r===b.dataset.r;
+  st.rt=same?null:{k:b.dataset.k,r:b.dataset.r};
+  if(st.rt) st.kind=st.rt.k;
+  renderAll();
+  if(st.rt) document.querySelector('.toolbar').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+});
+
+// ---- toolbar ----
+function renderSeg(){
+  const counts={all:board.length};for(const[k] of KINDS)counts[k]=board.filter(r=>r.kind===k).length;
+  $('#seg').innerHTML=[['all','All'],...KINDS.filter(([k])=>counts[k])].map(([k,nm])=>`<button data-k="${k}" aria-pressed="${st.kind===k}">${nm}<span class="c">${counts[k]}</span></button>`).join('');
+}
+$('#seg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;st.kind=b.dataset.k;if(st.rt&&st.rt.k!==st.kind)st.rt=null;save();renderAll();});
+$('#q').addEventListener('input',e=>{st.q=e.target.value.trim().toLowerCase();renderTable();});
+for(const [id,key] of [['#f-comp','comp'],['#f-both','both'],['#f-gap','gapf']]){
+  $(id).addEventListener('click',e=>{st[key]=!st[key];e.currentTarget.setAttribute('aria-pressed',st[key]);renderTable();});
+}
+
+// ---- table ----
+const ALLCOLS=[
+  {k:'race',l:'Race',v:r=>r.sortRace},
+  {k:'rt',l:'Rating',v:r=>(r.lead==='D'?-1:r.lead==='R'?1:0)*r.lp},
+  {k:'close',l:'Odds',v:r=>r.lp,title:'Sorted by how close the race is'},
+  {k:'kD',l:'Kalshi D',v:r=>r.kS?r.kS.D:null,c:'r',cmp:1},
+  {k:'pD',l:'Poly D',v:r=>r.pS?r.pS.D:null,c:'r',cmp:1},
+  {k:'gap',l:'Gap',v:r=>r.gap,c:'r',cmp:1},
+  {k:'dem',l:'Dem',v:r=>r.D,c:'r',one:1},
+  {k:'rep',l:'Rep',v:r=>r.R,c:'r',one:1},
+  {k:'chg',l:'24h D',v:r=>r.chg,c:'r'},
+  {k:'vol',l:'Volume',v:r=>r.vol,c:'r'},
+];
+let COLS=ALLCOLS;
+function renderHead(){
+  COLS=ALLCOLS.filter(c=>st.src==='avg'?!c.one:!c.cmp);
+  $('#thead').innerHTML=COLS.map(c=>{
+    const on=st.sort===c.k;
+    const arrow=on?(st.dir>0?'▲':'▼'):'▲';
+    return `<th class="${c.c||''}" ${on?`aria-sort="${st.dir>0?'ascending':'descending'}"`:''}><button data-k="${c.k}" ${c.title?`title="${c.title}"`:''}>${c.l}<span class="ar">${arrow}</span></button></th>`;
+  }).join('');
+}
+$('#thead').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const k=b.dataset.k;
+  if(st.sort===k) st.dir*=-1; else {st.sort=k; st.dir=['vol','gap','kD','pD','dem','rep'].includes(k)?-1:1;}
+  save();renderHead();renderTable();
+});
+
+const SORTS=[['close',1,'Closest races first'],['race',1,'State A–Z'],['vol',-1,'Most traded'],['rt',1,'Most Democratic'],['rt',-1,'Most Republican'],['chg',-1,'Biggest Dem gain (24h)'],['chg',1,'Biggest GOP gain (24h)'],['gap',-1,'Biggest market gap',1]];
+function renderSortSel(){
+  const opts=SORTS.filter(o=>!o[3]||st.src==='avg');
+  const cur=opts.findIndex(o=>o[0]===st.sort&&o[1]===st.dir);
+  $('#sortsel').innerHTML=(cur<0?'<option value="-1">Custom (table header)</option>':'')+opts.map((o,i)=>`<option value="${SORTS.indexOf(o)}" ${i===cur?'selected':''}>${o[2]}</option>`).join('');
+}
+$('#sortsel').addEventListener('change',e=>{const o=SORTS[+e.target.value];if(!o)return;st.sort=o[0];st.dir=o[1];save();renderHead();renderTable();});
+function filtered(){
+  return board.filter(r=>{
+    if(st.kind!=='all'&&r.kind!==st.kind) return false;
+    if(st.rt&&(r.kind!==st.rt.k||(r.rt==='I'?'T':r.rt)!==st.rt.r)) return false;
+    if(st.comp&&r.lp>0.85) return false;
+    if(st.both&&!(r.k&&r.p)) return false;
+    if(st.gapf&&!(r.gap!=null&&r.gap>=0.03)) return false;
+    if(st.q&&!r.hay.includes(st.q)) return false;
+    return true;
+  });
+}
+function sorted(rs){
+  const c=COLS.find(c=>c.k===st.sort)||COLS[2];
+  return rs.slice().sort((a,b)=>{
+    const x=c.v(a),y=c.v(b);
+    if(x==null&&y==null) return b.vol-a.vol;
+    if(x==null) return 1; if(y==null) return -1;
+    if(x<y) return -st.dir; if(x>y) return st.dir;
+    return b.vol-a.vol;
+  });
+}
+const KIND_L={senate:'Senate',governor:'Governor',house:'House'};
+function rowHTML(r){
+  const top=r.lead==='I'?(r.k||r.p).o.find(o=>o.pa!=='D'&&o.pa!=='R'):null;
+  const left=`<span><span class="pc" style="color:var(--d)">${pct(r.D)}</span> ${esc(r.dName)}</span>`;
+  const right=`<span style="text-align:right">${esc(r.rName)} <span class="pc" style="color:var(--r)">${pct(r.R)}</span></span>`;
+  const g=r.gap==null?'<span class="na">—</span>':`<span class="gap num ${r.gap>=0.03?'hot':''}">${(r.gap*100).toFixed(1)}</span>`;
+  const ch=r.chg==null||Math.abs(r.chg)<0.0005?'<span class="na num">0.0</span>':`<span class="dlt num ${r.chg>0?'up':'dn'}">${r.chg>0?'▲':'▼'} ${Math.abs(r.chg*100).toFixed(1)}</span>`;
+  const sub=r.kind==='house'?r.state:KIND_L[r.kind];
+  return `<tr class="row ${st.open.has(r.id)?'open':''}" data-id="${r.id}" tabindex="0" aria-expanded="${st.open.has(r.id)}">
+    <td class="c-race"><div class="race"><a class="rlink" href="${esc(r.path)}"><b>${esc(r.kind==='house'?r.label:r.state)}</b></a><small>${esc(sub)}${r.label.includes('special')?' · special':''}</small></div></td>
+    <td class="c-rt"><span class="rating rt-${r.rt} ${STRONG.has(r.rt)?'on-strong':''}">${RT[r.rt]}${top&&r.rt==='I'?'':''}</span></td>
+    <td class="c-odds"><div class="odds"><div class="names">${left}${right}</div>${splitBar(r.D,r.R,r.O)}</div></td>
+    ${st.src==='avg'?`<td class="r num m" data-l="Kalshi D">${r.kS?pct(r.kS.D,1):'<span class="na">—</span>'}</td>
+    <td class="r num m" data-l="Poly D">${r.pS?pct(r.pS.D,1):'<span class="na">—</span>'}</td>
+    <td class="r m" data-l="Gap">${g}</td>`:`<td class="r num m" data-l="Dem">${pct(r.D,1)}</td><td class="r num m" data-l="Rep">${pct(r.R,1)}</td>`}
+    <td class="r m" data-l="24h D">${ch}</td>
+    <td class="r num m" data-l="Volume">${fmtVol(r.vol)}</td>
+  </tr>${st.open.has(r.id)?detailHTML(r):''}`;
+}
+function srcList(name,s){
+  if(!s) return `<div><h3>${name}</h3><p class="none">No market for this race on ${name}.</p></div>`;
+  const tot=s.o.reduce((a,o)=>a+o.p,0)||1;
+  const items=s.o.filter(o=>o.p>=0.002||s.o.length<=4).slice(0,8).map(o=>{
+    const share=o.p/tot, col=o.pa==='D'?'var(--d)':o.pa==='R'?'var(--r)':'var(--oth)';
+    return `<li><span class="sw ${o.pa==='D'?'D':o.pa==='R'?'R':'O'}" title="${o.pa||'Other'}"></span><span>${esc(o.n)}${o.pa&&o.pa!=='D'&&o.pa!=='R'?' <span class="na">('+o.pa+')</span>':''}</span><span class="num r">${pct(share,1)}</span><span class="bar"><i style="width:${share*100}%;background:${col}"></i></span></li>`;}).join('');
+  return `<div><h3>${name}<a href="${esc(s.url)}" target="_blank" rel="noopener">Open on ${name} ↗</a></h3><ul>${items}</ul></div>`;
+}
+function detailHTML(r){
+  return `<tr class="detail"><td colspan="${COLS.length}"><div class="det">${st.src==='p'?srcList('Polymarket',r.p)+srcList('Kalshi',r.k):srcList('Kalshi',r.k)+srcList('Polymarket',r.p)}</div></td></tr>`;
+}
+function renderTable(keep){
+  if(!keep) st.limit=40;
+  renderSortSel();
+  const all=sorted(filtered()); const rs=all.slice(0,st.limit||40);
+  $('#count').textContent=`${all.length} of ${board.length} races match`;
+  $('#tbody').innerHTML=rs.length?rs.map(rowHTML).join('')+(all.length>rs.length?`<tr class="more"><td colspan="${COLS.length}"><button type="button" class="morebtn" id="morebtn">Show ${Math.min(40,all.length-rs.length)} more of ${all.length-rs.length} remaining</button></td></tr>`:''):`<tr><td colspan="${COLS.length}" class="empty">No races match these filters. Clear the search or turn off a filter to see more.</td></tr>`;
+}
+function toggle(tr){const id=tr.dataset.id; st.open.has(id)?st.open.delete(id):st.open.add(id); renderTable(true);}
+$('#tbody').addEventListener('click',e=>{if(e.target.closest('#morebtn')){st.limit=(st.limit||40)+40;renderTable(true);return;}if(e.target.closest('a'))return;const tr=e.target.closest('tr.row');if(tr)toggle(tr);});
+$('#tbody').addEventListener('keydown',e=>{const tr=e.target.closest('tr.row');if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggle(tr);const n=document.querySelector(`tr.row[data-id="${tr.dataset.id}"]`);n&&n.focus();}});
+
+// ---- big picture ----
+let BIG=DATA.big||{};
+const srcs=()=>st.src==='avg'?['k','p']:[st.src];
+function link(o,name){return o&&o.url?`<a href="${esc(o.url)}" target="_blank" rel="noopener">${name||'Open'} ↗</a>`:'';}
+function bopPanel(){
+  const b=BIG.bop||{}; const ss=srcs().filter(x=>b[x]); if(!ss.length) return '';
+  const ROWS=[['DD','Democrats sweep','D','D'],['DR','D House, R Senate','D','R'],['RD','R House, D Senate','R','D'],['RR','Republicans sweep','R','R']];
+  const fill=k=>k==='DD'?'fill-D':k==='RR'?'fill-R':'fill-M';
+  const rows=ROWS.map(([k,l,h,se])=>{
+    const vals=ss.map(x=>b[x].o[k]||0);
+    const avg=vals.reduce((a,c)=>a+c,0)/vals.length;
+    const bars=ss.length>1?`<div class="hbar two">${ss.map((x,i)=>`<i class="${fill(k)} fill-${x.toUpperCase()}" style="width:${vals[i]*100}%"></i>`).join('')}</div>`:`<div class="hbar"><i class="${fill(k)}" style="width:${avg*100}%"></i></div>`;
+    const num=ss.length>1?ss.map((x,i)=>pct(vals[i])).join(' · '):pct(avg,1);
+    return `<div class="bop-row" data-tip="${esc(l)}: ${ss.map((x,i)=>SRC[x]+' '+pct(vals[i],1)).join(', ')}" tabindex="0"><span class="pair" title="House ${h}, Senate ${se}"><i class="${h}"></i><i class="${se}"></i></span><div class="top"><span>${l}</span><span class="num">${num}</span></div>${bars}</div>`;}).join('');
+  const lead=ROWS.map(r=>[r,ss.reduce((a,x)=>a+(b[x].o[r[0]]||0),0)/ss.length]).sort((a,c)=>c[1]-a[1])[0];
+  return `<article class="panel"><h3>Balance of power ${ss.length===1?link(b[ss[0]]):''}</h3>
+    <p class="headline"><b>${lead[0][1]} ${pct(lead[1])}</b>Most likely outcome${ss.length>1?', average of both markets':''}</p>
+    <div class="bop">${rows}</div>
+    <div class="srclegend"><span>Each color pair shows the House winner, then the Senate winner</span></div>
+    ${ss.length>1?`<div class="srclegend"><span><i></i>Kalshi</span><span><i class="p"></i>Polymarket</span><span>${link(b.k,'Kalshi')} ${link(b.p,'Polymarket')}</span></div>`:''}
+  </article>`;
+}
+function histHTML(o,mark,colorOf,fmtTip,axisM){
+  const bins=o.bins, n=bins.length, mx=Math.max(...bins.map(b=>b.p))||1;
+  let pos=null;
+  bins.forEach((b,i)=>{ if(pos!=null) return;
+    if(b.lo!=null&&b.lo>=mark){pos=i/n;}
+    else if(b.lo!=null&&b.hi!=null&&b.lo<mark&&b.hi>=mark){pos=(i+(mark-b.lo)/(b.hi-b.lo+1))/n;} });
+  const cols=bins.map(b=>`<button data-tip="${esc(fmtTip(b))}" aria-label="${esc(fmtTip(b))}"><i class="fill-${colorOf(b)}" style="height:${Math.max(2,b.p/mx*100)}%"></i></button>`).join('');
+  return `<div class="cols">${cols}${pos!=null?`<span class="maj" style="left:${pos*100}%"></span>`:''}</div>
+    <div class="axis"><span class="l">${esc(bins[0].l)}</span>${pos!=null&&pos>0.18&&pos<0.82?`<span class="m" style="left:${pos*100}%">${axisM}</span>`:''}<span class="r">${esc(bins[n-1].l)}</span></div>`;
+}
+function shareAtLeast(o,mark){
+  let t=0; for(const b of o.bins){ if(b.lo!=null&&b.lo>=mark) t+=b.p; else if(b.lo!=null&&b.hi!=null&&b.lo<mark&&b.hi>=mark) t+=b.p*(b.hi-mark+1)/(b.hi-b.lo+1);} return t;
+}
+function seatPanel(key,title){
+  const g=BIG[key]||{}; const ss=srcs().filter(x=>g[x]); if(!ss.length) return '';
+  const maj=g.maj;
+  const col=b=>(b.lo!=null&&b.lo>=maj)?'R':(b.hi!=null&&b.hi<maj)?'D':'M';
+  const rk=ss.map(x=>shareAtLeast(g[x],maj)); const avg=rk.reduce((a,c)=>a+c,0)/rk.length;
+  const charts=ss.map(x=>{const top=g[x].bins.reduce((a,b)=>b.p>a.p?b:a);
+    return `<div class="hist">${ss.length>1?`<span class="lab">${SRC[x]}</span>`:''}${histHTML(g[x],maj,col,b=>`${SRC[x]}: ${b.l} seats, ${pct(b.p,1)}`,key==='senate'?'50':'218')}
+    <span class="headline" style="font-size:12px">Most likely: ${esc(top.l)} seats (${pct(top.p)}) ${link(g[x],ss.length>1?SRC[x]:'')}</span></div>`;}).join('');
+  return `<article class="panel"><h3>${title}</h3>
+    <p class="headline"><b>${pct(avg)} chance of ${maj}+</b>Republican ${key==='senate'?'Senate':'House'} seats${key==='senate'?' (50 keeps control with the VP tiebreak)':' needed for a majority'}${ss.length>1?' · average of both':''}</p>
+    ${charts}
+    <div class="srclegend"><span><i style="background:var(--r)"></i>Republican majority</span><span><i style="background:var(--d)"></i>Democratic majority</span></div>
+  </article>`;
+}
+function pvPanel(){
+  const g=BIG.pv||{}; const ss=srcs().filter(x=>g[x]); if(!ss.length) return '';
+  const col=b=>b.hi<=0?'R':b.lo>=0?'D':'M';
+  const fmt=b=>b.lo<=-100?`R +${-b.hi}% or more`:b.hi>=100?`D +${b.lo}% or more`:b.hi<=0?`R +${-b.hi} to +${-b.lo}%`:`D +${b.lo} to +${b.hi}%`;
+  const median=o=>{let c=0;for(const b of o.bins){c+=b.p;if(c>=0.5)return b;}return o.bins[o.bins.length-1];};
+  const dwin=ss.map(x=>g[x].bins.filter(b=>b.lo>=0).reduce((a,b)=>a+b.p,0)); const avg=dwin.reduce((a,c)=>a+c,0)/dwin.length;
+  const charts=ss.map(x=>`<div class="hist">${ss.length>1?`<span class="lab">${SRC[x]}</span>`:''}${histHTML(g[x],0,col,b=>`${SRC[x]}: ${fmt(b)}, ${pct(b.p,1)}`,'Even')}
+    <span class="headline" style="font-size:12px">Median: ${fmt(median(g[x]))} ${link(g[x],ss.length>1?SRC[x]:'')}</span></div>`).join('');
+  return `<article class="panel"><h3>House popular vote</h3>
+    <p class="headline"><b>${pct(avg)} Democrats win it</b>National House vote margin${ss.length>1?' · average of both':''}</p>
+    ${charts}
+    <div class="srclegend"><span><i style="background:var(--r)"></i>Republicans ahead</span><span><i style="background:var(--d)"></i>Democrats ahead</span></div>
+  </article>`;
+}
+function renderBig(){
+  $('#bigs').innerHTML=bopPanel()+seatPanel('senate','Senate seats')+seatPanel('house','House seats')+pvPanel();
+}
+
+// ---- ballot measures ----
+const bst={q:'',hideThin:false,sort:'v',dir:-1};
+const BCOLS=[{k:'n',l:'Measure',v:b=>b.st+b.n},{k:'p',l:'Chance it passes',v:b=>b.p},{k:'src',l:'Market',v:b=>b.src,cmp:1},{k:'v',l:'Volume',v:b=>b.v,c:'r'}];
+const BSORTS=[['v',-1,'Most traded'],['p',-1,'Most likely to pass'],['p',1,'Least likely to pass'],['close',1,'Closest to 50/50'],['n',1,'State A–Z']];
+function renderBallots(){
+  const all=(BIG.ballots||[]);
+  const list=all.filter(b=>(st.src==='avg'||b.src===st.src)&&(!bst.hideThin||!b.thin)&&(!bst.q||(b.n+' '+b.st+' '+(ST_NAMES[b.st]||'')).toLowerCase().includes(bst.q)));
+  const key={n:b=>b.st+b.n,p:b=>b.p,src:b=>b.src,v:b=>b.v,close:b=>Math.abs(b.p-0.5)}[bst.sort];
+  list.sort((a,b)=>{const x=key(a),y=key(b);return x<y?-bst.dir:x>y?bst.dir:b.v-a.v;});
+  const cols=BCOLS.filter(c=>!c.cmp||st.src==='avg');
+  $('#bthead').innerHTML=cols.map(c=>`<th class="${c.c||''}" ${bst.sort===c.k?`aria-sort="${bst.dir>0?'ascending':'descending'}"`:''}><button data-k="${c.k}">${c.l}<span class="ar">${bst.sort===c.k?(bst.dir>0?'▲':'▼'):'▲'}</span></button></th>`).join('');
+  const cur=BSORTS.findIndex(o=>o[0]===bst.sort&&o[1]===bst.dir);
+  $('#bsortsel').innerHTML=(cur<0?'<option value="-1">Custom</option>':'')+BSORTS.map((o,i)=>`<option value="${i}" ${i===cur?'selected':''}>${o[2]}</option>`).join('');
+  const n=all.filter(b=>st.src==='avg'||b.src===st.src).length;
+  $('#bcount').textContent=`Showing ${list.length} of ${n} measures`;
+  $('#btbody').innerHTML=list.length?list.map(b=>`<tr>
+    <td class="b-name"><div class="mname">${esc(b.n)}<small>${esc(ST_NAMES[b.st]||b.st)} · <a href="${esc(b.url)}" target="_blank" rel="noopener">${SRC[b.src]} ↗</a></small></div></td>
+    <td class="b-pass"><div class="passbar"><div class="hbar"><i style="width:${b.p*100}%"></i></div><span class="num">${pct(b.p)}</span>${b.thin?'<span class="thin" title="Wide spread or under $500 traded">Thin</span>':''}</div></td>
+    ${st.src==='avg'?`<td class="m" data-l="Market"><span class="srcpill">${SRC[b.src]}</span></td>`:''}
+    <td class="r num m" data-l="Volume">${fmtVol(b.v)}</td></tr>`).join(''):`<tr><td colspan="${cols.length}" class="empty">No ballot measures match. Clear the search to see them all.</td></tr>`;
+}
+const ST_NAMES={};for(const r of DATA.races) if(r.st&&r.state) ST_NAMES[r.st]=r.state;
+$('#bthead').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.k;if(bst.sort===k)bst.dir*=-1;else{bst.sort=k;bst.dir=(k==='v'||k==='p')?-1:1;}renderBallots();});
+$('#bsortsel').addEventListener('change',e=>{const o=BSORTS[+e.target.value];if(!o)return;bst.sort=o[0];bst.dir=o[1];renderBallots();});
+$('#bq').addEventListener('input',e=>{bst.q=e.target.value.trim().toLowerCase();renderBallots();});
+$('#f-thin').addEventListener('click',e=>{bst.hideThin=!bst.hideThin;e.currentTarget.setAttribute('aria-pressed',bst.hideThin);renderBallots();});
+
+// ---- tooltip (hover on desktop, tap on touch) ----
+const tip=$('#tip'); let tipEl=null;
+function showTip(el,x,y){tipEl=el;tip.textContent=el.dataset.tip;tip.hidden=false;
+  const r=tip.getBoundingClientRect(); const vw=document.documentElement.clientWidth;
+  let left=Math.min(Math.max(8,x-r.width/2),vw-r.width-8); let top=y-r.height-12; if(top<8) top=y+16;
+  tip.style.left=left+'px'; tip.style.top=top+'px';
+  document.querySelectorAll('.cols button.act').forEach(b=>b.classList.remove('act')); if(el.matches('.cols button')) el.classList.add('act');}
+function hideTip(){tip.hidden=true;tipEl=null;document.querySelectorAll('.cols button.act').forEach(b=>b.classList.remove('act'));}
+document.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const el=e.target.closest('[data-tip]');if(el)showTip(el,e.clientX,e.clientY);else if(tipEl)hideTip();});
+document.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&tipEl)showTip(tipEl,e.clientX,e.clientY);});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-tip]');if(el){const r=el.getBoundingClientRect();showTip(el,r.left+r.width/2,r.top);}else if(tipEl)hideTip();});
+document.addEventListener('focusin',e=>{const el=e.target.closest('[data-tip]');if(el){const r=el.getBoundingClientRect();showTip(el,r.left+r.width/2,r.top);}});
+document.addEventListener('focusout',()=>{if(tipEl)hideTip();});
+window.addEventListener('scroll',()=>{if(tipEl)hideTip();},{passive:true});
+
+// ---- refresh from the site's own feed (the collector updates it every 10 minutes) ----
+async function refresh(){
+  if(document.hidden) return;
+  try{
+    const r=await fetch(`/api/v1/${DATA.meta.cycle}.json`,{cache:'no-store'}); if(!r.ok) return;
+    const next=await r.json(); if(!next.meta||next.meta.generated===DATA.meta.generated) return;
+    Object.assign(DATA,next); gen=new Date(DATA.meta.generated);
+    for(const m of ['k','p','avg']) BY[m]=DATA.races.map(r=>derive(r,m)).filter(Boolean);
+    BIG=DATA.big||{}; renderAll(); renderStamp();
+  }catch(e){}
+}
+setInterval(refresh,5*60000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
+
+function renderAll(){
+  ctrl=BY[st.src].filter(r=>r.kind==='control'); board=BY[st.src].filter(r=>r.kind!=='control');
+  const cmp=st.src==='avg'; $('#f-both').hidden=!cmp; $('#f-gap').hidden=!cmp;
+  if(!cmp){st.both=false;st.gapf=false;$('#f-both').setAttribute('aria-pressed','false');$('#f-gap').setAttribute('aria-pressed','false');}
+  $('#ladder-note').textContent=(cmp?"Each race is rated from the average of both markets' odds for the leading party.":"Each race is rated from "+SRC[st.src]+"'s odds for the leading party.")+" Click a segment to filter the board.";
+  renderTabs();renderControl();renderBig();renderSeg();renderLadder();renderHead();renderTable();renderBallots();
+  $('#control').hidden=!ctrl.length; $('#big-sec').hidden=!$('#bigs').innerHTML.trim();
+  $('#ladder-sec').hidden=!board.length; $('#races-sec').hidden=!board.length;
+  $('#ballots-sec').hidden=!(BIG.ballots||[]).length;}
+renderAll();
+})();
+</script>
+<style is:global>
+.bt-dash{
+  --bg:var(--color-bg); --surface:var(--color-surface); --ink:var(--color-text); --ink-2:var(--color-text-secondary); --ink-3:var(--color-muted);
+  --line:var(--color-border); --line-2:light-dark(#ced3dc,#323a46); --hover:var(--bt-hover);
+  --d:var(--bt-d); --r:var(--bt-r); --oth:var(--bt-oth); --toss:var(--bt-toss); --pos:var(--bt-pos); --neg:light-dark(#b23a2e,#f07a6c); --chip:var(--bt-chip);
+  --f-display:var(--font-display),"Arial Narrow",sans-serif; --f-body:var(--font-body),system-ui,sans-serif; --f-mono:var(--font-mono),ui-monospace,monospace;
+  display:flex;flex-direction:column;gap:28px;font-family:var(--f-body);font-size:14px;line-height:1.45;color:var(--ink);
+}
+.bt-dash a{color:inherit}
+.bt-dash :focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:4px}
+.bt-dash .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+
+/* masthead */
+.asof{display:inline-flex;align-items:center;gap:6px}
+.bt-dash .dot{width:8px;height:8px;border-radius:50%;background:var(--pos);box-shadow:0 0 0 0 color-mix(in oklab,var(--pos) 60%,transparent);animation:pulse 2s infinite}
+.bt-dash .dot.off{background:var(--ink-3);animation:none}
+/* source tabs */
+.bt-dash .srctabs{display:flex;gap:4px;border-bottom:1px solid var(--line-2);margin-top:-8px;overflow-x:auto}
+.bt-dash .srctabs button{all:unset;cursor:pointer;padding:10px 18px 12px;display:flex;flex-direction:column;gap:2px;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.bt-dash .srctabs .t{font-family:var(--f-display);font-stretch:80%;font-weight:800;font-size:20px;color:var(--ink-3);letter-spacing:-.005em}
+.bt-dash .srctabs .s{font-size:12px;color:var(--ink-3)}
+.bt-dash .srctabs button:hover .t{color:var(--ink-2)}
+.bt-dash .srctabs button[aria-selected="true"]{border-bottom-color:var(--ink)}
+.bt-dash .srctabs button[aria-selected="true"] .t{color:var(--ink)}
+.bt-dash .srctabs button[aria-selected="true"] .s{color:var(--ink-2)}
+.bt-dash .srctabs button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.bt-dash .ctl .src .on{font-weight:600;color:var(--ink)}
+/* control cards */
+.bt-dash .control{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.bt-dash .ctl{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.bt-dash .ctl h2{font-family:var(--f-display);font-stretch:80%;font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--ink-2)}
+.bt-dash .ctl-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.bt-dash .big{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.bt-dash .big .side{display:flex;flex-direction:column}
+.bt-dash .big .side.right{align-items:flex-end;text-align:right}
+.bt-dash .big .pct{font-family:var(--f-display);font-stretch:70%;font-weight:800;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.bt-dash .big .who{font-size:12px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;display:flex;align-items:center;gap:6px}
+.bt-dash .sw{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.bt-dash .sw.D{background:var(--d)}
+.bt-dash .sw.R{background:var(--r)}
+.bt-dash .sw.O{background:var(--oth)}
+.bt-dash .split{display:flex;height:14px;gap:2px;border-radius:4px;overflow:hidden}
+.bt-dash .split i{display:block;height:100%}
+.bt-dash .split .D{background:var(--d)}
+.bt-dash .split .R{background:var(--r)}
+.bt-dash .split .O{background:repeating-linear-gradient(45deg,var(--oth) 0 3px,transparent 3px 6px);background-color:color-mix(in oklab,var(--oth) 45%,var(--surface))}
+.bt-dash .mid50{position:relative}
+.bt-dash .mid50::after{content:"";position:absolute;left:50%;top:-4px;bottom:-4px;width:0;border-left:1.5px dashed var(--ink-3)}
+.bt-dash .src{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;font-size:13px;align-items:center}
+.bt-dash .src .lab{color:var(--ink-2)}
+.bt-dash .src .vals{text-align:right}
+.bt-dash .src a{color:var(--ink-3);text-decoration:none;font-size:12px}
+.bt-dash .src a:hover{color:var(--ink);text-decoration:underline}
+/* ratings ladder */
+.bt-dash .section-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 10px}
+.bt-dash .section-h h2{font-family:var(--f-display);font-stretch:75%;font-weight:800;font-size:24px;margin:0;letter-spacing:-.005em}
+.bt-dash .section-h p{margin:0;color:var(--ink-2);font-size:13px;max-width:60ch}
+.bt-dash .ladder{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.bt-dash .lrow{display:grid;grid-template-columns:96px 1fr 150px;gap:14px;align-items:center}
+.bt-dash .lrow .nm{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:14px}
+.bt-dash .lrow .tally{font-size:12px;color:var(--ink-2);text-align:right;white-space:nowrap}
+.bt-dash .lrow .tally b{color:var(--ink)}
+.bt-dash .lbar{display:flex;gap:2px;height:28px;min-width:0}
+.bt-dash .lbar button{all:unset;cursor:pointer;height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--ink);min-width:0;overflow:hidden;border-radius:2px;transition:filter .12s}
+.bt-dash .lbar button:first-child{border-radius:4px 2px 2px 4px}
+.bt-dash .lbar button:last-child{border-radius:2px 4px 4px 2px}
+.bt-dash .lbar button:hover,.bt-dash .lbar button:focus-visible{filter:brightness(.92)}
+.bt-dash .lbar button.sel{outline:2px solid var(--ink);outline-offset:1px}
+.bt-dash .lbar .on-strong{color:#fff}
+.bt-dash .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-2);padding-top:4px;border-top:1px solid var(--line)}
+.bt-dash .legend span{display:inline-flex;align-items:center;gap:6px}
+.bt-dash .rt-SD,.bt-dash .lbar button.rt-SD{background:var(--d)}
+.bt-dash .rt-LD,.bt-dash .lbar button.rt-LD{background:color-mix(in oklab,var(--d) 62%,var(--surface))}
+.bt-dash .rt-lD,.bt-dash .lbar button.rt-lD{background:color-mix(in oklab,var(--d) 30%,var(--surface))}
+.bt-dash .rt-T,.bt-dash .lbar button.rt-T{background:var(--toss)}
+.bt-dash .rt-lR,.bt-dash .lbar button.rt-lR{background:color-mix(in oklab,var(--r) 30%,var(--surface))}
+.bt-dash .rt-LR,.bt-dash .lbar button.rt-LR{background:color-mix(in oklab,var(--r) 62%,var(--surface))}
+.bt-dash .rt-SR,.bt-dash .lbar button.rt-SR{background:var(--r)}
+.bt-dash .rt-I,.bt-dash .lbar button.rt-I{background:color-mix(in oklab,var(--oth) 45%,var(--surface))}
+/* toolbar */
+.bt-dash .toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line)}
+.bt-dash .seg{display:inline-flex;background:var(--chip);border-radius:8px;padding:3px;gap:2px}
+.bt-dash .seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:6px;font-weight:600;font-size:13px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:baseline}
+.bt-dash .seg button .c{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);font-weight:400}
+.bt-dash .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+.bt-dash .seg button:focus-visible{outline:2px solid var(--ink)}
+.bt-dash .search{flex:1 1 200px;min-width:0;max-width:300px;position:relative}
+.bt-dash .search input{width:100%;font:inherit;padding:7px 10px 7px 30px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--ink)}
+.bt-dash .search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ink-3)}
+.bt-dash .chips{display:flex;flex-wrap:wrap;gap:6px}
+.bt-dash .chip{all:unset;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;background:var(--surface)}
+.bt-dash .chip::before{content:"";width:8px;height:8px;border-radius:2px;border:1.5px solid var(--ink-3)}
+.bt-dash .chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
+.bt-dash .chip[aria-pressed="true"]::before{background:var(--ink);border-color:var(--ink)}
+.bt-dash .chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.bt-dash .count{margin-left:auto;font-size:12px;color:var(--ink-3)}
+/* big picture */
+.bt-dash .bigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.bt-dash .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.bt-dash .panel h3{margin:0;font-family:var(--f-display);font-stretch:80%;font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.bt-dash .panel h3 a{font-family:var(--f-body);font-size:12px;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink-3);text-decoration:none}
+.bt-dash .panel h3 a:hover{color:var(--ink);text-decoration:underline}
+.bt-dash .headline{font-size:13px;color:var(--ink-2);margin:0}
+.bt-dash .headline b{font-family:var(--f-display);font-stretch:75%;font-weight:800;font-size:26px;color:var(--ink);display:block;line-height:1.05}
+.bt-dash .bop{display:flex;flex-direction:column;gap:10px}
+.bt-dash .bop-row{display:grid;grid-template-columns:30px 1fr;gap:4px 10px;align-items:center}
+.bt-dash .bop-row .pair{display:flex;gap:2px;grid-row:span 2}
+.bt-dash .bop-row .pair i{width:12px;height:22px;border-radius:3px;display:block}
+.bt-dash .bop-row .pair i.D{background:var(--d)}
+.bt-dash .bop-row .pair i.R{background:var(--r)}
+.bt-dash .bop-row .top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.bt-dash .bop-row .top .num{font-weight:500}
+.bt-dash .hbar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+.bt-dash .hbar.two{height:14px;background:transparent}
+.bt-dash .hbar i{display:block;height:100%;border-radius:4px;min-width:2px}
+.bt-dash .hbar.two i{height:6px;background-color:var(--line)}
+.bt-dash .fill-D{background:var(--d)}
+.bt-dash .fill-R{background:var(--r)}
+.bt-dash .fill-M{background:repeating-linear-gradient(45deg,var(--oth) 0 3px,transparent 3px 6px);background-color:color-mix(in oklab,var(--oth) 45%,var(--surface))}
+.bt-dash .fill-K{opacity:1}
+.bt-dash .fill-P{opacity:.55}
+.bt-dash .srclegend{display:flex;gap:12px;font-size:11.5px;color:var(--ink-3)}
+.bt-dash .srclegend span{display:inline-flex;align-items:center;gap:5px}
+.bt-dash .srclegend i{width:14px;height:6px;border-radius:3px;background:var(--ink-2);display:inline-block}
+.bt-dash .srclegend i.p{opacity:.55}
+.bt-dash .hist{display:flex;flex-direction:column;gap:4px}
+.bt-dash .hist .lab{font-size:11.5px;color:var(--ink-3);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.bt-dash .cols{position:relative;display:flex;align-items:flex-end;gap:2px;height:96px;border-bottom:1px solid var(--line-2)}
+.bt-dash .cols button{all:unset;flex:1 1 0;min-width:0;cursor:pointer;height:100%;display:flex;align-items:flex-end}
+.bt-dash .cols button i{display:block;width:100%;border-radius:3px 3px 0 0;min-height:2px}
+.bt-dash .cols button:hover i,.bt-dash .cols button:focus-visible i,.bt-dash .cols button.act i{filter:brightness(.88)}
+.bt-dash .cols button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.bt-dash .cols .maj{position:absolute;top:-6px;bottom:-1px;border-left:1.5px dashed var(--ink);pointer-events:none}
+.bt-dash .axis{position:relative;height:16px;font-size:11px;color:var(--ink-3);font-family:var(--f-mono)}
+.bt-dash .axis span{position:absolute;top:0;white-space:nowrap}
+.bt-dash .axis .l{left:0}
+.bt-dash .axis .r{right:0}
+.bt-dash .axis .m{transform:translateX(-50%);color:var(--ink);font-weight:500}
+.bt-dash .tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:6px;max-width:240px;box-shadow:0 4px 14px rgb(0 0 0 / .2)}
+.bt-dash .sortsel{display:none;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.bt-dash .sortsel select{font:inherit;font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);max-width:60vw}
+.bt-dash .thin{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line-2);border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.bt-dash .passbar{display:flex;align-items:center;gap:10px;min-width:180px}
+.bt-dash .passbar .hbar{flex:1;height:8px}
+.bt-dash .passbar .hbar i{background:var(--ink-2)}
+.bt-dash .passbar .num{width:48px;text-align:right;font-weight:500}
+.bt-dash .srcpill{font-size:11.5px;font-weight:600;color:var(--ink-2);background:var(--chip);border-radius:4px;padding:2px 6px}
+.bt-dash .mname{font-weight:600}
+.bt-dash .mname small{display:block;font-weight:400;color:var(--ink-3);font-size:12px}
+/* table */
+.bt-dash .board{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.bt-dash table{border-collapse:collapse;width:100%;min-width:880px}
+.bt-dash th,.bt-dash td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+.bt-dash thead th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;white-space:nowrap;background:var(--surface);position:sticky;top:0}
+.bt-dash thead th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.bt-dash thead th button:hover{color:var(--ink)}
+.bt-dash thead th button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.bt-dash thead th[aria-sort] button{color:var(--ink)}
+.bt-dash thead th .ar{font-size:10px;opacity:.35}
+.bt-dash thead th[aria-sort] .ar{opacity:1}
+.bt-dash th.r,.bt-dash td.r{text-align:right}
+.bt-dash tbody tr.row{cursor:pointer}
+.bt-dash tbody tr.row:hover{background:var(--hover)}
+.bt-dash tbody tr.row.open{background:var(--hover)}
+.bt-dash .race{display:flex;flex-direction:column;min-width:0}
+.bt-dash .race b{font-weight:600;white-space:nowrap}
+.bt-dash .race small{color:var(--ink-3);font-size:12px}
+.bt-dash .kindtag{font-family:var(--f-display);font-stretch:80%;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.bt-dash .rating{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;color:var(--ink)}
+.bt-dash .rating.on-strong{color:#fff}
+.bt-dash .odds{display:flex;flex-direction:column;gap:5px;min-width:250px}
+.bt-dash .odds .names{display:flex;justify-content:space-between;gap:8px;font-size:12.5px}
+.bt-dash .odds .names span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%}
+.bt-dash .odds .names .pc{font-family:var(--f-mono);font-weight:500}
+.bt-dash .odds .split{height:8px}
+.bt-dash .na{color:var(--ink-3)}
+.bt-dash .gap{display:inline-block;min-width:44px}
+.bt-dash .gap.hot{background:var(--chip);border-radius:4px;padding:1px 6px;font-weight:600}
+.bt-dash .dlt.up{color:var(--d)}
+.bt-dash .dlt.dn{color:var(--r)}
+.bt-dash tr.detail td{background:var(--hover);padding:0}
+.bt-dash .det{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:14px 16px 18px}
+.bt-dash .det h3{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);display:flex;justify-content:space-between;gap:8px}
+.bt-dash .det h3 a{text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink-2)}
+.bt-dash .det ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.bt-dash .det li{display:grid;grid-template-columns:12px 1fr 52px 72px;gap:8px;align-items:center;font-size:13px}
+.bt-dash .det li .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bt-dash .det li .bar i{display:block;height:100%;border-radius:3px}
+.bt-dash .det .none{color:var(--ink-3);font-size:13px}
+.bt-dash .empty{padding:40px 16px;text-align:center;color:var(--ink-2)}
+.bt-dash .notes{color:var(--ink-2);font-size:12.5px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.bt-dash .notes p{margin:0}
+@media (max-width:720px){.bt-dash .toolbar{position:static;padding-block:6px 10px}
+.bt-dash .sortsel{display:inline-flex}
+.bt-dash .search{max-width:none;flex-basis:100%}
+.bt-dash .count{flex-basis:100%}
+.bt-dash .board{overflow:visible;background:transparent;border:0;border-radius:0}
+.bt-dash table{min-width:0;display:block}
+.bt-dash thead{display:none}
+.bt-dash tbody{display:flex;flex-direction:column;gap:8px}
+.bt-dash tbody tr.row,.bt-dash .btable tbody tr{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.bt-dash tbody tr.row.open{border-color:var(--line-2);border-radius:10px 10px 0 0;background:var(--surface)}
+.bt-dash tbody td{display:block;border:0;padding:0;min-width:0}
+.bt-dash td.c-race{grid-column:1 / 4}
+.bt-dash td.c-rt{grid-column:4 / 6;justify-self:end;align-self:start}
+.bt-dash td.c-odds{grid-column:1 / -1}
+.bt-dash td.m{text-align:left!important;font-size:13px}
+.bt-dash td.m::before{content:attr(data-l);display:block;font-family:var(--f-body);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-bottom:1px}
+.bt-dash .odds{min-width:0}
+.bt-dash tr.detail{display:block;margin-top:-9px}
+.bt-dash tr.detail td{display:block;border:1px solid var(--line-2);border-top:0;border-radius:0 0 10px 10px;background:var(--hover)}
+.bt-dash .det{grid-template-columns:1fr;padding:12px 14px 14px}
+.bt-dash .det li{grid-template-columns:12px 1fr 48px 56px}
+.bt-dash .btable tbody tr{grid-template-columns:1fr auto}
+.bt-dash .btable td.b-name{grid-column:1 / -1}
+.bt-dash .btable td.b-pass{grid-column:1 / -1}
+.bt-dash .passbar{min-width:0}
+.bt-dash .empty{background:var(--surface);border-radius:10px}
+
+}
+@media (max-width:640px){.bt-dash .lrow{grid-template-columns:1fr;gap:6px}
+.bt-dash .lrow .tally{text-align:left}
+.bt-dash .count{margin-left:0}
+.bt-dash .big .pct{font-size:36px}
+
+}
+@media (prefers-reduced-motion:reduce){.bt-dash *{transition:none!important}
+}
+.bt-dash .morebtn{all:unset;cursor:pointer;display:block;width:100%;text-align:center;padding:12px;font-weight:600;color:var(--ink);background:var(--chip);border-radius:8px}
+.bt-dash .morebtn:focus-visible{outline:2px solid var(--ink)}
+.bt-dash tr.more td{padding:10px}
+.bt-dash .rlink{color:inherit;text-decoration:none}
+.bt-dash .rlink:hover b,.bt-dash .rlink:focus-visible b{text-decoration:underline}
+.bt-dash .dash-stamp{margin:0;color:var(--ink-2);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--pos) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+</style>

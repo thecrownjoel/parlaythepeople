@@ -1,0 +1,69 @@
+/*
+  theme.css -- your theme overrides. This is the file to edit to
+  retheme the site.
+
+  Every design token lives in src/styles/tokens.css (colors, type
+  scale, spacing, layout, shadows) with its default value. Override any
+  of them here: declarations in this file are unlayered, so they always
+  beat the @layer base defaults in tokens.css.
+
+  Colors are defined with light-dark(). Overriding with a plain color
+  changes light and dark mode at once; use light-dark(<light>, <dark>)
+  to set different values per mode.
+
+  Webfonts are loaded in astro.config.mjs (--font-body, --font-mono).
+  Swap the loaded font there; use overrides here for system fonts or a
+  separate heading face.
+
+  Example:
+
+  :root {
+    --color-brand: light-dark(#0f766e, #2dd4bf);
+    --font-heading: "Iowan Old Style", Georgia, serif;
+    --radius: 8px;
+  }
+*/
+
+:root {
+	/* Parlay the People: ink brand so blue and red stay reserved for the parties. */
+	--color-bg: light-dark(#f6f7f9, #0f1318);
+	--color-bg-subtle: light-dark(#eef0f4, #141920);
+	--color-surface: light-dark(#ffffff, #161b22);
+	--color-text: light-dark(#151a22, #e8ebf0);
+	--color-text-secondary: light-dark(#4a5262, #a9b0bc);
+	--color-muted: light-dark(#6f7787, #7c8492);
+	--color-border: light-dark(#e1e4ea, #252c36);
+	--color-border-subtle: light-dark(#eceef2, #1c222b);
+	--color-brand: light-dark(#151a22, #e8ebf0);
+	--color-brand-hover: light-dark(#000000, #ffffff);
+	--color-on-brand: light-dark(#ffffff, #0f1318);
+	--font-heading: var(--font-display), var(--font-body);
+	--font-weight-heading: 700;
+	--font-weight-display: 700;
+
+	/* Party colours: validated for colour-blind separation in both themes */
+	--bt-d: light-dark(#2e62d0, #5e92ee);
+	--bt-r: light-dark(#d23f35, #e85a4c);
+	--bt-oth: light-dark(#9aa1ad, #6c7482);
+	--bt-toss: light-dark(#c9cdd5, #3a424e);
+	--bt-pos: light-dark(#1f7a4d, #4cc38a);
+	--bt-chip: light-dark(#eceef2, #212833);
+	--bt-hover: light-dark(#eff1f5, #1c222b);
+}
+
+h1, h2, h3 { text-wrap: balance; }
+/* Brand header: always the logo's near-black, in both themes */
+.site-header { background: #11151c; color: #f3f4f6; border-bottom: 3px solid #a3262a; }
+.site-header a, .site-header .nav-links a { color: #e8ebf0; }
+.site-header .nav-links a:hover { color: #ffffff; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+.brand-mark { width: 40px; height: 40px; border-radius: 6px; display: block; }
+.brand-word { display: flex; flex-direction: column; font-family: var(--font-display); font-weight: 800; text-transform: uppercase; line-height: 0.95; letter-spacing: 0.02em; color: #ffffff; }
+.brand-word span:first-child { font-size: 19px; }
+.brand-word span:last-child { font-size: 12.5px; letter-spacing: 0.06em; }
+.site-header .site-search-input { background: #1b212b; border-color: #2c3440; color: #e8ebf0; }
+
+/* Keep the signed-in Admin link separated from the primary navigation. */
+.nav-admin {
+	margin-inline-start: var(--spacing-5);
+}

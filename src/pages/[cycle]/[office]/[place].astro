@@ -1,0 +1,215 @@
+---
+/**
+ * One race: /2026/senate/maine/, /2026/house/ca-22/, /2026/governor/ohio/, /2026/senate/control/
+ * Answer first, then the numbers from each exchange, history, FAQ and related races.
+ */
+import Base from "../../../layouts/Base.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import HistoryChart from "../../../components/HistoryChart.astro";
+import {
+	getCycle, getHistory, consensus, shares, candidate, answer, raceSearchTitle, officeTitle,
+	pct, fmtVol, fmtDate, daysUntil, RATING_LABEL, SRC_NAME, type Race, type Source,
+} from "../../../lib/markets";
+import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
+import "../../../styles/data.css";
+
+const { cycle, office, place } = Astro.params;
+if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
+const data = await getCycle(Number(cycle));
+const path = `/${cycle}/${office}/${place}/`;
+const race = data?.races.find((r) => r.path === path);
+if (!data || !race) return Astro.rewrite("/404");
+
+const origin = Astro.url.origin;
+const c = consensus(race);
+const history = await getHistory(race.id);
+const ks = shares(race.k), ps = shares(race.p);
+const dName = candidate(race, "D"), rName = candidate(race, "R"), iName = candidate(race, "I");
+const lede = answer(race, data.meta.generated);
+const title = raceSearchTitle(race);
+const officeName = race.kind === "control" ? (race.label.startsWith("Senate") ? "Senate" : "House") : race.kind === "house" ? "House" : race.kind === "senate" ? "Senate" : "Governor";
+const days = daysUntil(data.meta.election_day);
+
+// change over the last 7 days, from recorded history
+const weekAgo = Date.now() / 1000 - 7 * 86400;
+const first = history.find((h) => h.ts >= weekAgo);
+const lastH = history[history.length - 1];
+const dChange = (f: "k_d" | "p_d") => (first && lastH && first[f] != null && lastH[f] != null ? lastH[f]! - first[f]! : null);
+const moves = [dChange("k_d"), dChange("p_d")].filter((x) => x != null) as number[];
+const move = moves.length ? moves.reduce((a, b) => a + b, 0) / moves.length : null;
+const moveText = move == null || !first
+	? `Parlay the People began recording this race's price history on ${fmtDate(history[0]?.ts ?? data.meta.generated, false)}, so a weekly change isn't available yet.`
+	: Math.abs(move) < 0.005
+		? `Democratic odds are essentially unchanged since ${fmtDate(first.ts, false)}.`
+		: `Democratic odds have ${move > 0 ? "risen" : "fallen"} ${Math.abs(move * 100).toFixed(1)} points since ${fmtDate(first.ts, false)}.`;
+
+const gap = ks && ps ? Math.abs(ks.D - ps.D) : null;
+const srcSentence = [race.k && `Kalshi: Democrats ${pct(ks!.D)}, Republicans ${pct(ks!.R)}`, race.p && `Polymarket: Democrats ${pct(ps!.D)}, Republicans ${pct(ps!.R)}`]
+	.filter(Boolean).join(". ") + "." + (gap != null ? ` The two exchanges differ by ${(gap * 100).toFixed(1)} points.` : "");
+const raceWord = race.kind === "control" ? `control of the ${officeName} in ${race.cycle}` : `the ${race.cycle} ${race.kind === "house" ? race.label + " House" : race.state + " " + (race.kind === "senate" ? "Senate" : "governor")} race`;
+const faqs: [string, string][] = [
+	[`Who is favored to win ${raceWord}?`, lede],
+	["What do Kalshi and Polymarket say?", srcSentence],
+	["How have the odds moved this week?", moveText],
+	[`When is the ${race.cycle} election?`, `Election Day is ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}${days > 0 ? `, ${days} days from now` : ""}.`],
+];
+
+// related races: same state, then the closest races of the same office
+const sameState = data.races.filter((r) => r.st === race.st && r.id !== race.id && r.kind !== "control");
+const closest = data.races
+	.filter((r) => r.kind === race.kind && r.id !== race.id && !sameState.includes(r))
+	.map((r) => ({ r, lp: consensus(r).lp }))
+	.sort((a, b) => a.lp - b.lp)
+	.slice(0, 8)
+	.map((x) => x.r);
+
+const crumbs: [string, string][] = [
+	["Elections", "/elections/"],
+	[`${race.cycle}`, `/${race.cycle}/`],
+	[race.kind === "control" ? `${officeName} control` : race.kind === "house" ? race.label : `${race.state} ${officeName}`, path],
+];
+const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+const ld = graph(
+	organization(origin),
+	{
+		"@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: title, description: lede,
+		dateModified: data.meta.generated, isPartOf: { "@type": "WebSite", name: SITE_NAME, url: `${origin}/` },
+		about: { "@type": "Thing", name: `${race.cycle} ${officeTitle(race)}` },
+	},
+	breadcrumbs(origin, crumbs),
+	faq(faqs),
+	dataset(origin, {
+		name: `${race.cycle} ${officeTitle(race)}: prediction market odds`,
+		description: `Kalshi and Polymarket win probabilities for ${raceWord}, recorded every 10 minutes by ${SITE_NAME}.`,
+		path, json: `/api/v1/history/${race.id}.json`, modified: data.meta.generated,
+		keywords: [String(race.cycle), race.state, officeName, "election odds", "prediction markets", "Kalshi", "Polymarket"],
+	}),
+);
+
+function rows(s: Source) {
+	const tot = s.o.reduce((a, o) => a + o.p, 0) || 1;
+	return s.o.filter((o) => o.p / tot >= 0.002 || s.o.length <= 4).slice(0, 12).map((o) => ({ ...o, share: o.p / tot }));
+}
+const partyName = (p: string | null) => (p === "D" ? "Democratic" : p === "R" ? "Republican" : p === "I" ? "Independent" : "Other");
+const generic = (n: string) => /^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other)$/i.test(n.trim());
+---
+<Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp">
+		<nav class="crumbs" aria-label="Breadcrumb">
+			{crumbs.map(([n, p], i) => (<>{i > 0 && <span aria-hidden="true">/</span>}{i < crumbs.length - 1 ? <a href={p}>{n}</a> : <span aria-current="page">{n}</span>}</>))}
+		</nav>
+
+		<header class="dp-head">
+			<p class="eyebrow">{race.cycle} {race.kind === "control" ? "U.S. " + officeName : race.kind === "house" ? `${race.state} · U.S. House` : officeName}{race.special ? " · special election" : ""}</p>
+			<h1>{race.kind === "control" ? `Who will control the ${officeName} after ${race.cycle}?` : race.kind === "house" ? `${race.label} House race odds` : `${race.state} ${officeName.toLowerCase() === "governor" ? "governor" : "Senate"} race odds`}</h1>
+			<p class="lede">{lede}</p>
+			<p class="updated">Updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time> · prices refresh every 10 minutes</p>
+		</header>
+
+		<section class="panel duel" aria-label="Current odds">
+			<div class="duel-top">
+				<div class="duel-side">
+					<span class="duel-name"><span class="sw D"></span> <b>{dName ?? "Democrats"}</b>{dName && " (D)"}</span>
+					<span class="duel-pct" style="color:var(--bt-d)">{pct(c.D)}</span>
+				</div>
+				{c.O > 0.05 && (
+					<div class="duel-side" style="align-items:center;text-align:center">
+						<span class="duel-name"><span class="sw O"></span> <b>{iName ?? "Other"}</b>{iName && " (I)"}</span>
+						<span class="duel-pct">{pct(c.O)}</span>
+					</div>
+				)}
+				<div class="duel-side r">
+					<span class="duel-name"><b>{rName ?? "Republicans"}</b>{rName && " (R)"} <span class="sw R"></span></span>
+					<span class="duel-pct" style="color:var(--bt-r)">{pct(c.R)}</span>
+				</div>
+			</div>
+			<div class="bar mid" role="img" aria-label={`Democrats ${pct(c.D)}, Republicans ${pct(c.R)}`}>
+				<i class="D" style={`width:${c.D * 100}%`}></i>{c.O > 0.005 && <i class="O" style={`width:${c.O * 100}%`}></i>}<i class="R" style={`width:${c.R * 100}%`}></i>
+			</div>
+			<dl class="facts">
+				<div><dt>Market rating</dt><dd><span class={`chip ${c.lead}`}>{RATING_LABEL[c.rating]}</span></dd></div>
+				<div><dt>Kalshi (D / R)</dt><dd class="num">{ks ? `${pct(ks.D, 1)} / ${pct(ks.R, 1)}` : "Not listed"}</dd></div>
+				<div><dt>Polymarket (D / R)</dt><dd class="num">{ps ? `${pct(ps.D, 1)} / ${pct(ps.R, 1)}` : "Not listed"}</dd></div>
+				<div><dt>Gap between exchanges</dt><dd class="num">{gap != null ? `${(gap * 100).toFixed(1)} pts` : "—"}</dd></div>
+				<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}{days > 0 && ` (${days} days)`}</dd></div>
+			</dl>
+		</section>
+
+		<section>
+			<h2>Price history</h2>
+			<p class="sec-note">{moveText}</p>
+			<div class="panel"><HistoryChart points={history} label="Democratic odds" party={c.lead === "R" && !race.k && !race.p ? "R" : "D"} /></div>
+		</section>
+
+		<section>
+			<h2>Every candidate, by exchange</h2>
+			<p class="sec-note">Each exchange's prices rescaled to add up to 100%. Kalshi prices are the bid–ask midpoint; Polymarket prices are its displayed price.</p>
+			<div class="grid2">
+				{(["k", "p"] as const).map((x) => {
+					const s = race[x];
+					return (
+						<div class="panel">
+							<h3>{SRC_NAME[x]} {s && <a href={s.url} rel="nofollow noopener" target="_blank" style="font-weight:400;font-size:13px;color:var(--color-text-secondary)">open market ↗</a>}</h3>
+							{s ? (
+								<table class="tbl" style="border:0">
+									<thead><tr><th>Outcome</th><th class="r">Chance</th><th class="r">Volume</th></tr></thead>
+									<tbody>
+										{rows(s).map((o) => (
+											<tr>
+												<td><span class="cand"><span class={`sw ${o.pa ?? "O"}`}></span>{generic(o.n) ? partyName(o.pa) + " candidate" : o.n}{o.pa && !generic(o.n) && <span style="color:var(--color-muted)"> ({o.pa})</span>}</span></td>
+												<td class="r num">{pct(o.share, 1)}</td>
+												<td class="r num">{fmtVol(o.v)}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							) : <p class="sec-note" style="margin:0">{SRC_NAME[x]} doesn't list this race.</p>}
+						</div>
+					);
+				})}
+			</div>
+		</section>
+
+		<section>
+			<h2>Questions about this race</h2>
+			<div class="faq">
+				{faqs.map(([q, a], i) => (<details open={i < 2}><summary>{q}</summary><p>{a}</p></details>))}
+			</div>
+		</section>
+
+		{sameState.length > 0 && (
+			<section>
+				<h2>Other {race.state} races in {race.cycle}</h2>
+				<ul class="racelist">
+					{sameState.map((r) => { const cc = consensus(r); return (
+						<li><a href={r.path}>{r.kind === "house" ? r.label + " House" : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`}</a><span class={`num ${cc.lead === "D" ? "dlead" : "rlead"}`}>{cc.lead} {pct(cc.lp)}</span></li>
+					); })}
+				</ul>
+			</section>
+		)}
+
+		{closest.length > 0 && (
+			<section>
+				<h2>Closest {race.kind === "house" ? "House" : race.kind === "senate" ? "Senate" : race.kind === "governor" ? "governor" : ""} races in {race.cycle}</h2>
+				<ul class="racelist">
+					{closest.map((r) => { const cc = consensus(r); return (
+						<li><a href={r.path}>{r.kind === "house" ? r.label : r.kind === "control" ? r.label : r.state}</a><span class={`num ${cc.lead === "D" ? "dlead" : "rlead"}`}>{cc.lead} {pct(cc.lp)}</span></li>
+					); })}
+				</ul>
+			</section>
+		)}
+
+		<section>
+			<h2>Data</h2>
+			<p class="datalinks">
+				<a href={`/api/v1/history/${race.id}.json`}>Price history (JSON)</a>
+				<a href={`/api/v1/${race.cycle}.json`}>All {race.cycle} races (JSON)</a>
+				<a href={`/api/v1/${race.cycle}/races.csv`}>All {race.cycle} races (CSV)</a>
+				<a href={`/${race.cycle}/`}>{race.cycle} dashboard</a>
+				<a href="/methodology/">Methodology</a>
+			</p>
+			<p class="disclaimer">Cite as: {SITE_NAME}, “{race.cycle} {officeTitle(race)},” {origin}{path}, accessed {fmtDate(data.meta.generated, false)}. Prediction-market prices are crowd forecasts, not certainties, and nothing here is betting or investment advice.</p>
+		</section>
+	</div>
+</Base>

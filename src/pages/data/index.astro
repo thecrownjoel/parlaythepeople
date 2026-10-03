@@ -1,0 +1,37 @@
+---
+/** Public data feeds, for researchers, journalists and AI tools. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { getIndex } from "../../lib/markets";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const origin = Astro.url.origin;
+const index = await getIndex();
+const ex = index?.cycles[0]?.year ?? 2026;
+const feeds: [string, string, string][] = [
+	["Cycles index", "/api/v1/index.json", "Which election years exist, the next one, and links to each cycle's feeds."],
+	["One cycle (JSON)", `/api/v1/${ex}.json`, "Every race with each exchange's outcomes and prices, plus balance of power, seat counts, popular vote, presidency and ballot measures."],
+	["One cycle (CSV)", `/api/v1/${ex}/races.csv`, "One row per race: consensus odds, each exchange's odds, rating and page link."],
+	["Race history (JSON)", `/api/v1/history/${ex}-senate-control.json`, "Every recorded price point for one race. Race ids look like 2026-senate-maine or 2026-house-ca-22."],
+	["For AI assistants", "/llms.txt", "A plain-text guide to the site and the current headline numbers."],
+];
+const ld = graph(organization(origin), { "@type": "WebPage", url: `${origin}/data/`, name: "Parlay the People data and API" }, breadcrumbs(origin, [["Data & API", "/data/"]]));
+---
+<Base title="Data & API: election odds feeds" description="Free JSON and CSV feeds of Kalshi and Polymarket election odds for every U.S. race, with price history." canonical={`${origin}/data/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:960px">
+		<header class="dp-head">
+			<p class="eyebrow">Data &amp; API</p>
+			<h1>Election odds data</h1>
+			<p class="lede">Every number on {SITE_NAME} is available as JSON or CSV. No key is needed. Feeds update every 10 minutes and are free to use with attribution and a link.</p>
+		</header>
+		<div class="tbl-wrap">
+			<table class="tbl">
+				<thead><tr><th>Feed</th><th>URL</th><th>What it contains</th></tr></thead>
+				<tbody>{feeds.map(([n, u, d]) => <tr><td><strong>{n}</strong></td><td class="num"><a href={u}>{u}</a></td><td style="color:var(--color-text-secondary)">{d}</td></tr>)}</tbody>
+			</table>
+		</div>
+		<p class="disclaimer">Prices originate from Kalshi and Polymarket; {SITE_NAME} normalizes and records them. Please cite “{SITE_NAME}” with a link to the page or feed you used.</p>
+	</div>
+</Base>

@@ -1,0 +1,88 @@
+/* Shared styles for Parlay the People's data pages (cycles, races, presidency, elections index). */
+.dp {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding-inline: 20px;
+	padding-block: 28px 64px;
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+}
+@media (max-width: 640px) { .dp { padding-inline: 16px; gap: 26px; } }
+
+.crumbs { font-size: 13px; color: var(--color-muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.crumbs a { color: var(--color-text-secondary); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs span[aria-hidden] { color: var(--color-border); }
+
+.dp-head { display: flex; flex-direction: column; gap: 12px; border-bottom: 2px solid var(--color-text); padding-bottom: 18px; }
+.eyebrow { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-text-secondary); margin: 0; }
+.dp h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(32px, 5.4vw, 54px); line-height: 1; letter-spacing: -0.005em; margin: 0; }
+.lede { font-size: 18px; line-height: 1.5; max-width: 68ch; margin: 0; }
+.lede strong { font-weight: 600; }
+.updated { font-size: 13px; color: var(--color-muted); margin: 0; }
+
+.dp h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; margin: 0 0 12px; }
+.dp h3 { font-size: 15px; margin: 0 0 8px; }
+.sec-note { color: var(--color-text-secondary); font-size: 14px; margin: -6px 0 14px; max-width: 70ch; }
+
+.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+
+/* big two-party bar */
+.duel { display: flex; flex-direction: column; gap: 10px; }
+.duel-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.duel-side { display: flex; flex-direction: column; min-width: 0; }
+.duel-side.r { align-items: flex-end; text-align: right; }
+.duel-name { font-size: 14px; color: var(--color-text-secondary); }
+.duel-name b { color: var(--color-text); font-weight: 600; }
+.duel-pct { font-family: var(--font-display); font-weight: 700; font-size: 46px; line-height: 1; font-variant-numeric: tabular-nums; }
+.bar { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; background: var(--color-border); position: relative; }
+.bar.thin { height: 8px; }
+.bar i { display: block; height: 100%; }
+.bar .D { background: var(--bt-d); } .bar .R { background: var(--bt-r); }
+.bar .O { background: repeating-linear-gradient(45deg, var(--bt-oth) 0 3px, transparent 3px 6px); background-color: color-mix(in oklab, var(--bt-oth) 45%, var(--color-surface)); }
+.bar.mid::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1.5px dashed var(--color-surface); }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.sw.D { background: var(--bt-d); } .sw.R { background: var(--bt-r); } .sw.O, .sw.I { background: var(--bt-oth); }
+
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 5px; font-size: 12.5px; font-weight: 600; background: var(--bt-chip); color: var(--color-text); white-space: nowrap; }
+.chip.D { background: color-mix(in oklab, var(--bt-d) 22%, var(--color-surface)); }
+.chip.R { background: color-mix(in oklab, var(--bt-r) 22%, var(--color-surface)); }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th, .tbl td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; white-space: nowrap; }
+.tbl td.r, .tbl th.r { text-align: right; }
+.tbl .cand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tbl .pbar { width: 120px; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+.tbl .pbar i { display: block; height: 100%; border-radius: 3px; }
+
+/* facts */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 14px 24px; margin: 0; }
+.facts div { display: flex; flex-direction: column; gap: 2px; }
+.facts dt { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+.facts dd { margin: 0; font-size: 15px; }
+
+/* link lists */
+.racelist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px 18px; }
+.racelist li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14px; min-width: 0; }
+.racelist a { color: var(--color-text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.racelist a:hover { text-decoration: underline; }
+.racelist .num { font-size: 13px; white-space: nowrap; }
+.racelist .dlead { color: var(--bt-d); } .racelist .rlead { color: var(--bt-r); }
+
+/* faq */
+.faq { display: flex; flex-direction: column; gap: 4px; }
+.faq details { border-bottom: 1px solid var(--color-border); padding: 10px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 16px; }
+.faq details p { margin: 8px 0 0; color: var(--color-text-secondary); max-width: 72ch; line-height: 1.55; }
+
+.datalinks { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.datalinks a { color: var(--color-text-secondary); }
+.disclaimer { font-size: 13px; color: var(--color-muted); max-width: 80ch; margin: 0; }

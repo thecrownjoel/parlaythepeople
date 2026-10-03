@@ -1,0 +1,524 @@
+{
+	"$schema": "https://emdashcms.com/seed.schema.json",
+	"version": "1",
+	"meta": {
+		"name": "Parlay the People",
+		"description": "Election prediction-market research site",
+		"author": "Parlay the People"
+	},
+	"settings": {
+		"title": "Parlay the People",
+		"tagline": "The running record of what election markets expect."
+	},
+	"collections": [
+		{
+			"slug": "posts",
+			"label": "Posts",
+			"labelSingular": "Post",
+			"urlPattern": "/posts/{slug}",
+			"supports": [
+				"drafts",
+				"revisions",
+				"preview",
+				"scheduling",
+				"search",
+				"seo"
+			],
+			"commentsEnabled": true,
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string",
+					"required": true,
+					"searchable": true
+				},
+				{
+					"slug": "featured_image",
+					"label": "Featured Image",
+					"type": "image"
+				},
+				{
+					"slug": "content",
+					"label": "Content",
+					"type": "portableText",
+					"searchable": true
+				},
+				{
+					"slug": "excerpt",
+					"label": "Excerpt",
+					"type": "text"
+				}
+			]
+		},
+		{
+			"slug": "pages",
+			"label": "Pages",
+			"labelSingular": "Page",
+			"urlPattern": "/pages/{slug}",
+			"supports": [
+				"drafts",
+				"revisions",
+				"preview",
+				"search",
+				"seo"
+			],
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string",
+					"required": true,
+					"searchable": true
+				},
+				{
+					"slug": "content",
+					"label": "Content",
+					"type": "portableText",
+					"searchable": true
+				}
+			]
+		}
+	],
+	"taxonomies": [
+		{
+			"name": "category",
+			"label": "Categories",
+			"labelSingular": "Category",
+			"hierarchical": true,
+			"collections": [
+				"posts"
+			],
+			"terms": [
+				{
+					"slug": "analysis",
+					"label": "Analysis"
+				},
+				{
+					"slug": "market-moves",
+					"label": "Market Moves"
+				},
+				{
+					"slug": "methodology",
+					"label": "Methodology"
+				},
+				{
+					"slug": "notes",
+					"label": "Notes"
+				}
+			]
+		},
+		{
+			"name": "tag",
+			"label": "Tags",
+			"labelSingular": "Tag",
+			"hierarchical": false,
+			"collections": [
+				"posts"
+			],
+			"terms": [
+				{
+					"slug": "senate",
+					"label": "Senate"
+				},
+				{
+					"slug": "house",
+					"label": "House"
+				},
+				{
+					"slug": "governor",
+					"label": "Governor"
+				},
+				{
+					"slug": "president",
+					"label": "President"
+				},
+				{
+					"slug": "2026",
+					"label": "2026"
+				},
+				{
+					"slug": "2028",
+					"label": "2028"
+				},
+				{
+					"slug": "kalshi",
+					"label": "Kalshi"
+				},
+				{
+					"slug": "polymarket",
+					"label": "Polymarket"
+				},
+				{
+					"slug": "ballot-measures",
+					"label": "Ballot measures"
+				}
+			]
+		}
+	],
+	"bylines": [
+		{
+			"id": "byline-desk",
+			"slug": "parlay-the-people-desk",
+			"displayName": "Parlay the People Desk"
+		}
+	],
+	"menus": [
+		{
+			"name": "primary",
+			"label": "Primary Navigation",
+			"items": [
+				{
+					"type": "custom",
+					"label": "2026 Midterms",
+					"url": "/2026/"
+				},
+				{
+					"type": "custom",
+					"label": "2028 President",
+					"url": "/2028/president/"
+				},
+				{
+					"type": "custom",
+					"label": "All elections",
+					"url": "/elections/"
+				},
+				{
+					"type": "custom",
+					"label": "Analysis",
+					"url": "/posts"
+				},
+				{
+					"type": "custom",
+					"label": "Methodology",
+					"url": "/methodology/"
+				}
+			]
+		}
+	],
+	"widgetAreas": [
+		{
+			"name": "footer",
+			"label": "Footer",
+			"description": "Widget area displayed in the site footer",
+			"widgets": [
+				{
+					"type": "content",
+					"title": "About",
+					"content": [
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Independent, nonpartisan tracking of election prediction markets. Not affiliated with Kalshi or Polymarket. Not betting or investment advice.",
+									"_key": "k1"
+								}
+							],
+							"_key": "k0"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "sidebar",
+			"label": "Sidebar",
+			"description": "Widget area displayed on single post pages",
+			"widgets": [
+				{
+					"type": "component",
+					"componentId": "core:search",
+					"title": "Search"
+				},
+				{
+					"type": "component",
+					"componentId": "core:categories",
+					"title": "Categories"
+				},
+				{
+					"type": "component",
+					"componentId": "core:recent-posts",
+					"title": "Recent analysis"
+				}
+			]
+		}
+	],
+	"sections": [
+		{
+			"slug": "newsletter-signup",
+			"title": "Newsletter Signup",
+			"description": "A call-to-action block for newsletter subscriptions",
+			"keywords": [
+				"newsletter",
+				"subscribe",
+				"email",
+				"cta"
+			],
+			"source": "theme",
+			"content": [
+				{
+					"_type": "block",
+					"style": "h3",
+					"children": [
+						{
+							"_type": "span",
+							"text": "Stay in the loop",
+							"_key": "k1"
+						}
+					],
+					"_key": "k0"
+				},
+				{
+					"_type": "block",
+					"style": "normal",
+					"children": [
+						{
+							"_type": "span",
+							"text": "Get notified when new posts are published. No spam, unsubscribe anytime.",
+							"_key": "k3"
+						}
+					],
+					"_key": "k2"
+				}
+			]
+		},
+		{
+			"slug": "about-author",
+			"title": "About the Author",
+			"description": "Brief author bio for use in posts or pages",
+			"keywords": [
+				"author",
+				"bio",
+				"about"
+			],
+			"source": "theme",
+			"content": [
+				{
+					"_type": "block",
+					"style": "normal",
+					"children": [
+						{
+							"_type": "span",
+							"text": "A software developer who writes about building things on the web. Based somewhere with good coffee and reliable internet.",
+							"_key": "k1"
+						}
+					],
+					"_key": "k0"
+				}
+			]
+		}
+	],
+	"content": {
+		"pages": [
+			{
+				"id": "about",
+				"slug": "about",
+				"status": "published",
+				"data": {
+					"title": "About Parlay the People",
+					"content": [
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Parlay the People tracks what election prediction markets expect, race by race, for every U.S. federal and statewide election: the presidency, the Senate, the House, governors and statewide ballot measures.",
+									"_key": "k1"
+								}
+							],
+							"_key": "k2"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Prices come from Kalshi and Polymarket, the two largest U.S.-facing election markets. A collector checks both exchanges every ten minutes, files every market by election year, office and place, and records the price so the history of each race can be studied later. New cycles appear on their own as the exchanges list them.",
+									"_key": "k3"
+								}
+							],
+							"_key": "k4"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Parlay the People is independent and nonpartisan. It is not affiliated with Kalshi, Polymarket or any campaign, and nothing here is betting or investment advice. Market prices are crowd forecasts and can be wrong.",
+									"_key": "k5"
+								}
+							],
+							"_key": "k6"
+						}
+					]
+				}
+			}
+		],
+		"posts": [
+			{
+				"id": "post-launch",
+				"slug": "introducing-parlay-the-people",
+				"status": "published",
+				"bylines": [
+					{
+						"byline": "byline-desk"
+					}
+				],
+				"taxonomies": {
+					"category": [
+						"methodology"
+					],
+					"tag": [
+						"kalshi",
+						"polymarket",
+						"2026",
+						"2028"
+					]
+				},
+				"data": {
+					"title": "Introducing Parlay the People",
+					"excerpt": "A permanent, race-by-race record of what Kalshi and Polymarket traders expect in U.S. elections, starting with the 2026 midterms and the 2028 presidential race.",
+					"content": [
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Prediction markets now price almost every U.S. election, from control of Congress down to single House districts. Parlay the People collects those prices from Kalshi and Polymarket, puts them side by side, and keeps the record.",
+									"_key": "k7"
+								}
+							],
+							"_key": "k8"
+						},
+						{
+							"_type": "block",
+							"style": "h2",
+							"children": [
+								{
+									"_type": "span",
+									"text": "What you can do here",
+									"_key": "k9"
+								}
+							],
+							"_key": "k10"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "See the current odds for every 2026 Senate, House and governor race, both chambers, the national House vote and state ballot measures.",
+									"_key": "k11"
+								}
+							],
+							"_key": "k12"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Compare the two exchanges. Most races agree within a few points; where they don't, the gap is shown.",
+									"_key": "k13"
+								}
+							],
+							"_key": "k14"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Follow the 2028 presidential race: the winner, the winning party and both parties' nominee markets.",
+									"_key": "k15"
+								}
+							],
+							"_key": "k16"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Look back. Every race page keeps a price history, so you can see when the market moved and by how much.",
+									"_key": "k17"
+								}
+							],
+							"_key": "k18"
+						},
+						{
+							"_type": "block",
+							"style": "h2",
+							"children": [
+								{
+									"_type": "span",
+									"text": "How to read a price",
+									"_key": "k19"
+								}
+							],
+							"_key": "k20"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "A contract that pays $1 if a candidate wins and trades at 63 cents implies roughly a 63% chance. Parlay the People rescales each market so its outcomes add to 100%, which removes the small premium exchanges build in.",
+									"_key": "k21"
+								}
+							],
+							"_key": "k22"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Prices are a crowd forecast, not a certainty. They react to news faster than polls do, and they can also overreact. The methodology page explains exactly how each number is computed.",
+									"_key": "k23"
+								}
+							],
+							"_key": "k24"
+						},
+						{
+							"_type": "block",
+							"style": "h2",
+							"children": [
+								{
+									"_type": "span",
+									"text": "Built to last",
+									"_key": "k25"
+								}
+							],
+							"_key": "k26"
+						},
+						{
+							"_type": "block",
+							"style": "normal",
+							"children": [
+								{
+									"_type": "span",
+									"text": "The site isn't built around one election. Markets are filed by year, office and place as soon as they appear, so the 2028 and 2030 cycles fill in on their own, and past cycles stay online as an archive.",
+									"_key": "k27"
+								}
+							],
+							"_key": "k28"
+						}
+					]
+				}
+			}
+		]
+	}
+}

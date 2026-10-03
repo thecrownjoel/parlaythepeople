@@ -1,0 +1,6 @@
+---
+/** Emits one JSON-LD block into the page head (use with slot="head"). */
+interface Props { data: object }
+const json = JSON.stringify(Astro.props.data).replace(/</g, "\\u003c");
+---
+<script type="application/ld+json" set:html={json} />

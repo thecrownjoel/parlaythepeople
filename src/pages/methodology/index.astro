@@ -1,0 +1,48 @@
+---
+/** How every number on Parlay the People is produced. Written to be quoted. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const origin = Astro.url.origin;
+const faqs: [string, string][] = [
+	["Where does Parlay the People get its data?", "From the public market data of Kalshi and Polymarket, the two largest U.S.-facing election prediction markets. A collector checks both exchanges every 10 minutes."],
+	["How is a price turned into a probability?", "A contract that pays $1 if an outcome happens and trades at 63 cents implies about a 63% chance. For Kalshi, Parlay the People uses the midpoint of the best bid and ask, or the last trade when the spread is wider than 10 cents. For Polymarket it uses the exchange's displayed price. Each market's outcomes are then rescaled to add up to 100%."],
+	["What does the average across exchanges mean?", "When both exchanges list a race, the headline number is the simple average of the two rescaled probabilities. Each exchange's own number is always shown next to it."],
+	["How are races rated?", "By the leading party's average odds: Safe at 90% or more, Likely at 75–90%, Lean at 60–75%, and Toss-up below 60%."],
+	["How are new elections added?", "Automatically. The collector reads each market's election year from the market itself and files it by year, office and place, so new cycles appear as soon as the exchanges list them. Markets it can't classify go on a review list instead of being dropped."],
+	["How often is the price history recorded?", "Every 10 minutes for the most recent 7 days, and once per hour before that, kept indefinitely."],
+	["Are prediction markets accurate?", "They are crowd forecasts that update quickly with news, and they have a mixed record: favorites usually win, but upsets happen at roughly the rate the odds imply, and thin markets can be noisy. Treat them as one input alongside polls and fundamentals."],
+	["Can I use Parlay the People's data?", `Yes. The JSON and CSV feeds are free to use with attribution to ${SITE_NAME} and a link to the page you used. See the Data & API page.`],
+];
+const ld = graph(
+	organization(origin),
+	{ "@type": "TechArticle", headline: "How Parlay the People measures election odds", url: `${origin}/methodology/`, author: { "@id": `${origin}/#org` }, publisher: { "@id": `${origin}/#org` } },
+	breadcrumbs(origin, [["Methodology", "/methodology/"]]),
+	faq(faqs),
+);
+---
+<Base title="Methodology: how Parlay the People measures election odds" description="How Parlay the People turns Kalshi and Polymarket prices into probabilities, rates races, records history and discovers new elections." canonical={`${origin}/methodology/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:860px">
+		<header class="dp-head">
+			<p class="eyebrow">Methodology</p>
+			<h1>How Parlay the People measures election odds</h1>
+			<p class="lede">Parlay the People reports what traders on Kalshi and Polymarket expect, converted into plain probabilities and recorded over time. It doesn't add its own model or adjust the markets beyond the steps below.</p>
+		</header>
+		<section class="faq">
+			{faqs.map(([q, a]) => (<details open><summary>{q}</summary><p>{a}</p></details>))}
+		</section>
+		<section>
+			<h2>Known limits</h2>
+			<ul style="padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--color-text-secondary);max-width:72ch">
+				<li>Some markets trade very little. Ballot measures with a wide bid–ask spread or under $500 traded are marked “thin.”</li>
+				<li>Kalshi reports volume in contracts and Polymarket in dollars; Parlay the People adds them as an approximate “volume.”</li>
+				<li>When an exchange lists candidates by name without a party, the party is matched from the other exchange or from that party's nominee market.</li>
+				<li>Prices can lag fast-moving news by up to 10 minutes.</li>
+			</ul>
+		</section>
+		<p class="disclaimer">{SITE_NAME} is independent and nonpartisan, and isn't affiliated with Kalshi, Polymarket or any campaign. Nothing here is betting or investment advice.</p>
+	</div>
+</Base>

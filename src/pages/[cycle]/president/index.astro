@@ -1,0 +1,148 @@
+---
+/** Presidential race for a cycle: /2028/president/ */
+import Base from "../../../layouts/Base.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import HistoryChart from "../../../components/HistoryChart.astro";
+import { getCycle, getHistory, shares, pct, fmtVol, fmtDate, daysUntil, type Source, type PresMarket } from "../../../lib/markets";
+import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
+import "../../../styles/data.css";
+
+const { cycle } = Astro.params;
+if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
+const data = await getCycle(Number(cycle));
+const pres = data?.pres;
+if (!data || !pres || !(pres.party || pres.winner)) return Astro.rewrite("/404");
+
+const origin = Astro.url.origin;
+const year = data.meta.cycle;
+const path = `/${year}/president/`;
+const when = fmtDate(data.meta.generated, false);
+const days = daysUntil(data.meta.election_day);
+const history = await getHistory(`${year}-president`);
+
+const partyShares = (m?: PresMarket) => {
+	const arr = (["k", "p"] as const).map((x) => m?.[x]).filter(Boolean).map((s) => shares(s as Source)!);
+	return arr.length ? { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length } : null;
+};
+const party = partyShares(pres.party);
+
+/** Merge one market's candidates across both exchanges into rows sorted by average chance. */
+function merged(m?: PresMarket, limit = 15) {
+	if (!m) return [];
+	const rows = new Map<string, { n: string; pa: string | null; k: number | null; p: number | null; v: number }>();
+	for (const x of ["k", "p"] as const) {
+		const s = m[x];
+		if (!s) continue;
+		const tot = s.o.reduce((a, o) => a + o.p, 0) || 1;
+		for (const o of s.o) {
+			// "Donald J. Trump" and "Donald Trump" are the same person; "Donald Trump Jr." is not
+			const key = o.n.toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/).filter((w) => w.length > 1).join(" ");
+			const row = rows.get(key) ?? { n: o.n, pa: o.pa, k: null, p: null, v: 0 };
+			row[x] = o.p / tot;
+			row.pa = row.pa ?? o.pa;
+			row.v += o.v || 0;
+			rows.set(key, row);
+		}
+	}
+	return [...rows.values()]
+		.map((r) => ({ ...r, avg: [r.k, r.p].filter((v) => v != null).reduce((a, b) => a! + b!, 0)! / [r.k, r.p].filter((v) => v != null).length }))
+		.filter((r) => r.avg >= 0.003)
+		.sort((a, b) => b.avg - a.avg)
+		.slice(0, limit);
+}
+const winner = merged(pres.winner);
+const nomD = merged(pres.nomD, 12);
+const nomR = merged(pres.nomR, 12);
+const lead = winner[0];
+const lede = `As of ${when}, prediction markets give ${party ? `${party.D >= party.R ? "Democrats" : "Republicans"} a ${pct(Math.max(party.D, party.R))} chance of winning the ${year} presidential election` : `the ${year} presidential race to an open field`}${lead ? `. The single most likely winner is ${lead.n}${lead.pa ? ` (${lead.pa})` : ""} at ${pct(lead.avg)}` : ""}${nomD[0] && nomR[0] ? `, with ${nomD[0].n} leading the Democratic nomination (${pct(nomD[0].avg)}) and ${nomR[0].n} leading the Republican nomination (${pct(nomR[0].avg)})` : ""}.`;
+const faqs: [string, string][] = [
+	[`Who is favored to win the ${year} presidential election?`, lede],
+	...(nomD[0] ? [[`Who will be the ${year} Democratic nominee?`, `Markets favor ${nomD.slice(0, 3).map((r) => `${r.n} (${pct(r.avg)})`).join(", ")} as of ${when}.`] as [string, string]] : []),
+	...(nomR[0] ? [[`Who will be the ${year} Republican nominee?`, `Markets favor ${nomR.slice(0, 3).map((r) => `${r.n} (${pct(r.avg)})`).join(", ")} as of ${when}.`] as [string, string]] : []),
+	[`When is the ${year} presidential election?`, `Election Day is ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}${days > 0 ? `, ${days} days away` : ""}.`],
+];
+const crumbs: [string, string][] = [["Elections", "/elections/"], [String(year), `/${year}/`], ["President", path]];
+const title = `${year} presidential election odds: who will win? | Kalshi vs. Polymarket`;
+const ld = graph(
+	organization(origin),
+	{ "@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: title, description: lede, dateModified: data.meta.generated },
+	breadcrumbs(origin, crumbs),
+	faq(faqs),
+	dataset(origin, {
+		name: `${year} U.S. presidential election prediction-market odds`,
+		description: `Kalshi and Polymarket odds for the ${year} presidential winner, winning party and both parties' nominees, recorded by ${SITE_NAME}.`,
+		path, json: `/api/v1/${year}.json`, modified: data.meta.generated,
+		keywords: [String(year), "president", "presidential election odds", "nominee", "Kalshi", "Polymarket"],
+	}),
+);
+const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+const sw = (pa: string | null) => `sw ${pa === "D" ? "D" : pa === "R" ? "R" : "O"}`;
+const markets: [string, PresMarket | undefined, typeof winner][] = [
+	["Who will win the presidency", pres.winner, winner],
+	["Democratic nominee", pres.nomD, nomD],
+	["Republican nominee", pres.nomR, nomR],
+];
+---
+<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={data.meta.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/elections/">Elections</a><span aria-hidden="true">/</span><a href={`/${year}/`}>{year}</a><span aria-hidden="true">/</span><span aria-current="page">President</span></nav>
+		<header class="dp-head">
+			<p class="eyebrow">U.S. President · {days > 0 ? `${days} days to Election Day` : year}</p>
+			<h1>{year} presidential election odds</h1>
+			<p class="lede">{lede}</p>
+			<p class="updated">Updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time> · prices refresh every 10 minutes</p>
+		</header>
+
+		{party && (
+			<section class="panel duel" aria-label="Which party wins">
+				<div class="duel-top">
+					<div class="duel-side"><span class="duel-name"><span class="sw D"></span> <b>Democrats</b></span><span class="duel-pct" style="color:var(--bt-d)">{pct(party.D)}</span></div>
+					<div class="duel-side r"><span class="duel-name"><b>Republicans</b> <span class="sw R"></span></span><span class="duel-pct" style="color:var(--bt-r)">{pct(party.R)}</span></div>
+				</div>
+				<div class="bar mid" role="img" aria-label={`Democrats ${pct(party.D)}, Republicans ${pct(party.R)}`}><i class="D" style={`width:${party.D * 100}%`}></i><i class="R" style={`width:${party.R * 100}%`}></i></div>
+				<dl class="facts">
+					{(["k", "p"] as const).map((x) => { const s = pres.party?.[x]; const sh = s ? shares(s) : null; return <div><dt>{x === "k" ? "Kalshi" : "Polymarket"} (D / R)</dt><dd class="num">{sh ? `${pct(sh.D, 1)} / ${pct(sh.R, 1)}` : "Not listed"}</dd></div>; })}
+					<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}</dd></div>
+				</dl>
+			</section>
+		)}
+
+		<section>
+			<h2>Which party wins: price history</h2>
+			<div class="panel"><HistoryChart points={history} label="Democratic odds to win the presidency" /></div>
+		</section>
+
+		{markets.filter(([, m, rows]) => m && rows.length).map(([heading, m, rows]) => (
+			<section>
+				<h2>{heading}</h2>
+				<div class="tbl-wrap">
+					<table class="tbl">
+						<thead><tr><th>Candidate</th><th class="r">Average</th><th></th><th class="r">Kalshi</th><th class="r">Polymarket</th></tr></thead>
+						<tbody>
+							{rows.map((r) => (
+								<tr>
+									<td><span class="cand"><span class={sw(r.pa)}></span>{r.n}{r.pa && <span style="color:var(--color-muted)"> ({r.pa})</span>}</span></td>
+									<td class="r num"><strong>{pct(r.avg, 1)}</strong></td>
+									<td><div class="pbar"><i style={`width:${Math.min(100, r.avg * 100 / Math.max(rows[0].avg, 0.01))}%;background:${r.pa === "D" ? "var(--bt-d)" : r.pa === "R" ? "var(--bt-r)" : "var(--bt-oth)"}`}></i></div></td>
+									<td class="r num">{pct(r.k, 1)}</td>
+									<td class="r num">{pct(r.p, 1)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+				<p class="datalinks" style="margin-top:8px">{m!.k && <a href={m!.k.url} rel="nofollow noopener" target="_blank">Kalshi market ↗</a>}{m!.p && <a href={m!.p.url} rel="nofollow noopener" target="_blank">Polymarket market ↗</a>}{m!.p?.v ? <span class="num" style="color:var(--color-muted)">Polymarket volume {fmtVol(m!.p.v)}</span> : null}</p>
+			</section>
+		))}
+
+		<section>
+			<h2>Questions about {year}</h2>
+			<div class="faq">{faqs.map(([q, a], i) => <details open={i === 0}><summary>{q}</summary><p>{a}</p></details>)}</div>
+		</section>
+		<section>
+			<p class="datalinks"><a href={`/${year}/`}>All {year} races</a><a href={`/api/v1/${year}.json`}>{year} data (JSON)</a><a href={`/api/v1/history/${year}-president.json`}>Party odds history (JSON)</a><a href="/methodology/">Methodology</a></p>
+			<p class="disclaimer">Prediction-market prices are crowd forecasts, not certainties. Nothing here is betting or investment advice. {SITE_NAME} is not affiliated with Kalshi or Polymarket.</p>
+		</section>
+	</div>
+</Base>
