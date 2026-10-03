@@ -742,9 +742,9 @@ def write_d1_sql(cycles):
                    if NOW.minute < 10 else ") ON CONFLICT(id) DO NOTHING;"))
             lines.append("INSERT OR REPLACE INTO race_history (race_id,ts,k_d,k_r,p_d,p_r) VALUES ("
                          + ",".join([sql_str(rid), str(ts)] + [sql_num(v) for v in vals]) + ");")
-    # Tiered retention, once an hour. Only the slice that just crossed each boundary is examined,
+    # Tiered retention (off while config.HISTORY_KEEP_ALL), once an hour. Only the slice that just crossed each boundary is examined,
     # so this stays cheap however much history accumulates. Election weeks are never thinned.
-    if NOW.minute < 10:
+    if NOW.minute < 10 and not config.HISTORY_KEEP_ALL:
         keep = " AND ".join(f"NOT (ts BETWEEN {a} AND {b})" for a, b in election_windows(cycles)) or "1"
         for newer, older, bucket in ((config.HISTORY_FULL_DAYS, config.HISTORY_HOURLY_DAYS, 3600),
                                      (config.HISTORY_HOURLY_DAYS, None, 86400)):

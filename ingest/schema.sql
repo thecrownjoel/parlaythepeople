@@ -43,3 +43,44 @@ CREATE TABLE IF NOT EXISTS social_history (
   sentiment REAL,               -- % of posts that are positive
   PRIMARY KEY (topic, ts)
 ) WITHOUT ROWID;
+
+-- Money traded per race over time (cumulative and 24h, per exchange), written when it changes.
+-- Kalshi volume is in contracts ($1 each at settlement); Polymarket volume is in dollars.
+CREATE TABLE IF NOT EXISTS volume_history (
+  race_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  k_v REAL, p_v REAL,           -- cumulative volume
+  k_v24 REAL, p_v24 REAL,       -- trailing 24-hour volume
+  k_oi REAL, p_liq REAL,        -- Kalshi open interest, Polymarket liquidity
+  PRIMARY KEY (race_id, ts)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS volume_history_ts ON volume_history (ts);
+
+-- Every headline the news strip has carried.
+CREATE TABLE IF NOT EXISTS news (
+  url TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  source TEXT, tag TEXT,
+  published INTEGER,            -- unix seconds (publisher time)
+  first_seen INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS news_published ON news (published);
+
+-- Top social posts about each candidate/topic (LunarCrush), refreshed as their interactions grow.
+CREATE TABLE IF NOT EXISTS social_posts (
+  url TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  title TEXT, author TEXT, network TEXT,
+  interactions INTEGER, sentiment REAL,
+  posted_at INTEGER, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL,
+  PRIMARY KEY (url, topic)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS social_posts_topic ON social_posts (topic, posted_at);
+
+-- Hourly LunarCrush readings per topic (social_history keeps the daily series).
+CREATE TABLE IF NOT EXISTS social_hourly (
+  topic TEXT NOT NULL,
+  ts INTEGER NOT NULL,          -- hour, unix seconds
+  i24 INTEGER, contributors INTEGER, posts24 INTEGER, sentiment REAL, trend TEXT,
+  PRIMARY KEY (topic, ts)
+) WITHOUT ROWID;

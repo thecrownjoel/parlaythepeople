@@ -18,6 +18,12 @@
 			"database_name": "ballottape-markets",
 			"database_id": "788f4e77-c852-4a19-8e16-c1a9df33999d",
 		},
+		{
+			// Every individual trade on both exchanges, archived by the collector
+			"binding": "TRADES",
+			"database_name": "ballottape-trades",
+			"database_id": "0b9797e9-685b-4549-ac2b-fa65f6be8957",
+		},
 	],
 	"r2_buckets": [
 		{ "binding": "MEDIA", "bucket_name": "ballottape-media" },

@@ -14,8 +14,12 @@ KALSHI_CATEGORIES = {"Elections", "Politics"}
 # "Tuesday after the first Monday in November".
 ELECTION_DAYS = {2026: "2026-11-03", 2028: "2028-11-07"}
 
-# Race history retention: every 10-minute point for HISTORY_FULL_DAYS, then one per hour until
-# HISTORY_HOURLY_DAYS, then one per day forever. Election weeks keep every point forever.
+# Race history retention. HISTORY_KEEP_ALL keeps every 10-minute point forever (the record the
+# forecasting model and AI analyst are built on). If storage ever needs trimming, set it to False:
+# every point is kept for HISTORY_FULL_DAYS, then one per hour until HISTORY_HOURLY_DAYS, then one
+# per day. Election weeks always keep every point. (archive.py also stores a full snapshot of every
+# contract each run in R2, so trimming D1 never loses data.)
+HISTORY_KEEP_ALL = True
 HISTORY_FULL_DAYS = 7
 HISTORY_HOURLY_DAYS = 90
 
