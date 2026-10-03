@@ -16,6 +16,7 @@
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",
     "@astrojs/react": "^6.0.5",
+    "@cloudflare/puppeteer": "^1.4.0",
     "@emdash-cms/cloudflare": "^1.0.1",
     "astro": "^7.3.2",
     "d3-geo": "^3.1.1",

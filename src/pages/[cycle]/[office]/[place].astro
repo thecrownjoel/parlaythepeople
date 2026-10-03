@@ -188,7 +188,7 @@ import { parlayD } from "../../../lib/model";
 	@media (max-width: 520px) { .qb th:nth-child(5), .qb td:nth-child(5) { display: none; } .qb { font-size: 12.5px; } }
 	.est-how { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 4px; }
 </style>
-<Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated}>
+<Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated} image={`${origin}/og/race/${race.id}.png`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
 		<nav class="crumbs" aria-label="Breadcrumb">

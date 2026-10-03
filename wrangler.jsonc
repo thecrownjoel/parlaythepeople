@@ -26,6 +26,8 @@
 		},
 	],
 	"ai": { "binding": "AI" },
+	// Browser Rendering: draws the per-race share images (/og/race/<id>.png)
+	"browser": { "binding": "BROWSER" },
 	"r2_buckets": [
 		{ "binding": "MEDIA", "bucket_name": "ballottape-media" },
 		// Full per-cycle data files (cycles/<year>.json, index.json), written by the collector
