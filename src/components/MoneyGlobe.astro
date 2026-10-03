@@ -69,7 +69,9 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		const path = geoPath(proj, ctx);
 		const grat = geoGraticule10();
 		// Framed on the USA: fit the lower 48 to the canvas, then sway gently around it
-		const lower48 = { type: "FeatureCollection", features: states.features.filter((f: any) => !["Alaska", "Hawaii", "Puerto Rico"].includes(f.properties.name)) };
+		// (the map file also has territories across the Pacific and Caribbean, which must not count toward the frame)
+		const NOT_LOWER48 = ["Alaska", "Hawaii", "Puerto Rico", "Guam", "American Samoa", "Commonwealth of the Northern Mariana Islands", "United States Virgin Islands"];
+		const lower48 = { type: "FeatureCollection", features: states.features.filter((f: any) => !NOT_LOWER48.includes(f.properties.name)) };
 		const HOME_ROT = 97, HOME_TILT = -38;
 		let width = 0, height = 0, rot = HOME_ROT, tilt = HOME_TILT, dragging = false, lastX = 0, lastY = 0, last = performance.now(), dragOffset = 0, tiltOffset = 0;
 		const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
