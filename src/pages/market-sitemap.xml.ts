@@ -18,12 +18,18 @@ export const GET: APIRoute = async ({ url }) => {
 		const { results } = await env.DB.prepare("SELECT slug, MAX(updated_at) AS mod FROM _emdash_bylines GROUP BY slug").all<{ slug: string; mod: string }>();
 		for (const b of results ?? []) urls.push([`${o}${authorPath(b.slug)}`, b.mod ?? ""]);
 	} catch { /* bylines table unavailable: skip author pages */ }
+	// each race's last real price change (history is written only when odds move), so lastmod means something
+	const changed = new Map<string, string>();
+	try {
+		const { results } = await env.MARKETS.prepare("SELECT race_id, MAX(ts) AS t FROM race_history GROUP BY race_id").all<{ race_id: string; t: number }>();
+		for (const r of results ?? []) changed.set(r.race_id, new Date(r.t * 1000).toISOString().replace(/\.\d{3}Z$/, "+00:00"));
+	} catch { /* fall back to the cycle's generation time */ }
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
 		if (!data) continue;
 		urls.push([`${o}/${cy.year}/`, data.meta.generated]);
 		if (data.pres.party || data.pres.winner) urls.push([`${o}/${cy.year}/president/`, data.meta.generated]);
-		for (const r of data.races) urls.push([`${o}${r.path}`, data.meta.generated]);
+		for (const r of data.races) urls.push([`${o}${r.path}`, changed.get(r.id) ?? data.meta.generated]);
 	}
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
 		.map(([loc, mod]) => `<url><loc>${loc}</loc>${mod ? `<lastmod>${mod}</lastmod>` : ""}</url>`)
