@@ -25,6 +25,11 @@
 		{ "binding": "DATA", "bucket_name": "ballottape-data" },
 	],
 	"observability": { "enabled": true },
+	// Custom domains (Cloudflare creates the DNS records and certificates)
+	"routes": [
+		{ "pattern": "parlaythepeople.com", "custom_domain": true },
+		{ "pattern": "www.parlaythepeople.com", "custom_domain": true },
+	],
 	// Sandboxed plugins require Worker Loader, available on Workers paid plans. Uncomment to enable:
 	// "worker_loaders": [{ "binding": "LOADER" }],
 	// General maintenance cron trigger (EmDash scheduled publishing etc.)

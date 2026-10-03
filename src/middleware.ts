@@ -1,13 +1,19 @@
 import { defineMiddleware } from "astro:middleware";
 
 /**
- * Adds the market data to EmDash's own robots.txt and sitemap index:
+ * Redirects www to the bare domain, and adds the market data to EmDash's own robots.txt and sitemap index:
  * - robots.txt: explicit welcome for search and AI crawlers, plus our sitemap and llms.txt
  * - sitemap.xml: lists /market-sitemap.xml alongside EmDash's per-collection sitemaps
  */
 const AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"];
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
+	// One canonical host: send www.parlaythepeople.com to parlaythepeople.com
+	if (ctx.url.hostname.startsWith("www.")) {
+		const to = new URL(ctx.url);
+		to.hostname = to.hostname.slice(4);
+		return Response.redirect(to.toString(), 301);
+	}
 	const res = await next();
 	const path = ctx.url.pathname;
 	if (path !== "/robots.txt" && path !== "/sitemap.xml") return res;
