@@ -33,6 +33,11 @@ if (!data || !race) return Astro.rewrite("/404");
 const origin = Astro.url.origin;
 const c = consensus(race);
 const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
+const estView = est == null ? null : {
+	text: `${est >= 0.5 ? "D" : "R"} ${pct(Math.max(est, 1 - est))}`,
+	style: `font-weight:600;color:var(--bt-${est >= 0.5 ? "d" : "r"})`,
+	market: pct(Math.max(c.D, c.R) / (c.D + c.R || 1)),
+};
 const [social, kTrades] = await Promise.all([getSocial(), getKalshiTrades()]);
 // Kalshi trades for this race's contracts (collected every 10 minutes for the most active contracts)
 const kalshiTickers = (race.k?.o ?? []).filter((o) => o.id).map((o) => ({ id: o.id!, n: o.n, pa: o.pa }));
@@ -225,7 +230,7 @@ import { parlayD } from "../../../lib/model";
 				<i class="D" style={`width:${c.D * 100}%`}></i>{c.O > 0.005 && <i class="O" style={`width:${c.O * 100}%`}></i>}<i class="R" style={`width:${c.R * 100}%`}></i>
 			</div>
 			<dl class="facts">
-				{est != null && <div><dt>Parlay estimate <a href="/model/" class="est-how">how?</a></dt><dd class="num" style="font-weight:600;color:var(--bt-${est >= 0.5 ? "d" : "r"})">{est >= 0.5 ? "D" : "R"} {pct(Math.max(est, 1 - est))} <span style="color:var(--color-muted);font-weight:400">vs. market {pct(Math.max(c.D, c.R) / (c.D + c.R || 1))}</span></dd></div>}
+				{estView && <div><dt>Parlay estimate <a href="/model/" class="est-how">how?</a></dt><dd class="num" style={estView.style}>{estView.text} <span style="color:var(--color-muted);font-weight:400">vs. market {estView.market}</span></dd></div>}
 				<div><dt>Market rating</dt><dd><span class={`chip ${c.lead}`}>{RATING_LABEL[c.rating]}</span></dd></div>
 				<div><dt>Kalshi (D / R)</dt><dd class="num">{ks ? `${pct(ks.D, 1)} / ${pct(ks.R, 1)}` : "Not listed"}</dd></div>
 				<div><dt>Polymarket (D / R)</dt><dd class="num">{ps ? `${pct(ps.D, 1)} / ${pct(ps.R, 1)}` : "Not listed"}</dd></div>

@@ -61,7 +61,14 @@ function candidateSpecs(group: string, rows: typeof winner, n: number) {
 	const colors = partyShades(top.map((r) => r.pa));
 	return top.map((r, i) => ({ kind: "out" as const, id: `${year}-pres-${group}`, key: r.key, label: r.n, color: colors[i], dash: i % 2 === 1 }));
 }
-const lede = `As of ${when}, prediction markets give ${party ? `${party.D >= party.R ? "Democrats" : "Republicans"} a ${pct(Math.max(party.D, party.R))} chance of winning the ${year} presidential election` : `the ${year} presidential race to an open field`}${lead ? `. The single most likely winner is ${lead.n}${lead.pa ? ` (${lead.pa})` : ""} at ${pct(lead.avg)}` : ""}${nomD[0] && nomR[0] ? `, with ${nomD[0].n} leading the Democratic nomination (${pct(nomD[0].avg)}) and ${nomR[0].n} leading the Republican nomination (${pct(nomR[0].avg)})` : ""}.`;
+const ledeParty = party
+	? `${party.D >= party.R ? "Democrats" : "Republicans"} a ${pct(Math.max(party.D, party.R))} chance of winning the ${year} presidential election`
+	: `the ${year} presidential race to an open field`;
+const ledeLead = lead ? `. The single most likely winner is ${lead.n}${lead.pa ? " (" + lead.pa + ")" : ""} at ${pct(lead.avg)}` : "";
+const ledeNoms = nomD[0] && nomR[0]
+	? `, with ${nomD[0].n} leading the Democratic nomination (${pct(nomD[0].avg)}) and ${nomR[0].n} leading the Republican nomination (${pct(nomR[0].avg)})`
+	: "";
+const lede = `As of ${when}, prediction markets give ${ledeParty}${ledeLead}${ledeNoms}.`;
 const faqs: [string, string][] = [
 	[`Who is favored to win the ${year} presidential election?`, lede],
 	...(nomD[0] ? [[`Who will be the ${year} Democratic nominee?`, `Markets favor ${nomD.slice(0, 3).map((r) => `${r.n} (${pct(r.avg)})`).join(", ")} as of ${when}.`] as [string, string]] : []),
@@ -89,6 +96,11 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 	["Democratic nominee", pres.nomD, nomD],
 	["Republican nominee", pres.nomR, nomR],
 ];
+const partyFacts = (["k", "p"] as const).map((x) => {
+	const src = pres.party?.[x];
+	const sh = src ? shares(src) : null;
+	return { name: x === "k" ? "Kalshi" : "Polymarket", text: sh ? `${pct(sh.D, 1)} / ${pct(sh.R, 1)}` : "Not listed" };
+});
 ---
 <Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={data.meta.generated} image={`${Astro.url.origin}/og/president/${data.meta.cycle}.png`}>
 	<JsonLd slot="head" data={ld} />
@@ -109,7 +121,7 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 				</div>
 				<div class="bar mid" role="img" aria-label={`Democrats ${pct(party.D)}, Republicans ${pct(party.R)}`}><i class="D" style={`width:${party.D * 100}%`}></i><i class="R" style={`width:${party.R * 100}%`}></i></div>
 				<dl class="facts">
-					{(["k", "p"] as const).map((x) => { const s = pres.party?.[x]; const sh = s ? shares(s) : null; return <div><dt>{x === "k" ? "Kalshi" : "Polymarket"} (D / R)</dt><dd class="num">{sh ? `${pct(sh.D, 1)} / ${pct(sh.R, 1)}` : "Not listed"}</dd></div>; })}
+					{partyFacts.map((f) => <div><dt>{f.name} (D / R)</dt><dd class="num">{f.text}</dd></div>)}
 					<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}</dd></div>
 				</dl>
 			</section>
