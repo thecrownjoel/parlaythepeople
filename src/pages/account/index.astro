@@ -1,0 +1,160 @@
+---
+/** Reader account: sign in (email link or passkey), see your plan and what's left, manage passkeys, sign out. */
+import Base from "../../layouts/Base.astro";
+import { account, safeNext } from "../../lib/auth";
+import { listPasskeys } from "../../lib/passkeys";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "no-store");
+const a = await account(Astro.cookies, Astro.request);
+const user = a.user;
+const keys = user ? await listPasskeys(user.id) : [];
+const next = safeNext(Astro.url.searchParams.get("next"));
+const error = Astro.url.searchParams.get("error");
+const day = (ts: number | null) => (ts ? new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
+const unit = a.plan.credits ? "credits" : "questions";
+---
+<Base title={`Your account | ${SITE_NAME}`} description="Sign in to Parlay the People with an email link or a passkey." canonical={`${Astro.url.origin}/account/`} robots="noindex, nofollow">
+	<div class="dp acct" style="max-width:720px" data-next={next}>
+		<header class="dp-head">
+			<p class="eyebrow">Account</p>
+			<h1>{user ? "Your account" : "Sign in"}</h1>
+			{!user && <p class="lede">No password. We email you a one-time link, or you can use a passkey you've added.</p>}
+		</header>
+
+		{!user && (
+			<section class="panel acct-panel">
+				{error === "link" && <p class="acct-err" role="alert">That sign-in link has expired or was already used. Request a new one below.</p>}
+				<form class="acct-form" data-link-form>
+					<label for="acct-email">Email</label>
+					<div class="acct-row">
+						<input id="acct-email" type="email" name="email" autocomplete="email webauthn" required placeholder="you@campaign.org" />
+						<button type="submit">Email me a link</button>
+					</div>
+				</form>
+				<p class="acct-msg" data-msg aria-live="polite"></p>
+				<div class="acct-or"><span>or</span></div>
+				<button type="button" class="acct-ghost" data-passkey-login>Sign in with a passkey</button>
+			</section>
+		)}
+
+		{user && (
+			<>
+				<section class="panel acct-panel">
+					<dl class="acct-facts">
+						<div><dt>Signed in as</dt><dd>{user.email}</dd></div>
+						<div><dt>Plan</dt><dd><strong>{a.plan.name}</strong>{!a.plan.credits && <> · <a href="/pro/">See Pro</a></>}</dd></div>
+						<div><dt>{a.plan.credits ? "Credits left" : "Questions left today"}</dt><dd class="num">{a.left.toLocaleString("en-US")} {unit}{a.resets && <span class="acct-quiet"> · resets {day(a.resets)}</span>}</dd></div>
+					</dl>
+					<p class="acct-links"><a href="/ai/">Ask the analyst</a><button type="button" class="acct-link" data-logout>Sign out</button></p>
+				</section>
+				<section class="panel acct-panel">
+					<h2>Passkeys</h2>
+					<p class="acct-quiet">Sign in with Face ID, Touch ID, Windows Hello or a security key instead of waiting for an email.</p>
+					{keys.length > 0 && (
+						<ul class="acct-keys">
+							{keys.map((k) => <li><span>{k.name}</span><span class="acct-quiet">added {day(k.created)}{k.last_used ? `, last used ${day(k.last_used)}` : ""}</span><button type="button" class="acct-link" data-delete-key={k.id}>Remove</button></li>)}
+						</ul>
+					)}
+					<button type="button" class="acct-ghost" data-passkey-add>Add a passkey</button>
+					<p class="acct-msg" data-msg aria-live="polite"></p>
+				</section>
+			</>
+		)}
+	</div>
+</Base>
+
+<script>
+	import { startAuthentication, startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
+	const root = document.querySelector<HTMLElement>(".acct")!;
+	const next = root.dataset.next || "/account/";
+	const post = (url: string, body: object = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+	const say = (el: Element | null, text: string, bad = false) => { if (el) { el.textContent = text; el.classList.toggle("acct-err", bad); } };
+	const msgNear = (el: Element) => el.closest(".acct-panel")?.querySelector("[data-msg]") ?? null;
+
+	document.querySelector<HTMLFormElement>("[data-link-form]")?.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const form = e.currentTarget as HTMLFormElement;
+		const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+		const btn = form.querySelector("button")!;
+		btn.disabled = true;
+		const r = await post("/api/auth/link", { email, next }).catch(() => null);
+		const j = (r ? await r.json().catch(() => ({})) : {}) as { dev_link?: string; error?: string };
+		btn.disabled = false;
+		if (r?.ok && j.dev_link) { location.href = j.dev_link; return; }
+		if (r?.ok) say(msgNear(form), `Check ${email} for your sign-in link. It works once and expires in 15 minutes.`);
+		else say(msgNear(form), j.error === "too_many" ? "Too many links requested. Try again in an hour." : j.error === "email" ? "That doesn't look like an email address." : "We couldn't send the email right now. Please try again shortly.", true);
+	});
+
+	const passkeyLogin = document.querySelector<HTMLButtonElement>("[data-passkey-login]");
+	if (passkeyLogin && !browserSupportsWebAuthn()) passkeyLogin.hidden = true;
+	passkeyLogin?.addEventListener("click", async () => {
+		const msg = msgNear(passkeyLogin);
+		try {
+			const optionsJSON = (await (await post("/api/auth/passkey/login-options")).json()) as Parameters<typeof startAuthentication>[0]["optionsJSON"];
+			const response = await startAuthentication({ optionsJSON });
+			const r = await post("/api/auth/passkey/login", { response, next });
+			const j = (await r.json()) as { next?: string };
+			if (r.ok) location.href = j.next || "/account/";
+			else say(msg, "That passkey isn't linked to an account here. Sign in with an email link, then add it.", true);
+		} catch (e) {
+			if ((e as Error).name !== "NotAllowedError") say(msg, "Passkey sign-in didn't work. Try the email link instead.", true);
+		}
+	});
+
+	const add = document.querySelector<HTMLButtonElement>("[data-passkey-add]");
+	if (add && !browserSupportsWebAuthn()) { add.disabled = true; say(msgNear(add), "This browser doesn't support passkeys."); }
+	add?.addEventListener("click", async () => {
+		const msg = msgNear(add);
+		try {
+			const optionsJSON = (await (await post("/api/auth/passkey/register-options")).json()) as Parameters<typeof startRegistration>[0]["optionsJSON"];
+			const response = await startRegistration({ optionsJSON });
+			const name = navigator.userAgent.includes("Mac") ? "Mac or iPhone" : navigator.userAgent.includes("Windows") ? "Windows" : navigator.userAgent.includes("Android") ? "Android" : "Passkey";
+			const r = await post("/api/auth/passkey/register", { response, name });
+			if (r.ok) location.reload();
+			else say(msg, "The passkey couldn't be added. Please try again.", true);
+		} catch (e) {
+			const n = (e as Error).name;
+			if (n === "InvalidStateError") say(msg, "This device already has a passkey for your account.");
+			else if (n !== "NotAllowedError") say(msg, "The passkey couldn't be added. Please try again.", true);
+		}
+	});
+
+	document.querySelectorAll<HTMLButtonElement>("[data-delete-key]").forEach((b) => b.addEventListener("click", async () => {
+		if (!confirm("Remove this passkey? You can still sign in with an email link.")) return;
+		await post("/api/auth/passkey/delete", { id: b.dataset.deleteKey });
+		location.reload();
+	}));
+	document.querySelector("[data-logout]")?.addEventListener("click", async () => { await post("/api/auth/logout"); location.href = "/"; });
+</script>
+
+<style>
+	.acct-panel { display: flex; flex-direction: column; gap: 12px; }
+	.acct-panel h2 { font-size: 22px; margin: 0; }
+	.acct-form { display: flex; flex-direction: column; gap: 6px; }
+	.acct-form label { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+	.acct-row { display: flex; gap: 8px; flex-wrap: wrap; }
+	.acct-row input { flex: 1 1 220px; min-width: 0; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: 15px; }
+	.acct-row button, .acct-ghost { all: unset; cursor: pointer; padding: 11px 16px; border-radius: 10px; font-weight: 700; text-align: center; }
+	.acct-row button { background: #a3262a; color: #fff; }
+	.acct-ghost { border: 1px solid var(--color-border); color: var(--color-text); align-self: flex-start; }
+	.acct-ghost:hover { border-color: var(--color-text-secondary); }
+	.acct-row button:disabled, .acct-ghost:disabled { opacity: .5; cursor: default; }
+	.acct-row button:focus-visible, .acct-ghost:focus-visible, .acct-link:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+	.acct-or { display: flex; align-items: center; gap: 10px; color: var(--color-muted); font-size: 13px; }
+	.acct-or::before, .acct-or::after { content: ""; flex: 1; border-top: 1px solid var(--color-border); }
+	.acct-msg { margin: 0; font-size: 14px; color: var(--color-text-secondary); }
+	.acct-msg:empty { display: none; }
+	.acct-err { color: #ef7b6f !important; margin: 0; }
+	.acct-quiet { color: var(--color-muted); font-size: 13px; margin: 0; }
+	.acct-facts { display: grid; gap: 10px; margin: 0; }
+	.acct-facts div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--color-border); padding-bottom: 8px; }
+	.acct-facts dt { color: var(--color-text-secondary); font-size: 14px; }
+	.acct-facts dd { margin: 0; }
+	.acct-links { display: flex; gap: 16px; align-items: center; margin: 0; }
+	.acct-link { all: unset; cursor: pointer; color: var(--color-text-secondary); text-decoration: underline; font-size: 14px; }
+	.acct-keys { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+	.acct-keys li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+	.acct-keys li span:first-child { font-weight: 600; }
+</style>

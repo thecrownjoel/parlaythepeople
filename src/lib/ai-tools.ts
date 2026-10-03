@@ -80,11 +80,108 @@ export const TOOLS = [
 	},
 ] as const;
 
-export type ToolName = (typeof TOOLS)[number]["name"];
+/** Pro-only tools: who is moving the markets, and where the two exchanges disagree. */
+export const PRO_TOOLS = [
+	{
+		name: "trade_flow",
+		description: "Pro. Who is buying which side of one race over the last N days: per candidate, dollars betting FOR them vs AGAINST them on each exchange, the net, trade counts by size (under $100, $100-1k, $1k-10k, $10k+), and the largest Polymarket wallets in the race with their net direction. Trade records begin Sep 30, 2026.",
+		input_schema: { type: "object", properties: { race_id: { type: "string" }, days: { type: "number", default: 7 } }, required: ["race_id"] },
+	},
+	{
+		name: "whale_watch",
+		description: "Pro. The biggest bets across all races over the last N days (default trades of $5,000+), and Polymarket wallets that put the most money into election markets, with how many races each touched and which side they took. Wallets are public on-chain pseudonyms, not identities.",
+		input_schema: { type: "object", properties: { days: { type: "number", default: 7 }, min_usd: { type: "number", default: 5000 } } },
+	},
+	{
+		name: "exchange_divergence",
+		description: "Pro. Races where Kalshi and Polymarket disagree most right now on the Democratic chance, with each exchange's odds, the gap, and money traded on each. Large gaps can mean thin markets, different contract rules, or one exchange reacting first.",
+		input_schema: { type: "object", properties: { cycle: { type: "integer" }, min_gap: { type: "number", default: 0.03 } } },
+	},
+	{
+		name: "deep_research",
+		description: "Pro. A deeper search of the research library than search_research: more candidate passages, reranked for relevance to the exact question, with longer excerpts. Use for 'why' questions and background across many races or days.",
+		input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+	},
+] as const;
 
-export async function runTool(name: string, input: Record<string, any>): Promise<unknown> {
+/** Bullish for the named outcome: Kalshi taker bought Yes; on Polymarket bought the Yes token or sold the No token (the
+ *  token is read from the price paid, usd / size, which matches either the Yes price or one minus it). */
+const FOR_SQL = "CASE WHEN src = 'k' THEN side = 'yes' ELSE ((ABS(usd / size - yes_price) <= ABS(usd / size - (1 - yes_price))) = (side = 'BUY')) END";
+
+export async function runTool(name: string, input: Record<string, any>, ctx: { pro?: boolean } = {}): Promise<unknown> {
 	const now = Math.floor(Date.now() / 1000);
+	if (PRO_TOOLS.some((t) => t.name === name) && !ctx.pro) return { error: "This tool is part of Parlay the People Pro." };
 	switch (name) {
+		case "trade_flow": {
+			const days = Math.min(90, Math.max(0.25, Number(input.days ?? 7)));
+			const since = now - Math.round(days * DAY);
+			const race = String(input.race_id ?? "");
+			const [flow, sizes, wallets] = await Promise.all([
+				env.TRADES.prepare(`SELECT outcome, src, SUM(CASE WHEN ${FOR_SQL} THEN usd ELSE 0 END) AS for_usd, SUM(CASE WHEN ${FOR_SQL} THEN 0 ELSE usd END) AS against_usd, COUNT(*) AS n FROM trades WHERE race_id = ? AND ts >= ? AND size > 0 GROUP BY outcome, src`).bind(race, since).all<any>(),
+				env.TRADES.prepare("SELECT SUM(usd < 100) AS small, SUM(usd >= 100 AND usd < 1000) AS mid, SUM(usd >= 1000 AND usd < 10000) AS large, SUM(usd >= 10000) AS whale, SUM(CASE WHEN usd >= 10000 THEN usd ELSE 0 END) AS whale_usd, SUM(usd) AS usd FROM trades WHERE race_id = ? AND ts >= ?").bind(race, since).first<any>(),
+				env.TRADES.prepare(`SELECT wallet, outcome, SUM(usd) AS usd, SUM(CASE WHEN ${FOR_SQL} THEN usd ELSE -usd END) AS net, COUNT(*) AS n FROM trades WHERE race_id = ? AND ts >= ? AND src = 'p' AND wallet IS NOT NULL AND size > 0 GROUP BY wallet, outcome ORDER BY usd DESC LIMIT 10`).bind(race, since).all<any>(),
+			]);
+			const by = new Map<string, any>();
+			for (const r of flow.results ?? []) {
+				const x = by.get(r.outcome) ?? { candidate: r.outcome, for_usd: 0, against_usd: 0, trades: 0, kalshi_net: 0, polymarket_net: 0 };
+				x.for_usd += r.for_usd ?? 0; x.against_usd += r.against_usd ?? 0; x.trades += r.n ?? 0;
+				x[r.src === "k" ? "kalshi_net" : "polymarket_net"] += (r.for_usd ?? 0) - (r.against_usd ?? 0);
+				by.set(r.outcome, x);
+			}
+			return {
+				race_id: race, days,
+				by_candidate: [...by.values()].map((x) => ({ ...x, for_usd: usd(x.for_usd), against_usd: usd(x.against_usd), net_usd: usd(x.for_usd - x.against_usd), kalshi_net: usd(x.kalshi_net), polymarket_net: usd(x.polymarket_net) })).sort((a, b) => (b.for_usd + b.against_usd) - (a.for_usd + a.against_usd)),
+				trade_sizes: { under_100: sizes?.small ?? 0, "100_to_1k": sizes?.mid ?? 0, "1k_to_10k": sizes?.large ?? 0, "10k_plus": sizes?.whale ?? 0, share_of_dollars_in_10k_plus: sizes?.usd ? r3((sizes.whale_usd ?? 0) / sizes.usd) : null },
+				top_polymarket_wallets: (wallets.results ?? []).map((w) => ({ wallet: `${w.wallet.slice(0, 6)}…${w.wallet.slice(-4)}`, candidate: w.outcome, usd: usd(w.usd), net_for_candidate_usd: usd(w.net), trades: w.n })),
+				note: "for = betting the candidate wins; against = betting they lose. Kalshi trades are anonymous; Polymarket wallets are public pseudonyms. Trade records begin Sep 30, 2026.",
+			};
+		}
+		case "whale_watch": {
+			const days = Math.min(90, Math.max(0.25, Number(input.days ?? 7)));
+			const since = now - Math.round(days * DAY);
+			const min = Math.max(500, Number(input.min_usd ?? 5000));
+			const [big, wallets, races] = await Promise.all([
+				env.TRADES.prepare(`SELECT race_id, src, outcome, side, yes_price, usd, ts, wallet, ${FOR_SQL} AS bull FROM trades WHERE ts >= ? AND usd >= ? AND size > 0 ORDER BY usd DESC LIMIT 25`).bind(since, min).all<any>(),
+				env.TRADES.prepare("SELECT wallet, SUM(usd) AS usd, COUNT(*) AS n, COUNT(DISTINCT race_id) AS races, MAX(usd) AS biggest FROM trades WHERE ts >= ? AND src = 'p' AND wallet IS NOT NULL GROUP BY wallet ORDER BY usd DESC LIMIT 12").bind(since).all<any>(),
+				allRaces(),
+			]);
+			const name = new Map(races.map(({ r }) => [r.id, officeTitle(r)]));
+			const short = (w: string | null) => (w ? `${w.slice(0, 6)}…${w.slice(-4)}` : null);
+			return {
+				days, min_usd: min,
+				biggest_trades: (big.results ?? []).map((t) => ({ race: name.get(t.race_id) ?? t.race_id, race_id: t.race_id, exchange: t.src === "k" ? "Kalshi" : "Polymarket", candidate: t.outcome, direction: t.bull ? `for ${t.outcome}` : `against ${t.outcome}`, yes_price: t.yes_price, usd: usd(t.usd), when: new Date(t.ts * 1000).toISOString().slice(0, 16), wallet: short(t.wallet) })),
+				top_polymarket_wallets: (wallets.results ?? []).map((w) => ({ wallet: short(w.wallet), usd: usd(w.usd), trades: w.n, races: w.races, biggest_trade_usd: usd(w.biggest) })),
+				note: "Wallets are public Polymarket pseudonyms, not identities; never guess who is behind one. Trade records begin Sep 30, 2026.",
+			};
+		}
+		case "exchange_divergence": {
+			const index = await getIndex();
+			const data = await getCycle(Number(input.cycle ?? index?.next));
+			if (!data) return { error: "No such cycle" };
+			const minGap = Math.max(0, Number(input.min_gap ?? 0.03));
+			const rows = data.races.filter((r) => r.k && r.p && r.kind !== "control").map((r) => {
+				const k = shares(r.k)!, p = shares(r.p)!;
+				const kd = k.D / (k.D + k.R || 1), pd = p.D / (p.D + p.R || 1);
+				return { ...summary(r), kalshi_D: r3(kd), polymarket_D: r3(pd), gap: r3(Math.abs(kd - pd)), richer_for_D: kd > pd ? "Kalshi" : "Polymarket", kalshi_traded_usd: usd(r.k?.v), polymarket_traded_usd: usd(r.p?.v) };
+			}).filter((x) => (x.gap ?? 0) >= minGap).sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0)).slice(0, 15);
+			return { cycle: data.meta.cycle, min_gap: minGap, races: rows, note: "Odds are each exchange's two-party Democratic share. Thin markets (little money traded) often show the widest gaps." };
+		}
+		case "deep_research": {
+			const query = String(input.query ?? "");
+			try {
+				const res: any = await (env.AI as any).autorag("parlay").search({ query, max_num_results: 24, rewrite_query: true });
+				const docs = (res?.data ?? []).map((d: any) => ({
+					document: d.filename, url: d.attributes?.file?.url ?? d.attributes?.url ?? null, title: d.attributes?.file?.title ?? d.attributes?.title ?? null,
+					text: (d.content ?? []).map((c: any) => c.text).join("\n").slice(0, 3000),
+				}));
+				if (!docs.length) return { results: [] };
+				const ranked: any = await (env.AI as any).run("@cf/baai/bge-reranker-base", { query, contexts: docs.map((d: any) => ({ text: d.text.slice(0, 1500) })), top_k: 10 });
+				const order: { id: number; score: number }[] = ranked?.response ?? [];
+				return { results: (order.length ? order : docs.map((_: unknown, i: number) => ({ id: i, score: 0 }))).slice(0, 10).map((o: { id: number; score: number }) => ({ ...docs.at(o.id), relevance: r3(o.score) })) };
+			} catch (e) {
+				return { error: `Research search unavailable: ${String(e).slice(0, 120)}` };
+			}
+		}
 		case "find_races": {
 			const q = String(input.query ?? "").toLowerCase().trim();
 			const words = q.split(/[\s,]+/).filter(Boolean);
@@ -124,7 +221,7 @@ export async function runTool(name: string, input: Record<string, any>): Promise
 			const days = Number(input.days ?? 30);
 			const range = days === 0 ? RANGES.find((x) => x.key === "all")! : days <= 1 ? RANGES[0] : days <= 7 ? RANGES[1] : days <= 30 ? RANGES[2] : days <= 90 ? RANGES[3] : RANGES[4];
 			const pts = await getSeries(String(input.race_id), range);
-			const step = Math.max(1, Math.ceil(pts.length / 60));
+			const step = Math.max(1, Math.ceil(pts.length / (ctx.pro ? 400 : 60)));
 			return { race_id: input.race_id, range: range.words, points: pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => ({ t: new Date(p.ts * 1000).toISOString().slice(0, 16), kalshi_D: r3(p.k_d), polymarket_D: r3(p.p_d) })) };
 		}
 		case "money": {

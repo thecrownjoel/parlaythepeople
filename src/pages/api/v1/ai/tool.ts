@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { runTool, TOOLS } from "../../../../lib/ai-tools";
+// public tools only: Pro tools are reachable through the signed-in analyst, never this open endpoint
 
 /** Runs one analyst tool directly: /api/v1/ai/tool?name=race_detail&args={"race_id":"2026-senate-maine"}. Read-only. */
 export const GET: APIRoute = async ({ url }) => {

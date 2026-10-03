@@ -24,7 +24,15 @@
 			"database_name": "ballottape-trades",
 			"database_id": "0b9797e9-685b-4549-ac2b-fa65f6be8957",
 		},
+		{
+			// Reader accounts, sessions, passkeys, plans and metered AI usage (ingest/accounts_schema.sql)
+			"binding": "ACCOUNTS",
+			"database_name": "parlay-accounts",
+			"database_id": "22b8e7cc-538b-4d44-9b95-11920f469458",
+		},
 	],
+	// Cloudflare Email Service: sends the one-time sign-in links (from signin@parlaythepeople.com)
+	"send_email": [{ "name": "EMAIL" }],
 	"ai": { "binding": "AI" },
 	// Browser Rendering: draws the per-race share images (/og/race/<id>.png)
 	"browser": { "binding": "BROWSER" },

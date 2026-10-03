@@ -1,0 +1,112 @@
+---
+/** Pricing: the public site, a free account, Pro, Team and Organization. Billing isn't connected yet: paid plans are requested and granted by hand. */
+import Base from "../../layouts/Base.astro";
+import { account } from "../../lib/auth";
+import { PLANS, CREDITS, CREDIT_PACK } from "../../lib/plans";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "no-store");
+const a = await account(Astro.cookies, Astro.request);
+const tiers = [PLANS.free, PLANS.pro, PLANS.team, PLANS.enterprise];
+const current = a.plan.id === "anon" ? null : a.plan.id;
+const faqs: [string, string][] = [
+	["What is a credit?", `One question to the analyst uses ${CREDITS.ask} credit. A Deep analysis, which runs many more lookups, reads more sources and writes a structured brief, uses ${CREDITS.deep}. Credits reset each month; extra credits come in packs of ${CREDIT_PACK.credits} for $${CREDIT_PACK.price} and don't expire.`],
+	["What stays free?", "Everything public today: every race page, chart, map, date picker, daily report and headline, the data downloads, and the analyst's daily free questions. Pro adds depth on top; nothing public moves behind it."],
+	["Where does the trade data come from?", "Every individual trade on both exchanges since September 30, 2026. Kalshi trades are anonymous. Polymarket trades carry public wallet pseudonyms, which Pro reports as they are; we never guess who is behind one."],
+	["Is this betting advice?", "No. Parlay the People is election research. The analyst explains what the markets say and why they move; it never tells anyone what to buy or sell."],
+	["How do I pay?", "Billing opens soon. Until then, request a plan below and we'll set up your account by hand."],
+];
+---
+<Base title={`Pro: deeper election market analysis | ${SITE_NAME}`} description="Pro adds trade flow, whale watch, exchange divergence and Deep analyses to Parlay the People's AI analyst, for campaigns, consultants, reporters and traders." canonical={`${Astro.url.origin}/pro/`}>
+	<div class="dp pro" data-signed-in={a.user ? "1" : "0"}>
+		<header class="dp-head">
+			<p class="eyebrow">Parlay the People Pro</p>
+			<h1>See who is moving the market</h1>
+			<p class="lede">The public site shows what the markets say. Pro shows who is buying which side, where Kalshi and Polymarket disagree, and why a race is moving, in Deep analyses written for campaigns, consultants, reporters and traders.</p>
+		</header>
+
+		<section class="pro-grid" aria-label="Plans">
+			{tiers.map((p) => (
+				<article class={`pro-card${p.id === "pro" ? " pro-main" : ""}`}>
+					<h2>{p.name}</h2>
+					<p class="pro-price">
+						{p.price === null ? <span class="pro-num">Custom</span> : p.price === 0 ? <span class="pro-num">$0</span> : <><span class="pro-num">${p.price}</span><span class="pro-per">/month</span></>}
+					</p>
+					{p.priceYear ? <p class="pro-quiet">or ${p.priceYear.toLocaleString("en-US")} a year (two months free)</p> : <p class="pro-quiet">{p.price === null ? "Annual contract" : "No card needed"}</p>}
+					<p class="pro-blurb">{p.blurb}</p>
+					<ul>{p.features.map((f) => <li>{f}</li>)}</ul>
+					{current === p.id
+						? <p class="pro-current">Your plan</p>
+						: p.id === "free"
+							? (a.user ? <p class="pro-current">Included</p> : <a class="pro-btn pro-ghost" href="/account/?next=/pro/">Sign in free</a>)
+							: (a.user
+								? <button type="button" class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} data-request={p.id}>{p.id === "enterprise" ? "Talk to us" : `Request ${p.name}`}</button>
+								: <a class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} href="/account/?next=/pro/">Sign in to request</a>)}
+				</article>
+			))}
+		</section>
+
+		<dialog class="pro-dialog" data-dialog>
+			<form method="dialog" data-request-form>
+				<h2>Request <span data-plan-name></span></h2>
+				<p class="pro-quiet">Billing opens soon. Tell us who you're with and we'll set up your account.</p>
+				<label>Campaign, firm or newsroom <input name="org" maxlength="120" /></label>
+				<label>What do you want to track? <textarea name="note" rows="3" maxlength="1000"></textarea></label>
+				<div class="pro-actions"><button type="submit" class="pro-btn" value="send">Send request</button><button type="button" class="pro-btn pro-ghost" data-close>Cancel</button></div>
+				<p class="pro-quiet" data-msg aria-live="polite"></p>
+			</form>
+		</dialog>
+
+		<section>
+			<h2>Questions</h2>
+			<div class="faq">{faqs.map(([q, ans], i) => <details open={i === 0}><summary>{q}</summary><p>{ans}</p></details>)}</div>
+		</section>
+	</div>
+</Base>
+
+<script>
+	const dialog = document.querySelector<HTMLDialogElement>("[data-dialog]")!;
+	const form = document.querySelector<HTMLFormElement>("[data-request-form]")!;
+	const msg = form.querySelector("[data-msg]")!;
+	let plan = "";
+	document.querySelectorAll<HTMLButtonElement>("[data-request]").forEach((b) => b.addEventListener("click", () => {
+		plan = b.dataset.request!;
+		form.querySelector("[data-plan-name]")!.textContent = b.closest(".pro-card")!.querySelector("h2")!.textContent;
+		msg.textContent = "";
+		dialog.showModal();
+	}));
+	form.querySelector("[data-close]")!.addEventListener("click", () => dialog.close());
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const data = new FormData(form);
+		const r = await fetch("/api/pro/request", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, org: data.get("org"), note: data.get("note") }) }).catch(() => null);
+		msg.textContent = r?.ok ? "Thanks. We'll email you to set up your account." : "That didn't go through. Please try again.";
+		if (r?.ok) setTimeout(() => dialog.close(), 1800);
+	});
+</script>
+
+<style>
+	.pro { max-width: 1120px; }
+	.pro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+	.pro-card { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+	.pro-main { border-color: #a3262a; box-shadow: inset 0 0 0 1px #a3262a; }
+	.pro-card h2 { font-size: 22px; margin: 0; }
+	.pro-price { margin: 0; display: flex; align-items: baseline; gap: 4px; }
+	.pro-num { font-family: var(--font-display); font-size: 38px; font-weight: 800; }
+	.pro-per { color: var(--color-text-secondary); }
+	.pro-quiet { color: var(--color-muted); font-size: 13px; margin: 0; }
+	.pro-blurb { margin: 0; color: var(--color-text-secondary); font-size: 15px; }
+	.pro-card ul { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; flex: 1; }
+	.pro-btn { all: unset; cursor: pointer; text-align: center; padding: 11px 16px; border-radius: 10px; background: #a3262a; color: #fff; font-weight: 700; }
+	.pro-ghost { background: none; border: 1px solid var(--color-border); color: var(--color-text); }
+	.pro-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+	.pro-current { margin: 0; text-align: center; padding: 11px; color: var(--color-text-secondary); font-weight: 600; }
+	.pro-dialog { max-width: min(480px, calc(100vw - 32px)); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); color: var(--color-text); padding: 22px; }
+	.pro-dialog::backdrop { background: rgb(0 0 0 / .6); }
+	.pro-dialog form { display: flex; flex-direction: column; gap: 12px; }
+	.pro-dialog h2 { margin: 0; font-size: 22px; }
+	.pro-dialog label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+	.pro-dialog input, .pro-dialog textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: 15px; }
+	.pro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>

@@ -158,6 +158,7 @@ const isLoggedIn = !!Astro.locals.user;
 							</a>
 						)
 					}
+					<a href="/pro/" class="nav-pro">Pro</a>
 					<SearchOverlay />
 					<CountrySwitcher />
 				</div>
@@ -225,6 +226,8 @@ const isLoggedIn = !!Astro.locals.user;
 							<li><a href="/model/">Our model</a></li>
 							<li><a href="/guide/">Guide</a></li>
 							<li><a href="/methodology/">Methodology</a></li>
+							<li><a href="/pro/">Pro</a></li>
+							<li><a href="/account/">Account</a></li>
 						</ul>
 					</div>
 					<div class="footer-widgets-section">
@@ -479,6 +482,23 @@ const isLoggedIn = !!Astro.locals.user;
 				transition: color var(--transition-fast);
 			}
 
+			.nav-pro {
+				font-family: var(--font-mono), monospace;
+				font-size: 12px;
+				font-weight: 600;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 5px 10px;
+				border-radius: 6px;
+				border: 1px solid #a3262a;
+				color: var(--color-text);
+				text-decoration: none;
+				white-space: nowrap;
+			}
+			.nav-pro:hover {
+				background: #a3262a;
+				color: #fff;
+			}
 			.nav-admin:hover {
 				color: var(--color-text);
 			}
