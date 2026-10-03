@@ -15,7 +15,20 @@ export const RANGES: Range[] = [
 	{ key: "all", label: "All", words: "all recorded history", secs: null, bucket: 86400 },
 ];
 export const DEFAULT_RANGE = "3m";
-export const rangeOf = (key?: string | null) => RANGES.find((r) => r.key === key) ?? RANGES.find((r) => r.key === DEFAULT_RANGE)!;
+/** A preset range by key, or a calendar date ("2026-06-01") meaning "from that day to now". */
+export function rangeOf(key?: string | null): Range {
+	const pre = RANGES.find((r) => r.key === key);
+	if (pre) return pre;
+	if (key && /^\d{4}-\d{2}-\d{2}$/.test(key)) {
+		const ts = Date.parse(`${key}T00:00:00Z`) / 1000;
+		const secs = Math.floor(Date.now() / 1000) - ts;
+		if (Number.isFinite(ts) && secs > 3600) {
+			const day = new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+			return { key, label: day, words: `the period since ${day}`, secs, bucket: secs <= 2 * 86400 ? 0 : secs <= 10 * 86400 ? 3600 : secs <= 45 * 86400 ? 6 * 3600 : 86400 };
+		}
+	}
+	return RANGES.find((r) => r.key === DEFAULT_RANGE)!;
+}
 
 /** History for one race within a range, thinned to the last point per bucket, ending at `latest` if given. */
 export async function getSeries(raceId: string, range: Range, latest?: HistoryPoint | null): Promise<HistoryPoint[]> {

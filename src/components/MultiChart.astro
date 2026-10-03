@@ -11,6 +11,7 @@ const body = renderMulti(series, { range, electionDay, title });
 <div class="hc-wrap" data-multichart={JSON.stringify(specs)} data-ed={electionDay ?? ""} data-title={title}>
 	<div class="hc-ranges" role="group" aria-label={`${title}: time range`}>
 		{RANGES.map((r) => <button type="button" data-range={r.key} aria-pressed={r.key === range.key ? "true" : "false"} title={`Show ${r.words}`}>{r.label}</button>)}
+			<label class="hc-cal" title="Show the time since a date"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1.5 6.5h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg><span data-cal-label>Date</span><input type="date" min="2024-11-06" max={new Date().toISOString().slice(0, 10)} aria-label="Show the time since a date" /></label>
 	</div>
 	<div class="hc-body" data-chart-body aria-live="polite" set:html={body} />
 </div>
@@ -18,9 +19,11 @@ const body = renderMulti(series, { range, electionDay, title });
 	for (const wrap of document.querySelectorAll<HTMLElement>("[data-multichart]")) {
 		const body = wrap.querySelector<HTMLElement>("[data-chart-body]")!;
 		const cache = new Map<string, string>([[wrap.querySelector('[aria-pressed="true"]')?.getAttribute("data-range") ?? "", body.innerHTML]]);
-		wrap.querySelectorAll<HTMLButtonElement>("[data-range]").forEach((btn) => btn.addEventListener("click", async () => {
-			const key = btn.dataset.range!;
-			wrap.querySelectorAll("[data-range]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+		const load = async (key: string) => {
+			wrap.querySelectorAll<HTMLElement>("[data-range]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.range === key)));
+			const cal = wrap.querySelector<HTMLElement>(".hc-cal")!;
+			cal.dataset.on = String(!wrap.querySelector(`[data-range="${key}"]`));
+			cal.querySelector("[data-cal-label]")!.textContent = cal.dataset.on === "true" ? new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "Date";
 			if (!cache.has(key)) {
 				body.classList.add("hc-loading");
 				const q = new URLSearchParams({ s: wrap.dataset.multichart!, range: key, ed: wrap.dataset.ed ?? "", t: wrap.dataset.title ?? "" });
@@ -33,6 +36,10 @@ const body = renderMulti(series, { range, electionDay, title });
 				body.classList.remove("hc-loading");
 			}
 			body.innerHTML = cache.get(key)!;
-		}));
+		};
+		wrap.querySelectorAll<HTMLButtonElement>("[data-range]").forEach((btn) => btn.addEventListener("click", () => load(btn.dataset.range!)));
+		const input = wrap.querySelector<HTMLInputElement>(".hc-cal input")!;
+		input.addEventListener("change", () => input.value && load(input.value));
+		wrap.querySelector(".hc-cal")!.addEventListener("click", (e) => { if (e.target !== input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } } });
 	}
 </script>

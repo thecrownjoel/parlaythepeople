@@ -9,7 +9,13 @@ import MarketDashboard from "../../components/MarketDashboard.astro";
 import MultiChart from "../../components/MultiChart.astro";
 import { getCycle, consensus, shares, pct, fmtDate, fmtVol, daysUntil, PARTY_PLURAL, type Race } from "../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
+import PeriodPicker from "../../components/PeriodPicker.astro";
+import MoversBody from "../../components/home/MoversBody.astro";
+import MoneyBody from "../../components/home/MoneyBody.astro";
+import { homeData, SECTIONS } from "../../lib/home";
+import { parsePeriod } from "../../lib/period";
 import "../../styles/data.css";
+import "../../styles/home.css";
 
 const { cycle } = Astro.params;
 if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
@@ -57,6 +63,10 @@ const lede = parts.length
 const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 12);
 const officesHere = (["senate", "governor", "house"] as const).filter((k) => by(k).length);
 const officeNames = { senate: "Senate", governor: "Governor", house: "House" };
+// the next cycle's page also gets the homepage's period sections (they read the next cycle's data)
+const home = await homeData();
+const isNext = home.nextYear === year;
+const pMovers = parsePeriod(SECTIONS.movers.def, SECTIONS.movers.def), pMoney = parsePeriod("7d", "7d");
 const h1 = `${year} election odds${midterm ? ": Senate, House and governors" : hasPres ? ": president, Senate and governors" : ""}`;
 const title = `${year} ${midterm ? "midterm" : ""} election odds: ${hasPres ? "president, " : ""}${officesHere.map((k) => officeNames[k]).join(", ")} | Kalshi vs. Polymarket`.replace("  ", " ");
 
@@ -116,6 +126,19 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 				<p class="sec-note">Headline odds over time, averaged across Kalshi and Polymarket. (D) lines are Democratic odds; GOP 50+ is the chance Republicans keep at least 50 Senate seats.</p>
 				<div class="panel"><MultiChart title={`${year} headline odds`} specs={bigSpecs} electionDay={data.meta.election_day} /></div>
 			</section>
+		)}
+
+		{isNext && (
+			<>
+				<section class="panel" data-period-section="movers">
+					<div class="sec-head"><h2 style="font-size:22px">Biggest moves</h2><PeriodPicker section="movers" period={pMovers} /></div>
+					<div data-period-body><MoversBody d={home} period={pMovers} /></div>
+				</section>
+				<section data-period-section="money">
+					<div class="sec-head"><h2>Where the money went</h2><PeriodPicker section="money" period={pMoney} /></div>
+					<div data-period-body><MoneyBody d={home} period={pMoney} /></div>
+				</section>
+			</>
 		)}
 
 		<MarketDashboard data={data} />
