@@ -94,7 +94,7 @@ export const POST: APIRoute = async ({ request }) => {
 	if ((used?.n ?? 0) >= limit) return Response.json({ error: "limit", limit }, { status: 429 });
 	// a ceiling for the whole site, so a traffic spike can't run up the AI bill
 	const all = await env.MARKETS.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM ai_usage WHERE day = ?").bind(day).first<{ n: number }>();
-	if ((all?.n ?? 0) >= Number(E.AI_GLOBAL_DAILY ?? 500)) return Response.json({ error: "busy" }, { status: 429 });
+	if ((all?.n ?? 0) >= Number(E.AI_GLOBAL_DAILY ?? 200)) return Response.json({ error: "busy" }, { status: 429 });
 	await env.MARKETS.prepare("INSERT INTO ai_usage (who, day, n) VALUES (?, ?, 1) ON CONFLICT(who, day) DO UPDATE SET n = n + 1").bind(id, day).run();
 
 	const enc = new TextEncoder();
