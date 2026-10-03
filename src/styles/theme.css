@@ -83,3 +83,11 @@ html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff
 @media (max-width: 640px) { .footer-meta { align-items: center; } }
 .nav-end { gap: var(--spacing-2); }
 .nav-end .nav-admin { margin-inline-end: var(--spacing-2); }
+
+/*
+ * Make the footer's light/dark switch work. The CSS build rewrites light-dark() into
+ * --lightningcss-light / --lightningcss-dark switches that only follow the OS setting;
+ * these rules flip the same switches when the visitor picks a theme (html.light / html.dark).
+ */
+:root.dark { --lightningcss-light: ; --lightningcss-dark: initial; color-scheme: dark; }
+:root.light { --lightningcss-light: initial; --lightningcss-dark: ; color-scheme: light; }

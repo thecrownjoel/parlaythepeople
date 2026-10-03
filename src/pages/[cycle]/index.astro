@@ -6,6 +6,7 @@
 import Base from "../../layouts/Base.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import MarketDashboard from "../../components/MarketDashboard.astro";
+import MultiChart from "../../components/MultiChart.astro";
 import { getCycle, consensus, shares, pct, fmtDate, daysUntil, PARTY_PLURAL, type Race } from "../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
@@ -29,6 +30,14 @@ const presParty = (() => {
 	return { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length };
 })();
 const midterm = year % 4 === 2;
+const bigSpecs = [
+	senC && { kind: "race" as const, id: senC.id, key: "D", label: "Senate (D)", color: "#2e62d0" },
+	houseC && { kind: "race" as const, id: houseC.id, key: "D", label: "House (D)", color: "#6f9bf2", dash: true },
+	hasPres && { kind: "race" as const, id: `${year}-president`, key: "D", label: "Presidency (D)", color: "#4a7fc0" },
+	data.big?.bop?.k || data.big?.bop?.p ? { kind: "out" as const, id: `${year}-bop`, key: "DD", label: "Dem sweep", color: "#1d3f8c" } : null,
+	data.big?.pv?.k || data.big?.pv?.p ? { kind: "out" as const, id: `${year}-majority`, key: "popvote-D", label: "Popular vote (D)", color: "#9db8f0", dash: true } : null,
+	data.big?.senate?.k || data.big?.senate?.p ? { kind: "out" as const, id: `${year}-majority`, key: "senate-R", label: "GOP 50+ Senate seats", color: "#d23f35", dash: true } : null,
+].filter(Boolean) as any[];
 const days = daysUntil(data.meta.election_day);
 const when = fmtDate(data.meta.generated, false);
 
@@ -98,6 +107,14 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 						<li><a href={r.path}>{r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`}</a><span class={`num ${c.lead === "D" ? "dlead" : "rlead"}`}>{c.lead} {pct(c.lp)}</span></li>
 					))}
 				</ul>
+			</section>
+		)}
+
+		{bigSpecs.length > 1 && (
+			<section>
+				<h2>How the big picture has moved</h2>
+				<p class="sec-note">Headline odds over time, averaged across Kalshi and Polymarket. (D) lines are Democratic odds; GOP 50+ is the chance Republicans keep at least 50 Senate seats.</p>
+				<div class="panel"><MultiChart title={`${year} headline odds`} specs={bigSpecs} electionDay={data.meta.election_day} /></div>
 			</section>
 		)}
 

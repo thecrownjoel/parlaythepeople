@@ -23,7 +23,7 @@ const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.
 const [next, presCycle, posts, counts] = await Promise.all([
 	nextYear ? getCycle(nextYear) : Promise.resolve(null),
 	presYear ? getCycle(presYear) : Promise.resolve(null),
-	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 7 }),
+	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 13 }),
 	historyCounts(),
 ]);
 if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
@@ -120,7 +120,19 @@ const nomD = merged(presCycle?.pres.nomD, 3), nomR = merged(presCycle?.pres.nomR
 const coinFlips = (next?.big?.ballots ?? []).filter((b: any) => !b.thin).sort((a: any, b: any) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5)).slice(0, 6);
 
 // ---- analysis
-const [featured, ...morePosts] = posts.entries;
+const [featured, ...restPosts] = posts.entries;
+const sidePosts = restPosts.slice(0, 4);
+const gridPosts = restPosts.slice(4, 12);
+// Ticker: newest analysis headlines first, then live market headlines.
+const ticker: { text: string; href: string; tag: string }[] = [
+	...posts.entries.slice(0, 8).map((p) => ({ text: p.data.title, href: `/posts/${p.id}`, tag: "Analysis" })),
+	...(senC ? [{ text: `${PARTY_PLURAL[consensus(senC).lead as "D" | "R"]} ${pct(consensus(senC).lp)} to win the Senate`, href: senC.path, tag: "Markets" }] : []),
+	...(houseC ? [{ text: `${PARTY_PLURAL[consensus(houseC).lead as "D" | "R"]} ${pct(consensus(houseC).lp)} to win the House`, href: houseC.path, tag: "Markets" }] : []),
+	...(presParty ? [{ text: `${presYear} presidency: Democrats ${pct(presParty.D)}, Republicans ${pct(presParty.R)}`, href: `/${presYear}/president/`, tag: "Markets" }] : []),
+	...moved.slice(0, 3).map((m) => ({ text: `${name(m.race)}: Democratic odds ${m.delta >= 0 ? "up" : "down"} ${Math.abs(m.delta * 100).toFixed(1)} pts this week`, href: m.race.path, tag: "Movers" })),
+	...closest.slice(0, 2).map(({ r, c }) => ({ text: `Toss-up watch: ${name(r)} at ${c.lead} ${pct(c.lp)}`, href: r.path, tag: "Close race" })),
+];
+const h1Words = "Political News, Election odds from Kalshi and Polymarket, race by race".split(" ");
 const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
 const ld = graph(organization(origin), {
@@ -196,9 +208,26 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	@media (max-width: 860px) { .analysis-grid { grid-template-columns: 1fr; } }
 	@media (max-width: 520px) { .noms { grid-template-columns: 1fr; } .lb { grid-template-columns: 18px minmax(0, 1fr) 70px 48px; } }
 
-	:global(.anim-ready) .reveal-item { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
-	:global(.anim-ready.in-view) .reveal-item { opacity: 1; transform: none; }
-	@media (prefers-reduced-motion: reduce) { :global(.anim-ready) .reveal-item { opacity: 1; transform: none; transition: none; } .trend { transition: none; } }
+	.hero-h1 .w { display: inline-block; }
+	:global(html.gsap-pending) .ga { visibility: hidden; }
+	@media (prefers-reduced-motion: reduce) { .trend { transition: none; } }
+
+	.ticker { display: flex; align-items: stretch; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-surface); }
+	.ticker-label { flex: none; display: flex; align-items: center; padding: 0 14px; background: #a3262a; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+	.ticker-view { overflow: hidden; flex: 1; min-width: 0; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+	.ticker-track { list-style: none; margin: 0; padding: 0; display: flex; width: max-content; }
+	.ticker-track a { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; white-space: nowrap; text-decoration: none; color: var(--color-text); font-weight: 500; font-size: 14px; border-right: 1px solid var(--color-border); }
+	.ticker-track a:hover { text-decoration: underline; }
+	.ticker-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	:global(html.no-ticker-motion) .ticker-view { overflow-x: auto; }
+
+	.lb-bar { display: block; height: 4px; margin-top: 5px; background: var(--color-border); border-radius: 2px; overflow: hidden; max-width: 260px; }
+	.lb-bar i { display: block; height: 100%; border-radius: 2px; }
+	.hl-ex { color: var(--color-text-secondary); font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+	.post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-top: 22px; }
+	.post-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
+	.post-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgb(0 0 0 / .12); }
+	.post-card strong { font-size: 16px; line-height: 1.3; }
 </style>
 
 <Base title={`${SITE_NAME}: political news and election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
@@ -206,33 +235,91 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	<div class="dp">
 		<header class="dp-head home-hero">
 			<div class="home-hero-text">
-				<p class="eyebrow">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
-				<h1>Political News, Election odds from Kalshi and Polymarket, race by race</h1>
-				<p class="lede">{lede}</p>
-				{next && <p class="updated">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
+				<p class="eyebrow ga" data-ga="hero">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
+				<h1 class="hero-h1">{h1Words.map((w) => <><span class="w ga" data-ga="word">{w}</span>{" "}</>)}</h1>
+				<p class="lede ga" data-ga="hero">{lede}</p>
+				{next && <p class="updated ga" data-ga="hero">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
 			</div>
-			<img class="home-hero-logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
+			<img class="home-hero-logo ga" data-ga="logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
 
-		<section class="stats" aria-label="By the numbers" data-anim>
+		{ticker.length > 0 && (
+			<section class="ticker" aria-label="Latest headlines">
+				<span class="ticker-label">Latest</span>
+				<div class="ticker-view" data-ticker>
+					<ul class="ticker-track">
+						{[...ticker, ...ticker].map((t, i) => (
+							<li aria-hidden={i >= ticker.length ? "true" : undefined}>
+								<a href={t.href} tabindex={i >= ticker.length ? -1 : undefined}><span class="ticker-tag">{t.tag}</span>{t.text}</a>
+							</li>
+						))}
+					</ul>
+				</div>
+			</section>
+		)}
+
+		<section class="stats" aria-label="By the numbers">
 			<div class="stat"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to the {nextYear} election</span></div>
 			<div class="stat"><b data-count={totalRaces}>{totalRaces.toLocaleString()}</b><span>races tracked across {index?.cycles.length ?? 0} election years</span></div>
 			<div class="stat"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span></div>
 			<div class="stat"><b data-count={counts.points}>{counts.points.toLocaleString()}</b><span>price points recorded{counts.since ? ` since ${new Date(counts.since * 1000).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}</span></div>
 		</section>
 
+
+		<section class="analysis" aria-labelledby="analysis-h">
+			<div class="analysis-head">
+				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
+				<a href="/posts" class="datalinks">Every article →</a>
+			</div>
+			{featured ? (
+				<>
+					<div class="analysis-grid">
+						<a class="feature ga" data-ga="up" href={`/posts/${featured.id}`}>
+							{featured.data.featured_image ? (
+								<div class="feature-img"><Image image={featured.data.featured_image} /></div>
+							) : (
+								<div class="feature-img fallback"><img src="/brand/logo-full.jpg" alt="" width="709" height="900" /></div>
+							)}
+							<span class="post-meta">{postDate(featured.data.publishedAt)}{featured.data.bylines?.[0] && ` · ${featured.data.bylines[0].byline.displayName}`}</span>
+							<h3>{featured.data.title}</h3>
+							{featured.data.excerpt && <p>{featured.data.excerpt}</p>}
+						</a>
+						<ul class="headlines">
+							{sidePosts.map((p) => (
+								<li class="ga" data-ga="up"><a href={`/posts/${p.id}`}><span class="post-meta">{postDate(p.data.publishedAt)}{p.data.bylines?.[0] && ` · ${p.data.bylines[0].byline.displayName}`}</span><strong>{p.data.title}</strong>{p.data.excerpt && <span class="hl-ex">{p.data.excerpt}</span>}</a></li>
+							))}
+							{sidePosts.length === 0 && <li class="post-meta" style="padding:12px 0">More analysis is on the way.</li>}
+						</ul>
+					</div>
+					{gridPosts.length > 0 && (
+						<div class="post-grid">
+							{gridPosts.map((p) => (
+								<a class="post-card ga" data-ga="up" href={`/posts/${p.id}`}>
+									<span class="post-meta">{postDate(p.data.publishedAt)}</span>
+									<strong>{p.data.title}</strong>
+									{p.data.excerpt && <span class="hl-ex">{p.data.excerpt}</span>}
+								</a>
+							))}
+						</div>
+					)}
+				</>
+			) : (
+				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
+			)}
+		</section>
+
 		{cards.length > 0 && (
-			<section data-anim>
+			<section>
 				<h2>The big picture</h2>
 				<p class="sec-note">Democratic odds now, the change over 30 days, and the last 90 days of trading.</p>
 				<div class="trends">
 					{cards.map((c) => {
 						const chg = sparkChange(c.spark);
 						return (
-							<a class="panel trend reveal-item" href={c.href}>
+							<a class="panel trend ga" data-ga="up" href={c.href}>
 								<span class="trend-lab">{c.label}</span>
 								<div class="trend-top">
-									<span class="trend-val">{pct(c.now)}</span>
+									<span class="trend-val" data-count-pct={c.now ?? 0}>{pct(c.now)}</span>
 									{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg * 100).toFixed(1)} pts / 30d</span>}
 								</div>
 								<Sparkline points={c.spark} color={c.color} label={`${c.label}, last 90 days`} />
@@ -245,7 +332,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		)}
 
 		{globeRaces.length > 0 && (
-			<section class="globe-panel" aria-labelledby="money-h">
+			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
 				<MoneyGlobe races={globeRaces} />
 				<div class="globe-copy">
 					<p class="eyebrow">Where the money is</p>
@@ -262,7 +349,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		)}
 
 		{senMap.length > 0 && (
-			<section>
+			<section data-ga-map>
 				<h2>The {nextYear} map</h2>
 				<p class="sec-note">Every state with a race, shaded by how strongly the markets favor one party. Tap a state for its race.</p>
 				<StateTileMap senate={senMap} governor={govMap} year={nextYear!} />
@@ -275,7 +362,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 					<h2 style="font-size:22px">Biggest moves this week</h2>
 					<p class="sec-note" style="margin:0 0 6px">Change in Democratic odds over 7 days.</p>
 					{moved.map((m) => (
-						<a class="mover" href={m.race.path}>
+						<a class="mover ga" data-ga="up" href={m.race.path}>
 							<span>{name(m.race)}</span>
 							<span class={`num ${m.delta >= 0 ? "up" : "down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
 							<small>{pct(m.from)} → {pct(m.to)} Democratic</small>
@@ -304,16 +391,16 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		</div>
 
 		{leaders.length > 0 && (
-			<section class="panel" data-anim>
+			<section class="panel">
 				<div class="analysis-head" style="margin-bottom:6px">
 					<h2 style="margin:0">Who wins the White House in {presYear}?</h2>
 					<a href={`/${presYear}/president/`} class="datalinks">Full presidential odds →</a>
 				</div>
 				<p class="sec-note">Each candidate's chance of winning the presidency, averaged across both exchanges, with 90 days of history.</p>
 				{leaders.map((l, i) => (
-					<div class="lb reveal-item">
+					<div class="lb ga" data-ga="up">
 						<span class="lb-rank">{i + 1}</span>
-						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>}</span>
+						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>}<span class="lb-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, (l.v / Math.max(leaders[0].v, 0.01)) * 100)}%;background:${partyColor(l.pa)}`}></i></span></span>
 						<Sparkline points={leaderSparks[i]} color={partyColor(l.pa)} height={30} label={`${l.n}, last 90 days`} />
 						<span class="num" style={`color:${partyColor(l.pa)}`}>{pct(l.v)}</span>
 					</div>
@@ -326,34 +413,7 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			</section>
 		)}
 
-		<section class="analysis" aria-labelledby="analysis-h">
-			<div class="analysis-head">
-				<h2 id="analysis-h" style="margin:0;font-size:32px">Analysis</h2>
-				<a href="/posts" class="datalinks">All analysis →</a>
-			</div>
-			{featured ? (
-				<div class="analysis-grid">
-					<a class="feature" href={`/posts/${featured.id}`}>
-						{featured.data.featured_image ? (
-							<div class="feature-img"><Image image={featured.data.featured_image} /></div>
-						) : (
-							<div class="feature-img fallback"><img src="/brand/logo-full.jpg" alt="" width="709" height="900" /></div>
-						)}
-						<span class="post-meta">{postDate(featured.data.publishedAt)}{featured.data.bylines?.[0] && ` · ${featured.data.bylines[0].byline.displayName}`}</span>
-						<h3>{featured.data.title}</h3>
-						{featured.data.excerpt && <p>{featured.data.excerpt}</p>}
-					</a>
-					<ul class="headlines">
-						{morePosts.map((p) => (
-							<li><a href={`/posts/${p.id}`}><span class="post-meta">{postDate(p.data.publishedAt)}{p.data.bylines?.[0] && ` · ${p.data.bylines[0].byline.displayName}`}</span><strong>{p.data.title}</strong>{p.data.excerpt && <span style="color:var(--color-text-secondary);font-size:14px">{p.data.excerpt}</span>}</a></li>
-						))}
-						{morePosts.length === 0 && <li class="post-meta" style="padding:12px 0">More analysis is on the way.</li>}
-					</ul>
-				</div>
-			) : (
-				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
-			)}
-		</section>
+
 
 		{coinFlips.length > 0 && (
 			<section>
@@ -375,27 +435,89 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	</div>
 </Base>
 
+<script is:inline>
+	// Hide animatable pieces until GSAP has set their starting positions (never longer than 2.5s).
+	if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		document.documentElement.classList.add("gsap-pending");
+		setTimeout(() => document.documentElement.classList.remove("gsap-pending"), 2500);
+	}
+</script>
 <script>
-	// Count-up numbers and reveal-on-scroll; everything is already visible without this script.
-	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-	const fmt = (v: number, money: boolean) =>
-		money ? (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`) : Math.round(v).toLocaleString();
-	const io = new IntersectionObserver((entries) => {
-		for (const e of entries) {
-			if (!e.isIntersecting) continue;
-			io.unobserve(e.target);
-			e.target.classList.add("in-view");
-			if (reduce) continue;
-			e.target.querySelectorAll<HTMLElement>("[data-count]").forEach((el) => {
-				const end = Number(el.dataset.count), money = el.dataset.format === "money", t0 = performance.now(), dur = 1400;
-				const step = (t: number) => {
-					const k = Math.min(1, (t - t0) / dur), ease = 1 - Math.pow(1 - k, 3);
-					el.textContent = fmt(end * ease, money);
-					if (k < 1) requestAnimationFrame(step);
-				};
-				requestAnimationFrame(step);
-			});
+	import { gsap } from "gsap";
+	import { ScrollTrigger } from "gsap/ScrollTrigger";
+	gsap.registerPlugin(ScrollTrigger);
+	const root = document.documentElement;
+	const money = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`);
+
+	// Ticker: seamless loop of the duplicated list; pauses on hover/focus.
+	const startTicker = (animate: boolean) => {
+		const view = document.querySelector<HTMLElement>("[data-ticker]");
+		const track = view?.querySelector<HTMLElement>(".ticker-track");
+		if (!view || !track) return;
+		if (!animate) { root.classList.add("no-ticker-motion"); return; }
+		const half = track.scrollWidth / 2;
+		const tween = gsap.to(track, { x: -half, duration: half / 45, ease: "none", repeat: -1 });
+		view.addEventListener("mouseenter", () => tween.pause());
+		view.addEventListener("mouseleave", () => tween.play());
+		view.addEventListener("focusin", () => tween.pause());
+		view.addEventListener("focusout", () => tween.play());
+	};
+
+	const mm = gsap.matchMedia();
+	mm.add("(prefers-reduced-motion: no-preference)", () => {
+		// Hero
+		const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+		tl.from(".hero-h1 .w", { yPercent: 110, opacity: 0, rotate: 4, duration: 0.7, stagger: 0.045 })
+			.from("[data-ga='hero']", { y: 18, opacity: 0, duration: 0.6, stagger: 0.12 }, 0.25)
+			.from("[data-ga='logo']", { scale: 0.82, rotate: -6, opacity: 0, duration: 1.1, ease: "elastic.out(1, 0.6)" }, 0.15);
+
+		// Count-ups
+		document.querySelectorAll<HTMLElement>("[data-count]").forEach((el) => {
+			const end = Number(el.dataset.count), isMoney = el.dataset.format === "money", o = { v: 0 };
+			gsap.to(o, { v: end, duration: 1.6, ease: "power2.out", scrollTrigger: { trigger: el, start: "top 92%" },
+				onUpdate: () => (el.textContent = isMoney ? money(o.v) : Math.round(o.v).toLocaleString()) });
+		});
+		document.querySelectorAll<HTMLElement>("[data-count-pct]").forEach((el) => {
+			const end = Number(el.dataset.countPct) * 100, o = { v: 0 };
+			gsap.to(o, { v: end, duration: 1.4, ease: "power2.out", scrollTrigger: { trigger: el, start: "top 92%" },
+				onUpdate: () => (el.textContent = `${Math.round(o.v)}%`) });
+		});
+
+		// Rise-in for cards, rows, articles
+		gsap.set("[data-ga='up']", { y: 26, opacity: 0, transition: "none" });
+		ScrollTrigger.batch("[data-ga='up']", { start: "top 90%", once: true,
+			onEnter: (els) => gsap.to(els, { y: 0, opacity: 1, duration: 0.7, ease: "power3.out", stagger: 0.07, clearProps: "transform,translate,opacity,transition" }) });
+
+		// Sparklines draw themselves
+		document.querySelectorAll<SVGPathElement>(".spark-line").forEach((path) => {
+			gsap.fromTo(path, { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut",
+				scrollTrigger: { trigger: path, start: "top 92%" } });
+		});
+
+		// Leaderboard bars grow
+		gsap.utils.toArray<HTMLElement>("[data-ga-bar]").forEach((bar) => {
+			gsap.from(bar, { scaleX: 0, transformOrigin: "left center", duration: 1.1, ease: "power3.out", scrollTrigger: { trigger: bar, start: "top 92%" } });
+		});
+
+		// Map tiles fill in from the center
+		document.querySelectorAll<HTMLElement>("[data-ga-map]").forEach((sec) => {
+			const tiles = sec.querySelectorAll(".stm-grid:not([hidden]) .stm-tile");
+			// explicit end values + transition off while animating (the tiles' CSS hover transition would fight GSAP)
+			gsap.fromTo(tiles, { scale: 0.4, opacity: 0, transition: "none" }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)",
+				stagger: { grid: [8, 12], from: "center", amount: 0.9 }, scrollTrigger: { trigger: sec, start: "top 80%" },
+				clearProps: "transform,scale,opacity,transition" });
+		});
+
+		// Globe panel: rises in, then drifts gently with the scroll
+		const globe = document.querySelector<HTMLElement>("[data-ga='globe']");
+		if (globe) {
+			gsap.from(globe, { y: 60, opacity: 0, scale: 0.97, duration: 1, ease: "power3.out", scrollTrigger: { trigger: globe, start: "top 85%" } });
+			gsap.to(globe.querySelector("[data-globe]"), { y: -30, ease: "none", scrollTrigger: { trigger: globe, start: "top bottom", end: "bottom top", scrub: true } });
 		}
-	}, { threshold: 0.2 });
-	document.querySelectorAll<HTMLElement>("[data-anim]").forEach((el) => { el.classList.add("anim-ready"); io.observe(el); });
+
+		root.classList.remove("gsap-pending");
+		startTicker(true);
+		return () => root.classList.remove("gsap-pending");
+	});
+	mm.add("(prefers-reduced-motion: reduce)", () => { root.classList.remove("gsap-pending"); startTicker(false); });
 </script>

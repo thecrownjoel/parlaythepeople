@@ -1,5 +1,5 @@
 ---
-/** Small trend line with a soft area fill and an end dot. Draws in once when it scrolls into view. */
+/** Small trend line with a soft area fill and an end dot. (The homepage animates it in with GSAP.) */
 import type { Spark } from "../lib/trends";
 interface Props { points: Spark[]; color?: string; height?: number; label: string }
 const { points, color = "var(--bt-d)", height = 44, label } = Astro.props;
@@ -26,8 +26,5 @@ const id = `sp${Math.random().toString(36).slice(2, 8)}`;
 <style>
 	.spark { width: 100%; height: auto; display: block; overflow: visible; }
 	.spark-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
-	:global(.anim-ready) .spark-line { stroke-dashoffset: 1; transition: stroke-dashoffset 1.4s cubic-bezier(.2,.7,.2,1); }
-	:global(.anim-ready.in-view) .spark-line { stroke-dashoffset: 0; }
 	.spark-none { font-size: 12px; color: var(--color-muted); }
-	@media (prefers-reduced-motion: reduce) { :global(.anim-ready) .spark-line { stroke-dashoffset: 0; transition: none; } }
 </style>

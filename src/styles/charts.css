@@ -1,0 +1,36 @@
+/* Shared styles for HistoryChart and MultiChart (also used by HTML fragments from /api/v1/chart and /api/v1/multichart). */
+
+	.hc-ranges { display: inline-flex; gap: 2px; padding: 3px; background: var(--bt-chip); border-radius: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+	.hc-ranges button { all: unset; cursor: pointer; padding: 5px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); font-family: var(--font-mono), monospace; }
+	.hc-ranges button:hover { color: var(--color-text); }
+	.hc-ranges button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+	.hc-ranges button:focus-visible { outline: 2px solid var(--color-text); outline-offset: 1px; }
+	.hc-body { transition: opacity 0.15s; }
+	.hc-body.hc-loading { opacity: 0.45; }
+	.hc-body .hc-move { margin: 0 0 10px; font-size: 14px; color: var(--color-text-secondary); }
+	.hc-body .hc { margin: 0; }
+	.hc-body .hc-plot { position: relative; height: 240px; margin: 8px 0 26px 40px; }
+	.hc-body .hc-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+	.hc-body .hc-grid { stroke: var(--color-border); stroke-width: 1; }
+	.hc-body .hc-mid { stroke: var(--color-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+	.hc-body .hc-y, .hc-body .hc-x { position: absolute; font: 11.5px var(--font-mono), monospace; color: var(--color-muted); white-space: nowrap; }
+	.hc-body .hc-y { left: -40px; width: 34px; text-align: right; transform: translateY(-50%); }
+	.hc-body .hc-x { top: calc(100% + 6px); }
+	.hc-body .hc-x1 { transform: translateX(-50%); }
+	.hc-body .hc-x2 { transform: translateX(-100%); }
+	.hc-body .hc-ed { stroke: #a3262a; stroke-width: 1.5; stroke-dasharray: 4 3; }
+	.hc-body .hc-edl { position: absolute; top: 2px; margin-left: 5px; font: 600 11.5px var(--font-body), sans-serif; color: #a3262a; white-space: nowrap; }
+	.hc-body .hc-edl-r { transform: translateX(-100%); margin-left: -5px; }
+	@media (max-width: 640px) { .hc-body .hc-plot { height: 190px; } }
+	.hc-body .hc-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--color-text-secondary); margin-top: 6px; }
+	.hc-body .hc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+	.hc-body .hc-solid, .hc-body .hc-dash { width: 18px; height: 0; border-top: 2px solid; display: inline-block; }
+	.hc-body .hc-dash { border-top-style: dashed; }
+	.hc-body .hc-empty { color: var(--color-text-secondary); font-size: 14px; margin: 0; }
+	@media (prefers-reduced-motion: reduce) { .hc-body { transition: none; } }
+
+	/* multi-line charts: end labels to the right of the plot */
+	.hc-multi .hc-plot { margin-right: 190px; }
+	.hc-end { position: absolute; left: calc(100% + 8px); transform: translateY(-50%); font-size: 12.5px; white-space: nowrap; max-width: 182px; overflow: hidden; text-overflow: ellipsis; }
+	.hc-end b { font-family: var(--font-mono), monospace; }
+	@media (max-width: 640px) { .hc-multi .hc-plot { margin-right: 112px; } .hc-end { font-size: 11px; max-width: 106px; } }

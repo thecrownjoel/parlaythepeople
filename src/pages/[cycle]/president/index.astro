@@ -3,6 +3,8 @@
 import Base from "../../../layouts/Base.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import HistoryChart from "../../../components/HistoryChart.astro";
+import MultiChart from "../../../components/MultiChart.astro";
+import { partyShades } from "../../../lib/palette";
 import { nameKey } from "../../../lib/names";
 import { getCycle, shares, pct, fmtVol, fmtDate, daysUntil, type Source, type PresMarket } from "../../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
@@ -43,8 +45,8 @@ function merged(m?: PresMarket, limit = 15) {
 			rows.set(key, row);
 		}
 	}
-	return [...rows.values()]
-		.map((r) => ({ ...r, avg: [r.k, r.p].filter((v) => v != null).reduce((a, b) => a! + b!, 0)! / [r.k, r.p].filter((v) => v != null).length }))
+	return [...rows.entries()]
+		.map(([key, r]) => ({ ...r, key, avg: [r.k, r.p].filter((v) => v != null).reduce((a, b) => a! + b!, 0)! / [r.k, r.p].filter((v) => v != null).length }))
 		.filter((r) => r.avg >= 0.003)
 		.sort((a, b) => b.avg - a.avg)
 		.slice(0, limit);
@@ -53,6 +55,12 @@ const winner = merged(pres.winner);
 const nomD = merged(pres.nomD, 12);
 const nomR = merged(pres.nomR, 12);
 const lead = winner[0];
+/** Chart lines for the top candidates of one market, colored by party. */
+function candidateSpecs(group: string, rows: typeof winner, n: number) {
+	const top = rows.slice(0, n);
+	const colors = partyShades(top.map((r) => r.pa));
+	return top.map((r, i) => ({ kind: "out" as const, id: `${year}-pres-${group}`, key: r.key, label: r.n, color: colors[i], dash: i % 2 === 1 }));
+}
 const lede = `As of ${when}, prediction markets give ${party ? `${party.D >= party.R ? "Democrats" : "Republicans"} a ${pct(Math.max(party.D, party.R))} chance of winning the ${year} presidential election` : `the ${year} presidential race to an open field`}${lead ? `. The single most likely winner is ${lead.n}${lead.pa ? ` (${lead.pa})` : ""} at ${pct(lead.avg)}` : ""}${nomD[0] && nomR[0] ? `, with ${nomD[0].n} leading the Democratic nomination (${pct(nomD[0].avg)}) and ${nomR[0].n} leading the Republican nomination (${pct(nomR[0].avg)})` : ""}.`;
 const faqs: [string, string][] = [
 	[`Who is favored to win the ${year} presidential election?`, lede],
@@ -110,6 +118,16 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 		<section>
 			<h2>Which party wins: price history</h2>
 			<div class="panel"><HistoryChart raceId={`${year}-president`} data={data} label="Democratic odds to win the presidency" /></div>
+		</section>
+
+		<section>
+			<h2>How the race has moved</h2>
+			<p class="sec-note">Each candidate's chance, averaged across Kalshi and Polymarket. Pick a range to zoom in or out; history goes back to November 2024.</p>
+			<div class="panel" style="display:flex;flex-direction:column;gap:26px">
+				{winner.length > 1 && <div><h3>Who wins the presidency</h3><MultiChart title="Who wins the presidency" specs={candidateSpecs("winner", winner, 6)} electionDay={data.meta.election_day} /></div>}
+				{nomD.length > 1 && <div><h3>Democratic nomination</h3><MultiChart title="Democratic nomination" specs={candidateSpecs("nomD", nomD, 5)} electionDay={data.meta.election_day} /></div>}
+				{nomR.length > 1 && <div><h3>Republican nomination</h3><MultiChart title="Republican nomination" specs={candidateSpecs("nomR", nomR, 5)} electionDay={data.meta.election_day} /></div>}
+			</div>
 		</section>
 
 		{markets.filter(([, m, rows]) => m && rows.length).map(([heading, m, rows]) => (

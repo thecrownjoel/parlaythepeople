@@ -110,3 +110,86 @@ export function renderChart(points: HistoryPoint[], o: ChartOptions): string {
 		+ `${ylab}${xlab}${markerLab}</div>`
 		+ `<figcaption class="hc-legend"><span><i class="hc-solid" style="border-color:${color}"></i>Kalshi</span><span><i class="hc-dash" style="border-color:${color}"></i>Polymarket</span><span>${esc(o.label)}, ${esc(fmt(t0))} – ${esc(fmt(t1))}</span></figcaption></figure>`;
 }
+
+// ---------------------------------------------------------------- multi-line charts
+/** One line on a multi-line chart: a race's party odds, or one outcome of a non-race market. */
+export interface SeriesSpec { kind: "race" | "out"; id: string; key: string; label: string; color: string; dash?: boolean }
+const SPEC_ID = /^[0-9]{4}-[a-z0-9-]{2,60}$/;
+export function validSpecs(x: unknown): SeriesSpec[] | null {
+	if (!Array.isArray(x) || !x.length || x.length > 8) return null;
+	const ok = x.every((s) => s && (s.kind === "race" || s.kind === "out") && SPEC_ID.test(s.id) && typeof s.key === "string" && s.key.length <= 80
+		&& typeof s.label === "string" && s.label.length <= 60 && typeof s.color === "string" && /^(#[0-9a-f]{3,8}|var\(--[a-z0-9-]+\))$/i.test(s.color));
+	return ok ? (x as SeriesSpec[]) : null;
+}
+
+/** Average of both exchanges for one line, thinned to the range's bucket size. */
+export async function getSpecSeries(spec: SeriesSpec, range: Range): Promise<{ ts: number; v: number }[]> {
+	const now = Math.floor(Date.now() / 1000);
+	const since = range.secs ? now - range.secs : 0;
+	let rows: { ts: number; a: number | null; b: number | null }[] = [];
+	try {
+		if (spec.kind === "race") {
+			const [a, b] = spec.key === "R" ? ["k_r", "p_r"] : ["k_d", "p_d"];
+			rows = (await env.MARKETS.prepare(`SELECT ts, ${a} AS a, ${b} AS b FROM race_history WHERE race_id = ? AND ts >= ? ORDER BY ts`)
+				.bind(spec.id, since).all<{ ts: number; a: number | null; b: number | null }>()).results ?? [];
+		} else {
+			rows = (await env.MARKETS.prepare("SELECT ts, k AS a, p AS b FROM outcome_history WHERE group_id = ? AND outcome = ? AND ts >= ? ORDER BY ts")
+				.bind(spec.id, spec.key, since).all<{ ts: number; a: number | null; b: number | null }>()).results ?? [];
+		}
+	} catch {
+		rows = [];
+	}
+	const pts = rows.map((r) => {
+		const v = [r.a, r.b].filter((x): x is number => x != null);
+		return v.length ? { ts: r.ts, v: v.reduce((x, y) => x + y, 0) / v.length } : null;
+	}).filter((p): p is { ts: number; v: number } => p != null);
+	if (!range.bucket) return pts;
+	const by = new Map<number, { ts: number; v: number }>();
+	for (const p of pts) by.set(Math.floor(p.ts / range.bucket), p);
+	return [...by.values()];
+}
+
+/** Several lines on one 0–100% chart, each labeled at its right end (labels nudged apart). */
+export function renderMulti(series: { spec: SeriesSpec; points: { ts: number; v: number }[] }[], o: { range: Range; electionDay?: string; title: string }): string {
+	const live = series.filter((s) => s.points.length > 1);
+	if (!live.length) return `<p class="hc-empty">Not enough recorded prices for ${esc(o.range.words)} yet; try a longer range.</p>`;
+	const t1 = Math.max(...live.map((s) => s.points[s.points.length - 1].ts));
+	const first = Math.min(...live.map((s) => s.points[0].ts));
+	const t0 = o.range.secs ? Math.min(first, t1 - o.range.secs) : first;
+	const span = Math.max(1, t1 - t0);
+	const xp = (t: number) => ((t - t0) / span) * 100;
+	const ns = 'vector-effect="non-scaling-stroke"';
+	const fmt = (t: number) => new Date(t * 1000).toLocaleString("en-US", span <= 2 * 86400
+		? { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }
+		: span <= 120 * 86400 ? { month: "short", day: "numeric", timeZone: "America/New_York" }
+		: { month: "short", year: "numeric", timeZone: "America/New_York" });
+	const grid = [0, 25, 50, 75, 100].map((v) => `<line x1="0" x2="1000" y1="${100 - v}" y2="${100 - v}" class="${v === 50 ? "hc-mid" : "hc-grid"}" ${ns}/>`).join("");
+	const ylab = [0, 25, 50, 75, 100].map((v) => `<span class="hc-y" style="top:${100 - v}%">${v}%</span>`).join("");
+	const xlab = [0, 50, 100].map((p, i) => `<span class="hc-x hc-x${i}" style="left:${p}%">${esc(fmt(t0 + (span * p) / 100))}</span>`).join("");
+	let marker = "", markerLab = "";
+	if (o.electionDay) {
+		const ed = Math.floor(new Date(`${o.electionDay}T19:00:00-05:00`).getTime() / 1000);
+		if (ed > t0 && ed < t1) {
+			const ex = xp(ed);
+			marker = `<line x1="${(ex * 10).toFixed(1)}" x2="${(ex * 10).toFixed(1)}" y1="0" y2="100" class="hc-ed" ${ns}/>`;
+			markerLab = `<span class="hc-edl${ex > 75 ? " hc-edl-r" : ""}" style="left:${ex.toFixed(2)}%">Election Day</span>`;
+		}
+	}
+	const paths = live.map((s) => {
+		const d = s.points.map((p, i) => `${i ? "L" : "M"}${(xp(p.ts) * 10).toFixed(1)},${((1 - p.v) * 100).toFixed(2)}`).join("");
+		return `<path d="${d}" fill="none" stroke="${s.spec.color}" stroke-width="2.2" ${s.spec.dash ? 'stroke-dasharray="6 4"' : ""} stroke-linejoin="round" ${ns}/>`;
+	}).join("");
+	// end labels, pushed apart so they don't overlap (in % of plot height)
+	const ends = live.map((s) => ({ s, y: (1 - s.points[s.points.length - 1].v) * 100, v: s.points[s.points.length - 1].v })).sort((a, b) => a.y - b.y);
+	// keep labels at least 8% apart and inside the plot (4%–96%)
+	for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 8) ends[i].y = ends[i - 1].y + 8;
+	const over = ends.length ? ends[ends.length - 1].y - 96 : 0;
+	if (over > 0) for (const e of ends) e.y -= over;
+	for (let i = ends.length - 2; i >= 0; i--) if (ends[i + 1].y - ends[i].y < 8) ends[i].y = ends[i + 1].y - 8;
+	for (const e of ends) e.y = Math.max(4, e.y);
+	const labels = ends.map((e) => `<span class="hc-end" style="top:${e.y.toFixed(1)}%;color:${e.s.spec.color}" title="${esc(e.s.spec.label)}"><b>${Math.round(e.v * 100)}%</b> ${esc(e.s.spec.label)}</span>`).join("");
+	const aria = `${o.title}, ${o.range.words}: ` + ends.map((e) => `${e.s.spec.label} ${Math.round(e.v * 100)}%`).join(", ");
+	return `<figure class="hc hc-multi"><div class="hc-plot">`
+		+ `<svg viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label="${esc(aria)}">${grid}${marker}${paths}</svg>`
+		+ `${ylab}${xlab}${markerLab}${labels}</div></figure>`;
+}
