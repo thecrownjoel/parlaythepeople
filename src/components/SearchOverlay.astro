@@ -96,7 +96,10 @@
 		const ps = posts.filter((p) => p.slug);
 		const block = (title: string, html: string) => `<section><h2 class="so-h">${title}</h2><ul>${html}</ul></section>`;
 		let html = "";
-		if (rs.length) html += block("Races", rs.map((r) => `<li><a class="so-item" href="${esc(r.p)}"><span class="so-t">${esc(r.t)}</span><span class="so-s">${esc(r.s)}</span></a></li>`).join(""));
+		const item = (r: Race) => `<li><a class="so-item" href="${esc(r.p)}"><span class="so-t">${esc(r.t)}</span><span class="so-s">${esc(r.s)}</span></a></li>`;
+		const pages = rs.filter((r) => (r as any).pg), raceHits = rs.filter((r) => !(r as any).pg);
+		if (raceHits.length) html += block("Races", raceHits.map(item).join(""));
+		if (pages.length) html += block("On this site", pages.map(item).join(""));
 		if (ps.length) html += block("Analysis", ps.map((p) => `<li><a class="so-item" href="/${p.collection === "pages" ? "pages" : "posts"}/${esc(p.slug!)}"><span class="so-t">${esc(strip(p.title) || p.slug!)}</span>${p.snippet ? `<span class="so-s">${esc(strip(p.snippet))}</span>` : ""}</a></li>`).join(""));
 		out.innerHTML = html || `<p class="so-empty">No races or articles match “${esc(q)}”. Try a state name, a district like “TX-28”, or a candidate's last name.</p>`;
 	}

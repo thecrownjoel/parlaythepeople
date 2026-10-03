@@ -6,7 +6,7 @@ import { getSocial, pulseIndex, compact } from "../../../lib/social";
 export const GET: APIRoute = async () => {
 	const [index, social] = await Promise.all([getIndex(), getSocial()]);
 	const find = pulseIndex(social);
-	const items: { t: string; s: string; p: string; k: string; y: number; soc?: number; c?: 1 }[] = [];
+	const items: { t: string; s: string; p: string; k: string; y: number; soc?: number; c?: 1; pg?: 1 }[] = [];
 	const seenCand = new Set<string>();
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
@@ -48,6 +48,6 @@ export const GET: APIRoute = async () => {
 		["Methodology", "How the numbers are made", "/methodology/", "methodology how odds probability ratings data"],
 		["Data & API", "Free JSON and CSV feeds", "/data/", "data api json csv download feed"],
 	];
-	for (const [t, sub, p, k] of pages) items.push({ t, s: sub, p, y: new Date().getUTCFullYear(), k: `${t} ${k}`.toLowerCase() });
+	for (const [t, sub, p, k] of pages) items.push({ t, s: sub, p, y: new Date().getUTCFullYear(), pg: 1, k: `${t} ${k}`.toLowerCase() });
 	return Response.json(items, { headers: { "cache-control": "public, max-age=600" } });
 };
