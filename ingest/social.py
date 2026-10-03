@@ -32,7 +32,12 @@ PROFANITY = re.compile(r"\b(f+u+c+k\w*|sh[i1]t\w*|ass(hole)?s?|bitch\w*|damn|cra
 STOP_TOPICS = {"to the", "if you", "link", "watch", "image", "twitter", "moment", "current", "the first", "including", "building",
                "product", "build", "stand", "white", "red", "save", "send", "step", "answer", "night", "job", "focus", "just in",
                "close", "hold", "break", "post", "data", "matter", "stay", "sit", "pay", "remember", "middle", "happen", "plan",
-               "care", "ground", "message", "reason", "major", "public", "national", "report", "country", "media", "government"}
+               "care", "ground", "message", "reason", "major", "public", "national", "report", "country", "media", "government",
+               # generic politics words: every candidate has these
+               "vote", "voting", "race", "election", "elections", "politics", "political", "democrat", "democrats", "republican",
+               "republicans", "campaign", "party", "president", "candidate", "office", "congress", "senate", "governor",
+               "united states", "support", "win", "lose", "chance", "running", "seat", "money", "left", "right", "law", "state",
+               "people", "news", "video", "today", "time", "year", "new", "live", "show", "talk", "fight", "join", "help", "need"}
 GENERIC = {"democrats", "republicans", "democratic party", "republican party", "democrat", "republican", "independent", "other"}
 
 
