@@ -26,6 +26,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out")
 KEY = os.environ.get("LUNARCRUSH_API_KEY", "")
 BASE = "https://lunarcrush.com/api4/public"
+import re  # noqa: E402
+PROFANITY = re.compile(r"\b(f+u+c+k\w*|sh[i1]t\w*|ass(hole)?s?|bitch\w*|damn|crap|piss\w*|bastard\w*|dick\w*|wtf|stfu|f\*+\w*)\b", re.I)
 GENERIC = {"democrats", "republicans", "democratic party", "republican party", "democrat", "republican", "independent", "other"}
 
 
@@ -80,6 +82,18 @@ def topics_from_cycles():
             add(n, "candidate", f"/{c['meta']['cycle']}/president/", posts=True)
     for t in config.SOCIAL_EXTRA_TOPICS:
         add(t, "topic")
+    # Same name in several races (e.g. two different "Mike Rogers"): keep the highest-profile race
+    # (president > Senate > governor > House); if that's still ambiguous, don't attach a pulse at all.
+    rank = lambda path: 0 if "/president/" in path else 1 if "/senate/" in path else 2 if "/governor/" in path else 3  # noqa: E731
+    for name, t in list(topics.items()):
+        if len(t["races"]) < 2:
+            continue
+        best = min(rank(r) for r in t["races"])
+        keep = [r for r in t["races"] if rank(r) == best]
+        if len(keep) > 1 and best >= 1:
+            del topics[name]
+        else:
+            t["races"] = keep
     return topics
 
 
@@ -104,6 +118,9 @@ def fetch(topic, meta):
                           "by": p.get("creator_display_name") or p.get("creator_name"), "av": p.get("creator_avatar"),
                           "f": p.get("creator_followers"), "i": p.get("interactions_24h") or 0,
                           "s": p.get("post_sentiment"), "net": p.get("post_type"), "at": p.get("post_created")})
+        # keep posts that actually name the candidate, and nothing crude
+        last = meta["name"].split()[-1].lower()
+        posts = [x for x in posts if last in x["t"].lower() and not PROFANITY.search(x["t"])]
         posts.sort(key=lambda x: -x["i"])
         posts = posts[: config.SOCIAL_POSTS_PER_TOPIC]
     last7 = sum(p[1] for p in series[-7:]) if series else 0

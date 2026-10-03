@@ -32,7 +32,7 @@ export interface CycleSummary { year: number; election_day: string; races: numbe
 export interface DataIndex { generated: string; next: number; cycles: CycleSummary[] }
 
 const memo = new Map<string, { t: number; v: unknown }>();
-async function r2json<T>(key: string): Promise<T | null> {
+export async function r2json<T>(key: string): Promise<T | null> {
 	const hit = memo.get(key);
 	if (hit && Date.now() - hit.t < 60_000) return hit.v as T;
 	const obj = await env.DATA.get(key);

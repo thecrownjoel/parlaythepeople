@@ -13,7 +13,7 @@
 	<div class="so-panel">
 		<form class="so-bar" role="search" data-search-form>
 			<svg class="so-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="2" /><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-			<input id="site-search-q" class="so-input" type="search" name="q" placeholder="Search a state, district, candidate or article" autocomplete="off" spellcheck="false" aria-controls="so-results" aria-describedby="so-hint" />
+			<input id="site-search-q" class="so-input" type="search" name="q" placeholder="Search a candidate, state, district or article" autocomplete="off" spellcheck="false" aria-controls="so-results" aria-describedby="so-hint" />
 			<button type="button" class="so-close" data-search-close aria-label="Close search">Esc</button>
 		</form>
 		<div id="so-results" class="so-results" aria-live="polite" data-search-results>
@@ -23,7 +23,7 @@
 </dialog>
 
 <script>
-	type Race = { t: string; s: string; p: string; k: string; y: number };
+	type Race = { t: string; s: string; p: string; k: string; y: number; soc?: number; c?: 1 };
 	type Post = { collection: string; slug: string | null; title?: string; snippet?: string };
 
 	const dialog = document.querySelector<HTMLDialogElement>("[data-search-dialog]")!;
@@ -39,13 +39,23 @@
 		try { races = (await (await fetch("/api/v1/search-index.json")).json()) as Race[]; } catch { races = []; }
 		return races;
 	}
+	/** Empty search: the candidates people are talking about most (LunarCrush). */
+	async function showTrending() {
+		const my = seq; // if a search starts while the index loads, its results win
+		const list = (await loadRaces()).filter((r) => r.c && r.soc).sort((a, b) => b.soc! - a.soc!);
+		if (my !== seq) return;
+		const seen = new Set<string>();
+		const top = list.filter((r) => !seen.has(r.t) && seen.add(r.t)).slice(0, 6);
+		if (!top.length || input.value.trim().length >= 2) return;
+		out.innerHTML = `<section><h2 class="so-h">Trending on social · <span style="text-transform:none;letter-spacing:0">data by LunarCrush</span></h2><ul>${top.map((r) => `<li><a class="so-item" href="${esc(r.p)}"><span class="so-t">${esc(r.t)}</span><span class="so-s">${esc(r.s)}</span></a></li>`).join("")}</ul></section><p class="so-empty" style="margin-top:4px">${hint.replace(/<[^>]+>/g, "")}</p>`;
+	}
 	function open() {
 		if (dialog.open) return;
 		dialog.showModal();
 		document.documentElement.classList.add("so-lock");
 		input.focus();
 		input.select();
-		loadRaces();
+		if (input.value.trim().length < 2) showTrending(); else loadRaces();
 	}
 	function close() { dialog.close(); }
 	dialog.addEventListener("close", () => document.documentElement.classList.remove("so-lock"));
@@ -65,7 +75,7 @@
 		const words = q.toLowerCase().split(/\s+/).filter(Boolean);
 		return list
 			.filter((r) => words.every((w) => r.k.includes(w)))
-			.map((r) => ({ r, score: (r.t.toLowerCase().startsWith(words[0]) ? 0 : 1) + (r.y >= thisYear ? 0 : 0.5) + (r.y - thisYear) / 100 }))
+			.map((r) => ({ r, score: (r.t.toLowerCase().startsWith(words[0]) ? 0 : 1) + (r.y >= thisYear ? 0 : 0.5) + (r.y - thisYear) / 100 - (r.soc ? Math.min(0.3, Math.log10(r.soc) / 30) : 0) }))
 			.sort((a, b) => a.score - b.score)
 			.slice(0, 8)
 			.map((x) => x.r);
@@ -73,7 +83,7 @@
 
 	async function search(q: string) {
 		const my = ++seq;
-		if (q.trim().length < 2) { out.innerHTML = hint; return; }
+		if (q.trim().length < 2) { out.innerHTML = hint; showTrending(); return; }
 		const [list, posts] = await Promise.all([
 			loadRaces(),
 			fetch(`/_emdash/api/search?${new URLSearchParams({ q, limit: "6", collections: "posts,pages" })}`)

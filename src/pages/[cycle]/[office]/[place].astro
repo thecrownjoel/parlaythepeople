@@ -12,6 +12,9 @@ import {
 } from "../../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
 import "../../../styles/data.css";
+import Sparkline from "../../../components/Sparkline.astro";
+import LunarCrushCredit from "../../../components/LunarCrushCredit.astro";
+import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 
 const { cycle, office, place } = Astro.params;
 if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
@@ -22,6 +25,18 @@ if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
 const c = consensus(race);
+const social = await getSocial();
+const rp = racePulse(race, pulseIndex(social));
+const pulseSides = ([["D", rp.dName, rp.d], ["R", rp.rName, rp.r]] as const).filter(([, , p]) => p);
+const socialPosts = [...(rp.d?.top ?? []), ...(rp.r?.top ?? [])]
+	.filter((p, i, a) => a.findIndex((q) => q.u === p.u) === i)
+	.sort((a, b) => b.i - a.i)
+	.slice(0, 5);
+const ago = (t: number | null) => {
+	if (!t) return "";
+	const h = Math.round((Date.now() / 1000 - t) / 3600);
+	return h < 1 ? "just now" : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+};
 const history = await getHistory(race.id);
 const ks = shares(race.k), ps = shares(race.p);
 const dName = candidate(race, "D"), rName = candidate(race, "R"), iName = candidate(race, "I");
@@ -94,6 +109,26 @@ const partyName = (p: string | null) => (p === "D" ? "Democratic" : p === "R" ? 
 const generic = (n: string) => /^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other)$/i.test(n.trim());
 ---
 <style>
+	.pulse-card { display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--pc); }
+	.pc-head { display: flex; align-items: center; gap: 8px; }
+	.pc-head strong { font-size: 17px; }
+	.pc-link { margin-left: auto; font-size: 12.5px; color: var(--color-text-secondary); }
+	.pc-up { color: var(--bt-pos); } .pc-down { color: var(--bt-r); }
+	.pc-foot { font-size: 11.5px; color: var(--color-muted); margin-top: -4px; }
+	.sov { display: grid; grid-template-columns: 110px minmax(0, 1fr) 60px; gap: 8px 12px; align-items: center; }
+	.sov-lab { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+	.sov .num { text-align: right; font-size: 13px; }
+	.split2 { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--color-border); }
+	.split2 i { display: block; height: 100%; }
+	.split2 .d { background: var(--bt-d); } .split2 .r { background: var(--bt-r); }
+	.posts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
+	.posts a { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 2px; border-bottom: 1px solid var(--color-border); text-decoration: none; color: inherit; }
+	.posts a:hover { background: var(--bt-hover); }
+	.posts img, .post-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--bt-chip); font-weight: 700; }
+	.post-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+	.post-by { font-size: 12.5px; color: var(--color-muted); }
+	.post-text { font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+	.post-i { font-size: 12.5px; color: var(--color-text-secondary); }
 	.quote-board { background: #11151c; color: #e8ebf0; border-radius: 12px; padding: 14px 16px; min-width: 0; box-shadow: inset 0 0 0 1px #222a35; }
 	.qb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
 	.qb-head a { font-family: var(--font-body); font-weight: 500; font-size: 12.5px; letter-spacing: 0; text-transform: none; color: #a9b0bc; }
@@ -183,6 +218,62 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 				))}
 			</div>
 		</section>
+
+		{pulseSides.length > 0 && (
+			<section aria-labelledby="pulse-h">
+				<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+					<h2 id="pulse-h">Social pulse</h2>
+					<LunarCrushCredit />
+				</div>
+				<p class="sec-note">What social media is saying about the candidates, next to what the markets are betting.{rp.sovD != null && ` ${rp.dName} has ${Math.round(rp.sovD * 100)}% of the conversation and ${Math.round(rp.oddsD * 100)}% of the odds.`}</p>
+				<div class="grid2">
+					{pulseSides.map(([party, name, p]) => (
+						<div class="panel pulse-card" style={`--pc:${party === "D" ? "var(--bt-d)" : "var(--bt-r)"}`}>
+							<div class="pc-head"><span class={`sw ${party}`}></span><strong>{name}</strong><a href={p!.link} target="_blank" rel="noopener" class="pc-link">LunarCrush ↗</a></div>
+							<dl class="facts">
+								<div><dt>Interactions (24h)</dt><dd class="num">{compact(p!.i24)}</dd></div>
+								<div><dt>People posting</dt><dd class="num">{p!.contributors.toLocaleString()}</dd></div>
+								<div><dt>Sentiment</dt><dd class="num">{p!.sentiment != null ? `${Math.round(p!.sentiment)}% positive` : "—"}</dd></div>
+								<div><dt>This week vs. last</dt><dd class={`num ${(p!.wow ?? 0) >= 0 ? "pc-up" : "pc-down"}`}>{p!.wow != null ? `${p!.wow >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(p!.wow * 100))}%` : "—"}</dd></div>
+							</dl>
+							<Sparkline points={p!.series.map(([t, v]) => ({ ts: t, v }))} color={party === "D" ? "var(--bt-d)" : "var(--bt-r)"} label={`${name}: social interactions, last 30 days`} />
+							<span class="pc-foot">Social interactions, last 30 days</span>
+						</div>
+					))}
+				</div>
+				{rp.sovD != null && (
+					<div class="panel" style="margin-top:14px">
+						<div class="sov">
+							<span class="sov-lab">Conversation</span>
+							<span class="split2"><i class="d" style={`width:${rp.sovD * 100}%`}></i><i class="r" style={`width:${(1 - rp.sovD) * 100}%`}></i></span>
+							<span class="num">{Math.round(rp.sovD * 100)} / {Math.round((1 - rp.sovD) * 100)}</span>
+							<span class="sov-lab">Market odds</span>
+							<span class="split2"><i class="d" style={`width:${rp.oddsD * 100}%`}></i><i class="r" style={`width:${(1 - rp.oddsD) * 100}%`}></i></span>
+							<span class="num">{Math.round(rp.oddsD * 100)} / {Math.round((1 - rp.oddsD) * 100)}</span>
+						</div>
+					</div>
+				)}
+				{socialPosts.length > 0 && (
+					<div style="margin-top:14px">
+						<h3>Top posts right now</h3>
+						<ul class="posts">
+							{socialPosts.map((p) => (
+								<li>
+									<a href={p.u} target="_blank" rel="noopener nofollow">
+										{p.av ? <img src={p.av} alt="" width="36" height="36" loading="lazy" referrerpolicy="no-referrer" /> : <span class="post-av" aria-hidden="true">{(p.by ?? "?").slice(0, 1)}</span>}
+										<span class="post-body">
+											<span class="post-by">{p.by ?? "Unknown"}{p.f ? ` · ${compact(p.f)} followers` : ""}{p.net ? ` · ${p.net}` : ""}{p.at ? ` · ${ago(p.at)}` : ""}</span>
+											<span class="post-text">{p.t}</span>
+										</span>
+										<span class="num post-i">{compact(p.i)}</span>
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+			</section>
+		)}
 
 		<section>
 			<h2>Price history</h2>

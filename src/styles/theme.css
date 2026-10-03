@@ -97,3 +97,14 @@ html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff
  * light-dark() into these --lightningcss-* switches). The footer theme switcher was removed from Base.astro.
  */
 :root, :root.light, :root.dark { --lightningcss-light: ; --lightningcss-dark: initial; color-scheme: dark; }
+
+/* Data partners band above the footer */
+.partners { border-top: 1px solid var(--color-border); background: #0c1015; }
+.partners-inner { max-width: var(--wide-width); margin: 0 auto; padding: 22px var(--spacing-6); display: flex; flex-wrap: wrap; align-items: center; gap: 14px 34px; }
+.partners-lab { font-family: var(--font-display); font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #7c8492; }
+.pt { text-decoration: none; font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -.01em; opacity: .9; transition: opacity .15s; }
+.pt:hover { opacity: 1; }
+.pt-k { color: #00dd94; } .pt-p { color: #2e5cff; }
+.pt img { height: 24px; width: auto; display: block; }
+.partners-note { margin-left: auto; font-size: 12.5px; color: #7c8492; }
+@media (max-width: 640px) { .partners-inner { padding: 18px var(--spacing-4); gap: 12px 22px; } .partners-note { margin-left: 0; flex-basis: 100%; } .pt { font-size: 18px; } .pt img { height: 20px; } }

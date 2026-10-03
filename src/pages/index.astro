@@ -14,6 +14,8 @@ import { getNews, getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, d
 import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, leadChanges, candidateMoves, type Spark } from "../lib/trends";
 import { nameKey } from "../lib/names";
 import { mediaUrls } from "../lib/media";
+import { getSocial, pulseIndex, racePulse, compact } from "../lib/social";
+import LunarCrushCredit from "../components/LunarCrushCredit.astro";
 import { organization, graph, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
 
@@ -21,12 +23,13 @@ const origin = Astro.url.origin;
 const index = await getIndex();
 const nextYear = index?.next;
 const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
-const [next, presCycle, posts, counts, news] = await Promise.all([
+const [next, presCycle, posts, counts, news, social] = await Promise.all([
 	nextYear ? getCycle(nextYear) : Promise.resolve(null),
 	presYear ? getCycle(presYear) : Promise.resolve(null),
 	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 13 }),
 	historyCounts(),
 	getNews(),
+	getSocial(),
 ]);
 if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
 
@@ -168,6 +171,32 @@ const presRows = presCycle ? [
 	{ group: `${presYear}-pres-nomR`, market: "Republican nomination", items: merged(presCycle.pres.nomR, 25) },
 ] : [];
 const cmoves = presYear ? await candidateMoves(presYear, presRows, 30) : { rising: [], fading: [] };
+
+// ---- the Pulse: social buzz (LunarCrush) vs. market odds
+const findPulse = pulseIndex(social);
+const h2h = races
+	.filter((r) => r.kind === "senate" || r.kind === "governor")
+	.map((r) => racePulse(r, findPulse))
+	.filter((x) => x.sovD != null)
+	.sort((a, b) => ((b.race.k?.v ?? 0) + (b.race.p?.v ?? 0)) - ((a.race.k?.v ?? 0) + (a.race.p?.v ?? 0)))
+	.slice(0, 6);
+/** A candidate's current market odds and where to read about them. */
+const presByKey = new Map(merged(presCycle?.pres.winner, 40).map((l) => [l.key, l]));
+const oddsFor = (p: { key: string; races: string[] }) => {
+	for (const path of p.races) {
+		if (path.endsWith("/president/")) { const l = presByKey.get(p.key); if (l) return { odds: l.v, party: l.pa, href: path, what: `${presYear} presidency` }; continue; }
+		const r = races.find((x) => x.path === path);
+		if (!r) continue;
+		for (const s of [r.k, r.p]) for (const o of s?.o ?? []) if (nameKey(o.n) === p.key) {
+			const c = consensus(r);
+			return { odds: o.pa === "D" ? c.D : o.pa === "R" ? c.R : c.O, party: o.pa, href: r.path, what: r.kind === "house" ? `${r.label}` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}` };
+		}
+	}
+	return null;
+};
+const pulses = Object.values(social?.topics ?? {}).filter((p) => p.kind === "candidate");
+const mostTalked = pulses.slice().sort((a, b) => b.i24 - a.i24).slice(0, 8).map((p) => ({ p, o: oddsFor(p) }));
+const buzzRising = pulses.filter((p) => (p.wow ?? 0) >= 0.4 && p.i24 >= 150_000).sort((a, b) => (b.wow ?? 0) - (a.wow ?? 0)).slice(0, 5).map((p) => ({ p, o: oddsFor(p) }));
 
 const h1Words = "Political News, Election odds from Kalshi and Polymarket, race by race".split(" ");
 const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -321,6 +350,23 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	.star-bar i { display: block; height: 100%; border-radius: 3px; }
 	.star .num { text-align: right; font-weight: 600; }
 	.star-ft { grid-column: 1 / -1; font-size: 12px; color: var(--color-muted); text-align: left !important; font-weight: 400 !important; }
+
+	/* the pulse */
+	.h2h { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+	.h2h-row { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--color-surface); border: 1px solid var(--color-border); text-decoration: none; color: inherit; }
+	.h2h-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+	.h2h-top strong { font-family: var(--font-display); font-size: 17px; }
+	.h2h-names { font-size: 13px; color: var(--color-text-secondary); }
+	.h2h-bars { display: grid; grid-template-columns: 88px minmax(0, 1fr) 56px; gap: 6px 10px; align-items: center; }
+	.h2h-lab { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+	.split2 { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; background: var(--color-border); }
+	.split2 i { display: block; height: 100%; }
+	.split2 .d { background: var(--bt-d); } .split2 .r { background: var(--bt-r); }
+	.h2h-n { font-size: 12px; text-align: right; color: var(--color-text-secondary); }
+	.h2h-call { font-size: 12.5px; font-weight: 600; color: #f5b041; }
+	.talk { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
+	.talk-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.talk-name em { display: block; font-style: normal; font-weight: 400; font-size: 12px; color: var(--color-muted); }
 
 	/* analysis lineup */
 	.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
@@ -491,6 +537,72 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 
 
 
+
+
+		{(h2h.length > 0 || mostTalked.length > 0) && (
+			<section class="pulse" aria-labelledby="pulse-h">
+				<div class="analysis-head" style="margin-bottom:4px">
+					<h2 id="pulse-h" style="margin:0">The Pulse: buzz vs. odds</h2>
+					<LunarCrushCredit />
+				</div>
+				<p class="sec-note">Markets show where the money is; social shows where the conversation is. When the two disagree, something is usually about to give.</p>
+				{h2h.length > 0 && (
+					<div class="h2h">
+						{h2h.map((x) => {
+							const gap = x.sovD! - x.oddsD;
+							const louder = gap > 0 ? { name: x.dName, buzz: x.sovD!, odds: x.oddsD } : { name: x.rName, buzz: 1 - x.sovD!, odds: 1 - x.oddsD };
+							return (
+								<a class="h2h-row ga" data-ga="up" href={x.race.path}>
+									<div class="h2h-top">
+										<strong>{x.race.state} {x.race.kind === "senate" ? "Senate" : "Governor"}</strong>
+										<span class="h2h-names"><span style="color:var(--bt-d)">{x.dName}</span> vs. <span style="color:var(--bt-r)">{x.rName}</span></span>
+									</div>
+									<div class="h2h-bars">
+										<span class="h2h-lab">Conversation</span>
+										<span class="split2"><i class="d" data-ga-bar style={`width:${x.sovD! * 100}%`}></i><i class="r" style={`width:${(1 - x.sovD!) * 100}%`}></i></span>
+										<span class="num h2h-n">{Math.round(x.sovD! * 100)} / {Math.round((1 - x.sovD!) * 100)}</span>
+										<span class="h2h-lab">Odds</span>
+										<span class="split2"><i class="d" data-ga-bar style={`width:${x.oddsD * 100}%`}></i><i class="r" style={`width:${(1 - x.oddsD) * 100}%`}></i></span>
+										<span class="num h2h-n">{Math.round(x.oddsD * 100)} / {Math.round((1 - x.oddsD) * 100)}</span>
+									</div>
+									{Math.abs(gap) >= 0.15 && louder.name && (
+										<span class="h2h-call">{louder.name}: {Math.round(louder.buzz * 100)}% of the buzz, {Math.round(louder.odds * 100)}% of the odds</span>
+									)}
+								</a>
+							);
+						})}
+					</div>
+				)}
+				<div class="grid2" style="margin-top:16px">
+					{mostTalked.length > 0 && (
+						<div class="panel">
+							<h3 style="font-size:18px">Most talked-about · last 24 hours</h3>
+							{mostTalked.map(({ p, o }, i) => (
+								<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
+									<span class="lb-rank">{i + 1}</span>
+									<span class="talk-name">{p.name}<em>{compact(p.i24)} interactions · {p.sentiment != null ? `${Math.round(p.sentiment)}% positive` : "sentiment n/a"}</em></span>
+									<span class="num" style={`color:${o?.party === "D" ? "var(--bt-d)" : o?.party === "R" ? "var(--bt-r)" : "var(--color-muted)"}`}>{o ? pct(o.odds) : "—"}</span>
+								</a>
+							))}
+							<p class="sec-note" style="margin:8px 0 0;font-size:12px">Right column: each candidate's market odds in their race.</p>
+						</div>
+					)}
+					{buzzRising.length > 0 && (
+						<div class="panel">
+							<h3 style="font-size:18px">Buzz rising · this week</h3>
+							{buzzRising.map(({ p, o }) => (
+								<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
+									<span class="num up" style="text-align:left">{(p.wow ?? 0) >= 3 ? `×${Math.round(1 + (p.wow ?? 0))}` : `▲${Math.round((p.wow ?? 0) * 100)}%`}</span>
+									<span class="talk-name">{p.name}<em>{o?.what ?? "Politics"} · {compact(p.i24)} interactions today</em></span>
+									<span class="num" style={`color:${o?.party === "D" ? "var(--bt-d)" : o?.party === "R" ? "var(--bt-r)" : "var(--color-muted)"}`}>{o ? pct(o.odds) : "—"}</span>
+								</a>
+							))}
+							<p class="sec-note" style="margin:8px 0 0;font-size:12px">Change in social interactions vs. the week before, with current market odds.</p>
+						</div>
+					)}
+				</div>
+			</section>
+		)}
 
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
