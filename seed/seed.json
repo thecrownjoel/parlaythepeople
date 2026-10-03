@@ -187,11 +187,6 @@
 					"type": "custom",
 					"label": "Analysis",
 					"url": "/posts"
-				},
-				{
-					"type": "custom",
-					"label": "Guide",
-					"url": "/guide/"
 				}
 			]
 		}

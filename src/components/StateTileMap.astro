@@ -65,13 +65,15 @@ const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
 	<div class="stm-legend">{ORDER.map((r) => <span><i class={`rt-${r}`}></i>{RATING_LABEL[r]}</span>)}<span><i class="stm-none"></i>No race</span></div>
 </div>
 <script>
-	for (const el of document.querySelectorAll<HTMLElement>("[data-stm]")) {
-		el.querySelectorAll<HTMLButtonElement>("[data-office]").forEach((b) => b.addEventListener("click", () => {
-			el.querySelectorAll("[data-office]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-			el.querySelectorAll<HTMLElement>("[data-map]").forEach((m) => (m.hidden = m.dataset.map !== b.dataset.office));
-			el.dispatchEvent(new CustomEvent("stm:office", { detail: b.dataset.office, bubbles: true }));
-		}));
-	}
+	// delegated, so maps swapped in by a date picker keep working
+	document.addEventListener("click", (e) => {
+		const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-stm] [data-office]");
+		const el = b?.closest<HTMLElement>("[data-stm]");
+		if (!b || !el) return;
+		el.querySelectorAll("[data-office]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+		el.querySelectorAll<HTMLElement>("[data-map]").forEach((m) => (m.hidden = m.dataset.map !== b.dataset.office));
+		el.dispatchEvent(new CustomEvent("stm:office", { detail: b.dataset.office, bubbles: true }));
+	});
 </script>
 <style>
 	.stm-tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--bt-chip); border-radius: 8px; margin-bottom: 14px; }

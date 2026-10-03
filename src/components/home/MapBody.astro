@@ -1,0 +1,29 @@
+---
+/** The map as of a moment: every Senate, governor and House race shaded by the odds then. */
+import StateTileMap from "../StateTileMap.astro";
+import { candidate, rating, type Race } from "../../lib/markets";
+import { stateRaces, racesAt, type StateRace } from "../../lib/trends";
+import { traded$, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { next, nextYear } = d;
+const at = period.now ? null : await racesAt(period.ts);
+/** One race's tile, using the odds at the period when it isn't "now" (races with no price then are left off). */
+const then = (kind: "senate" | "governor" | "house"): StateRace[] => {
+	if (!next) return [];
+	if (!at) return stateRaces(next, kind);
+	return next.races.filter((r: Race) => r.kind === kind && at.has(r.id)).map((r: Race) => {
+		const D = at.get(r.id)!.D;
+		const lead = D >= 0.5 ? "D" : "R";
+		const lp = Math.max(D, 1 - D);
+		return { st: r.st, state: r.state, label: r.label, path: r.path, lead, lp, D, rating: rating(lead, lp), vol: traded$(r), who: candidate(r, lead) };
+	});
+};
+const sen = then("senate"), gov = then("governor"), house = then("house");
+---
+<p class="sec-note">{period.now
+	? "Every Senate, governor and House race, shaded by how strongly the markets favor one party. Tap any state or district for its race page."
+	: `The markets ${period.at}: every race shaded by its odds then. Dollar figures are totals traded to date. Tap any state or district for its race page.`}</p>
+{!period.now && <p class="asof-badge">Showing odds {period.at}</p>}
+<StateTileMap senate={sen} governor={gov} house={house} year={nextYear!} />

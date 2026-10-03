@@ -1,0 +1,45 @@
+---
+/** The big picture: headline Democratic odds now, their change over the period and the line through it. */
+import Sparkline from "../Sparkline.astro";
+import { consensus, pct } from "../../lib/markets";
+import { raceSeries, outcomeSeries, seriesChange, type Spark } from "../../lib/trends";
+import { avgShares, pts, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { next, nextYear, presYear, presCycle, senC, houseC } = d;
+const presParty = avgShares(presCycle?.pres.party);
+const bopNow = next?.big?.bop ? (["k", "p"] as const).map((x) => next.big.bop[x]?.o?.DD).filter((v): v is number => v != null) : [];
+const [sSen, sHouse, sPres, sSweep, sPv] = await Promise.all([
+	senC ? raceSeries(senC.id, period.ts) : Promise.resolve([] as Spark[]),
+	houseC ? raceSeries(houseC.id, period.ts) : Promise.resolve([] as Spark[]),
+	presYear ? raceSeries(`${presYear}-president`, period.ts) : Promise.resolve([] as Spark[]),
+	nextYear ? outcomeSeries(`${nextYear}-bop`, "DD", period.ts) : Promise.resolve([] as Spark[]),
+	nextYear ? outcomeSeries(`${nextYear}-majority`, "popvote-D", period.ts) : Promise.resolve([] as Spark[]),
+]);
+type Card = { label: string; sub: string; now: number | null; spark: Spark[]; href: string };
+const cards = [
+	senC && { label: "Democrats win the Senate", sub: `${nextYear}`, now: consensus(senC).D, spark: sSen, href: senC.path },
+	houseC && { label: "Democrats win the House", sub: `${nextYear}`, now: consensus(houseC).D, spark: sHouse, href: houseC.path },
+	presParty && { label: "Democrats win the presidency", sub: `${presYear}`, now: presParty.D, spark: sPres, href: `/${presYear}/president/` },
+	bopNow.length && { label: "Democrats sweep Congress", sub: `${nextYear} balance of power`, now: bopNow.reduce((a, b) => a + b, 0) / bopNow.length, spark: sSweep, href: `/${nextYear}/` },
+	sPv.length && { label: "Democrats win the House vote", sub: `${nextYear} national popular vote`, now: sPv[sPv.length - 1].v, spark: sPv, href: `/${nextYear}/` },
+].filter(Boolean) as Card[];
+---
+<p class="sec-note">Democratic odds now, and how they've moved {period.since}.</p>
+<div class="trends">
+	{cards.map((c) => {
+		const chg = seriesChange(c.spark);
+		return (
+			<a class="panel trend ga" data-ga="up" href={c.href}>
+				<span class="trend-lab">{c.label}</span>
+				<div class="trend-top">
+					<span class="trend-val" data-count-pct={c.now ?? 0}>{pct(c.now)}</span>
+					{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{pts(chg)} pts</span>}
+				</div>
+				<Sparkline points={c.spark} color="var(--bt-d)" label={`${c.label}, ${period.since}`} />
+				<span class="trend-sub">{c.sub}</span>
+			</a>
+		);
+	})}
+</div>

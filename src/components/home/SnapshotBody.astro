@@ -1,0 +1,65 @@
+---
+/** Midterms snapshot: control gauges and headline tiles, with each number's change over the period. */
+import { consensus, pct, fmtVol } from "../../lib/markets";
+import { racesAt, outcomesAt } from "../../lib/trends";
+import { traded$, pts, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { next, nextYear, senC, houseC, races } = d;
+const now = Math.floor(Date.now() / 1000);
+const [at, bopThen, majThen, majNow] = await Promise.all([
+	racesAt(period.ts),
+	outcomesAt(`${nextYear}-bop`, period.ts),
+	outcomesAt(`${nextYear}-majority`, period.ts),
+	outcomesAt(`${nextYear}-majority`, now),
+]);
+const medianBin = (g: any) => {
+	const src = g?.k ?? g?.p; if (!src) return null;
+	let c = 0;
+	for (const b of src.bins) { c += b.p; if (c >= 0.5) return b.l as string; }
+	return null;
+};
+const senMedian = medianBin(next?.big?.senate), houseMedian = medianBin(next?.big?.house);
+const bopNow = next?.big?.bop ? (["k", "p"] as const).map((x) => next.big.bop[x]?.o?.DD).filter((v): v is number => v != null) : [];
+const sweepNow = bopNow.length ? bopNow.reduce((a, b) => a + b, 0) / bopNow.length : null;
+const sweepThen = bopThen.get("DD") ?? null;
+const pvNow = majNow.get("popvote-D") ?? null, pvThen = majThen.get("popvote-D") ?? null;
+const contested = races.filter((r) => r.kind !== "control");
+const tossups = contested.filter((r) => consensus(r).rating === "T").length;
+const tossThen = contested.filter((r) => at.has(r.id)).filter((r) => Math.max(at.get(r.id)!.D, 1 - at.get(r.id)!.D) < 0.6).length;
+const traded = races.reduce((a, r) => a + traded$(r), 0);
+const chg = (now: number | null, then: number | null | undefined) => (now == null || then == null ? null : now - then);
+---
+<div class="snap-grid">
+	{[["Senate", senC, senMedian, 50], ["House", houseC, houseMedian, 218]].map(([ch, r, med, maj]: any) => {
+		if (!r) return null;
+		const c = consensus(r);
+		const dash = 251.3; // half-circle length for r = 80
+		const dd = chg(c.D, at.get(r.id)?.D);
+		return (
+			<a class="gauge-card" href={r.path}>
+				<span class="gauge-label">{ch} control</span>
+				<svg class="gauge" viewBox="0 0 200 116" role="img" aria-label={`${ch}: Democrats ${pct(c.D)}, Republicans ${pct(c.R)}`}>
+					<path d="M20 100 A80 80 0 0 1 180 100" class="g-track" />
+					<path d="M20 100 A80 80 0 0 1 180 100" class="g-r" />
+					<path d="M20 100 A80 80 0 0 1 180 100" class="g-d" stroke-dasharray={`${(c.D * dash).toFixed(1)} ${dash}`} data-gauge={c.D} />
+					<line x1="100" y1="14" x2="100" y2="30" class="g-mid" />
+				</svg>
+				<div class="gauge-nums">
+					<span class="gn-d"><b data-count-pct={c.D}>{pct(c.D)}</b> Dem</span>
+					<span class="gn-r"><b data-count-pct={c.R}>{pct(c.R)}</b> GOP</span>
+				</div>
+				{dd != null && <span class={`gauge-chg ${Math.abs(dd) < 0.005 ? "flat" : dd > 0 ? "chg-d" : "chg-r"}`}>{Math.abs(dd) < 0.005 ? "No change" : `${dd > 0 ? "Dem" : "GOP"} ${pts(Math.abs(dd))} pts`} {period.since}</span>}
+				{med && <span class="gauge-sub">Median outcome: {med} Republican seats · {maj} for control</span>}
+				<span class="gauge-money">{fmtVol(traded$(r))} traded on {ch} control</span>
+			</a>
+		);
+	})}
+	<div class="snap-tiles">
+		{sweepNow != null && (() => { const v = chg(sweepNow, sweepThen); return <div class="snap-tile"><b data-count-pct={sweepNow}>{pct(sweepNow)}</b><span>Democrats sweep both chambers</span>{v != null && <em class="tile-chg">{pts(v)} pts {period.since}</em>}</div>; })()}
+		{pvNow != null && (() => { const v = chg(pvNow, pvThen); return <div class="snap-tile"><b data-count-pct={pvNow}>{pct(pvNow)}</b><span>Democrats win the national House vote</span>{v != null && <em class="tile-chg">{pts(v)} pts {period.since}</em>}</div>; })()}
+		<div class="snap-tile"><b data-count={tossups}>{tossups}</b><span>races rated toss-up</span>{at.size > 0 && <em class="tile-chg">{tossups === tossThen ? "unchanged" : `${tossups > tossThen ? "▲" : "▼"} ${Math.abs(tossups - tossThen)}, was ${tossThen}`} {period.since}</em>}</div>
+		<div class="snap-tile"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span><em class="tile-chg">total to date</em></div>
+	</div>
+</div>

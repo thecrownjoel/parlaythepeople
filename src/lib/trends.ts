@@ -4,6 +4,7 @@
  */
 import { env } from "cloudflare:workers";
 import { consensus, candidate, shares, type CycleData, type Race } from "./markets";
+import { bucketFor } from "./period";
 
 export interface Spark { ts: number; v: number }
 
@@ -61,19 +62,20 @@ export function outcomeSpark(group: string, outcome: string, days = 90): Promise
 	});
 }
 
-/** Each race's Democratic odds about `days` ago (latest point at or before then), for computing moves. */
-export function racesAgo(days: number): Promise<Map<string, number>> {
-	return cached(`ago:${days}`, 10 * 60_000, async () => {
-		const t = Math.floor(Date.now() / 1000) - days * 86400;
+export interface RaceAt { D: number; k: number | null; p: number | null }
+/** Each race's Democratic odds at `ts` (latest point at or before then, within 4 days), per exchange and averaged. */
+export function racesAt(ts: number): Promise<Map<string, RaceAt>> {
+	const t = ts - (ts % 600); // 10-minute steps keep the memo useful
+	return cached(`at:${t}`, 10 * 60_000, async () => {
 		try {
 			// SQLite returns the row holding MAX(ts) for bare columns in an aggregate query.
 			const { results } = await env.MARKETS.prepare(
 				"SELECT race_id, k_d, p_d, MAX(ts) AS ts FROM race_history WHERE ts <= ? AND ts > ? GROUP BY race_id",
 			).bind(t, t - 4 * 86400).all<{ race_id: string; k_d: number | null; p_d: number | null }>();
-			const m = new Map<string, number>();
+			const m = new Map<string, RaceAt>();
 			for (const r of results ?? []) {
 				const v = avg(r.k_d, r.p_d);
-				if (v != null) m.set(r.race_id, v);
+				if (v != null) m.set(r.race_id, { D: v, k: r.k_d, p: r.p_d });
 			}
 			return m;
 		} catch {
@@ -82,9 +84,65 @@ export function racesAgo(days: number): Promise<Map<string, number>> {
 	});
 }
 
+/** Each race's Democratic odds about `days` ago. */
+export async function racesAgo(days: number): Promise<Map<string, number>> {
+	const at = await racesAt(Math.floor(Date.now() / 1000) - days * 86400);
+	return new Map([...at].map(([k, v]) => [k, v.D]));
+}
+
+/** Series from `ts` to now for one race's Democratic or Republican odds, bucketed to suit the span. */
+export function raceSeries(raceId: string, ts: number, party: "D" | "R" = "D"): Promise<Spark[]> {
+	const t = ts - (ts % 600), bucket = bucketFor(t);
+	return cached(`rser:${raceId}:${t}:${party}`, 5 * 60_000, async () => {
+		try {
+			const { results } = await env.MARKETS.prepare(
+				"SELECT ts, k_d, k_r, p_d, p_r FROM race_history WHERE race_id = ? AND ts >= ? ORDER BY ts",
+			).bind(raceId, t - 4 * 86400).all<{ ts: number; k_d: number | null; k_r: number | null; p_d: number | null; p_r: number | null }>();
+			return thin((results ?? []).map((r) => ({ ts: r.ts, v: party === "D" ? avg(r.k_d, r.p_d) : avg(r.k_r, r.p_r) })), t, bucket);
+		} catch {
+			return [];
+		}
+	});
+}
+
+/** Series from `ts` to now for one outcome, bucketed to suit the span. */
+export function outcomeSeries(group: string, outcome: string, ts: number): Promise<Spark[]> {
+	const t = ts - (ts % 600), bucket = bucketFor(t);
+	return cached(`oser:${group}:${outcome}:${t}`, 5 * 60_000, async () => {
+		try {
+			const { results } = await env.MARKETS.prepare(
+				"SELECT ts, k, p FROM outcome_history WHERE group_id = ? AND outcome = ? AND ts >= ? ORDER BY ts",
+			).bind(group, outcome, t - 4 * 86400).all<{ ts: number; k: number | null; p: number | null }>();
+			return thin((results ?? []).map((r) => ({ ts: r.ts, v: avg(r.k, r.p) })), t, bucket);
+		} catch {
+			return [];
+		}
+	});
+}
+
+/** Keep the last point per bucket; the series starts with the latest point at or before `t`. */
+function thin(rows: { ts: number; v: number | null }[], t: number, bucket: number): Spark[] {
+	const pts = rows.filter((r): r is Spark => r.v != null);
+	const before = pts.filter((p) => p.ts <= t).pop();
+	const after = pts.filter((p) => p.ts > t);
+	// at most ~150 points, whatever the span: a sparkline can't show more
+	const now = after.length ? after[after.length - 1].ts : t;
+	const b = Math.max(bucket, Math.ceil((now - t) / 150));
+	const by = new Map<number, Spark>();
+	for (const p of after) by.set(b ? Math.floor(p.ts / b) : p.ts, p);
+	return [...(before ? [{ ts: t, v: before.v }] : []), ...by.values()];
+}
+
+/** Change across a series (last minus first), or null without two points. */
+export const seriesChange = (s: Spark[]) => (s.length < 2 ? null : s[s.length - 1].v - s[0].v);
+
 export interface Mover { race: Race; from: number; to: number; delta: number }
 export async function movers(data: CycleData, days = 7, n = 6): Promise<Mover[]> {
-	const then = await racesAgo(days);
+	return moversSince(data, Math.floor(Date.now() / 1000) - days * 86400, n);
+}
+export async function moversSince(data: CycleData, ts: number, n = 6): Promise<Mover[]> {
+	const at = await racesAt(ts);
+	const then = new Map([...at].map(([k, v]) => [k, v.D]));
 	return data.races
 		.filter((r) => r.kind !== "control" && then.has(r.id))
 		.map((r) => {
@@ -127,8 +185,12 @@ export { shares };
 
 /** Each outcome's value in a market group about `days` ago (average of both exchanges). */
 export function outcomesAgo(group: string, days: number): Promise<Map<string, number>> {
-	return cached(`oago:${group}:${days}`, 10 * 60_000, async () => {
-		const t = Math.floor(Date.now() / 1000) - days * 86400;
+	return outcomesAt(group, Math.floor(Date.now() / 1000) - days * 86400);
+}
+/** Each outcome's value in a market group at `ts` (average of both exchanges). */
+export function outcomesAt(group: string, ts: number): Promise<Map<string, number>> {
+	const t = ts - (ts % 600);
+	return cached(`oat:${group}:${t}`, 10 * 60_000, async () => {
 		try {
 			const { results } = await env.MARKETS.prepare(
 				"SELECT outcome, k, p, MAX(ts) AS ts FROM outcome_history WHERE group_id = ? AND ts <= ? AND ts > ? GROUP BY outcome",
@@ -150,6 +212,20 @@ export interface LeadChange { race: Race; days: number; from: number; to: number
  * Races whose favorite flipped: the party behind `days` ago now leads (by at least 5 points past even).
  * Checks 30 days first, then 90, so the freshest flips come first.
  */
+export async function leadChangesSince(data: CycleData, ts: number, n = 6): Promise<LeadChange[]> {
+	const at = await racesAt(ts);
+	const days = Math.max(1, Math.round((Date.now() / 1000 - ts) / 86400));
+	const out: LeadChange[] = [];
+	for (const r of data.races) {
+		const then = at.get(r.id);
+		if (r.kind === "control" || !then) continue;
+		const from = then.D, to = consensus(r).D;
+		if ((from - 0.5) * (to - 0.5) >= 0 || Math.abs(to - 0.5) < 0.05) continue;
+		const nowLeader = to > 0.5 ? "D" : "R";
+		out.push({ race: r, days, from, to, nowLeader, who: candidate(r, nowLeader), was: candidate(r, nowLeader === "D" ? "R" : "D") });
+	}
+	return out.sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from)).slice(0, n);
+}
 export async function leadChanges(data: CycleData, n = 6): Promise<LeadChange[]> {
 	const out: LeadChange[] = [];
 	const seen = new Set<string>();
@@ -170,9 +246,12 @@ export async function leadChanges(data: CycleData, n = 6): Promise<LeadChange[]>
 export interface Mover2 { name: string; key: string; pa: string | null; now: number; then: number; delta: number; market: string }
 /** Candidates whose odds moved most over `days` in the presidential markets (winner and both nominations). */
 export async function candidateMoves(year: number, rows: { group: string; market: string; items: { key: string; n: string; pa: string | null; v: number }[] }[], days = 30) {
+	return candidateMovesSince(rows, Math.floor(Date.now() / 1000) - days * 86400);
+}
+export async function candidateMovesSince(rows: { group: string; market: string; items: { key: string; n: string; pa: string | null; v: number }[] }[], ts: number) {
 	const all: Mover2[] = [];
 	for (const g of rows) {
-		const then = await outcomesAgo(g.group, days);
+		const then = await outcomesAt(g.group, ts);
 		for (const it of g.items) {
 			if (!then.has(it.key)) continue;
 			const t = then.get(it.key)!;

@@ -1,0 +1,32 @@
+---
+/** White House leaderboard: each candidate's odds now, the change over the period and the line through it. */
+import Sparkline from "../Sparkline.astro";
+import { pct, fmtVol } from "../../lib/markets";
+import { outcomeSeries, seriesChange } from "../../lib/trends";
+import { merged, partyColor, pts, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { presYear, presCycle } = d;
+const leaders = merged(presCycle?.pres.winner, 6);
+const sparks = await Promise.all(leaders.map((l) => outcomeSeries(`${presYear}-pres-winner`, l.key, period.ts)));
+const nomD = merged(presCycle?.pres.nomD, 3), nomR = merged(presCycle?.pres.nomR, 3);
+---
+<p class="sec-note">Each candidate's chance of winning the presidency, averaged across both exchanges, and the change {period.since}.</p>
+{leaders.map((l, i) => {
+	const chg = seriesChange(sparks[i]);
+	return (
+		<div class="lb lb-chg ga" data-ga="up">
+			<span class="lb-rank">{i + 1}</span>
+			<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>} <small class="money">{fmtVol(l.vol)} traded</small><span class="lb-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, (l.v / Math.max(leaders[0].v, 0.01)) * 100)}%;background:${partyColor(l.pa)}`}></i></span></span>
+			<Sparkline points={sparks[i]} color={partyColor(l.pa)} height={30} label={`${l.n}, ${period.since}`} />
+			<span class={`lb-delta num ${chg == null || Math.abs(chg) < 0.0005 ? "" : chg > 0 ? "up" : "down"}`}>{chg == null ? "—" : Math.abs(chg) < 0.0005 ? "±0" : pts(chg)}</span>
+			<span class="num" style={`color:${partyColor(l.pa)}`}>{pct(l.v)}</span>
+		</div>
+	);
+})}
+<div class="noms">
+	{([["Democratic nomination", nomD, "var(--bt-d)"], ["Republican nomination", nomR, "var(--bt-r)"]] as const).map(([t, rows, c]) => rows.length > 0 && (
+		<div><strong style="font-size:14px">{t}</strong><ol>{rows.map((r) => <li>{r.n} <span class="num" style={`color:${c}`}>{pct(r.v)}</span></li>)}</ol></div>
+	))}
+</div>

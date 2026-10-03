@@ -1,0 +1,25 @@
+---
+/** Closest races as of a moment: the smallest favorite's edge, now or on a past date. */
+import { consensus, pct, fmtVol } from "../../lib/markets";
+import { racesAt } from "../../lib/trends";
+import { raceName, traded$, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const at = period.now ? null : await racesAt(period.ts);
+const rows = d.races
+	.filter((r) => r.kind !== "control")
+	.map((r) => {
+		if (!at) { const c = consensus(r); return { r, lead: c.lead, lp: c.lp }; }
+		const D = at.get(r.id)?.D;
+		return D == null ? null : { r, lead: D >= 0.5 ? "D" : "R", lp: Math.max(D, 1 - D) };
+	})
+	.filter((x): x is NonNullable<typeof x> => !!x)
+	.sort((a, b) => a.lp - b.lp)
+	.slice(0, 8);
+---
+{!period.now && <p class="sec-note" style="margin:0 0 6px">The closest races {period.at}.</p>}
+<ul class="racelist" style="grid-template-columns:1fr">
+	{rows.map(({ r, lead, lp }) => <li><a href={r.path}>{raceName(r)}</a><span class="num"><span class={lead === "D" ? "dlead" : "rlead"}>{lead} {pct(lp)}</span> <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
+</ul>
+<p class="datalinks" style="margin-top:10px"><a href={`/${d.nextYear}/`}>All {d.nextYear} races →</a></p>

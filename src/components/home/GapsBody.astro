@@ -1,0 +1,24 @@
+---
+/** Where the exchanges disagree, now or on a past date: the biggest Kalshi–Polymarket gaps in Democratic odds. */
+import { shares, fmtVol } from "../../lib/markets";
+import { racesAt } from "../../lib/trends";
+import { raceName, traded$, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const at = period.now ? null : await racesAt(period.ts);
+const gaps = d.races
+	.map((r) => {
+		if (!at) return r.k && r.p ? { r, g: Math.abs(shares(r.k)!.D - shares(r.p)!.D) } : null;
+		const x = at.get(r.id);
+		return x?.k != null && x?.p != null ? { r, g: Math.abs(x.k - x.p) } : null;
+	})
+	.filter((x): x is NonNullable<typeof x> => !!x)
+	.sort((a, b) => b.g - a.g)
+	.slice(0, 6);
+---
+<p class="sec-note" style="margin:0 0 6px">Largest gaps in Democratic odds between Kalshi and Polymarket{period.now ? "" : ` ${period.at}`}.</p>
+{gaps.length === 0 && <p class="empty-note">Too few races traded on both exchanges {period.at} to compare.</p>}
+<ul class="racelist" style="grid-template-columns:1fr">
+	{gaps.map(({ r, g }) => <li><a href={r.path}>{raceName(r)}</a><span class="num">{(g * 100).toFixed(1)} pts <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
+</ul>

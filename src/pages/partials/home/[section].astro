@@ -1,0 +1,29 @@
+---
+/** One homepage section's body for a period (?p=24h|7d|30d|60d|now|YYYY-MM-DD), swapped in by its date picker. */
+import SnapshotBody from "../../../components/home/SnapshotBody.astro";
+import BigPictureBody from "../../../components/home/BigPictureBody.astro";
+import MovingBody from "../../../components/home/MovingBody.astro";
+import PulseBody from "../../../components/home/PulseBody.astro";
+import MapBody from "../../../components/home/MapBody.astro";
+import MoversBody from "../../../components/home/MoversBody.astro";
+import ClosestBody from "../../../components/home/ClosestBody.astro";
+import GapsBody from "../../../components/home/GapsBody.astro";
+import LeadersBody from "../../../components/home/LeadersBody.astro";
+import { homeData, SECTIONS, type SectionKey } from "../../../lib/home";
+import { parsePeriod } from "../../../lib/period";
+export const partial = true;
+
+const BODIES = { snapshot: SnapshotBody, big: BigPictureBody, moving: MovingBody, pulse: PulseBody, map: MapBody, movers: MoversBody, closest: ClosestBody, gaps: GapsBody, leaders: LeadersBody };
+const key = Astro.params.section as SectionKey;
+const sec = SECTIONS[key];
+if (!sec) return new Response("Unknown section", { status: 404 });
+const raw = Astro.url.searchParams.get("p");
+// "now" only makes sense for sections that show a moment
+const period = parsePeriod(raw === "now" && !sec.asOf ? sec.def : raw, sec.def);
+const d = await homeData();
+const Body = BODIES[key];
+// prices refresh every 10 minutes; let the edge and browser reuse a section for a few
+Astro.response.headers.set("cache-control", "public, max-age=300");
+Astro.response.headers.set("x-robots-tag", "noindex");
+---
+<Body d={d} period={period} />

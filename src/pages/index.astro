@@ -11,13 +11,26 @@ import Sparkline from "../components/Sparkline.astro";
 import StateTileMap from "../components/StateTileMap.astro";
 import MoneyGlobe from "../components/MoneyGlobe.astro";
 import { getNews, getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, daysUntil, PARTY_PLURAL, type Race, type PresMarket, type Source } from "../lib/markets";
-import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, leadChanges, candidateMoves, type Spark } from "../lib/trends";
+import { movers, historyCounts, stateRaces } from "../lib/trends";
 import { nameKey } from "../lib/names";
 import { mediaUrls } from "../lib/media";
 import { getSocial, pulseIndex, racePulse, compact } from "../lib/social";
 import LunarCrushCredit from "../components/LunarCrushCredit.astro";
+import PeriodPicker from "../components/PeriodPicker.astro";
+import SnapshotBody from "../components/home/SnapshotBody.astro";
+import BigPictureBody from "../components/home/BigPictureBody.astro";
+import MovingBody from "../components/home/MovingBody.astro";
+import PulseBody from "../components/home/PulseBody.astro";
+import MapBody from "../components/home/MapBody.astro";
+import MoversBody from "../components/home/MoversBody.astro";
+import ClosestBody from "../components/home/ClosestBody.astro";
+import GapsBody from "../components/home/GapsBody.astro";
+import LeadersBody from "../components/home/LeadersBody.astro";
+import { homeData, SECTIONS, type SectionKey } from "../lib/home";
+import { parsePeriod } from "../lib/period";
 import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
+import "../styles/home.css";
 
 const origin = Astro.url.origin;
 const index = await getIndex();
@@ -32,6 +45,10 @@ const [next, presCycle, posts, counts, news, social] = await Promise.all([
 	getSocial(),
 ]);
 if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
+const home = await homeData();
+const P = Object.fromEntries(Object.entries(SECTIONS).map(([k, v]) => [k, parsePeriod(v.def, v.def)])) as Record<SectionKey, ReturnType<typeof parsePeriod>>;
+const socialStart = Math.min(...Object.values(home.social?.topics ?? {}).flatMap((p) => p.series.slice(0, 1).map((x) => x[0])), Math.floor(Date.now() / 1000));
+const pickerOf = (k: SectionKey) => ({ section: k, period: P[k], withNow: SECTIONS[k].asOf, presets: [...SECTIONS[k].presets] as string[], ...(k === "pulse" ? { min: new Date(socialStart * 1000).toISOString().slice(0, 10) } : {}) });
 
 const races = next?.races ?? [];
 const byId = (id: string) => races.find((r) => r.id === id);
@@ -62,30 +79,6 @@ const lede = summary.length
 // ---- stats band
 const totalRaces = (index?.cycles ?? []).reduce((a, c) => a + c.races, 0);
 const traded = races.reduce((a, r) => a + (r.k?.v ?? 0) + (r.p?.v ?? 0), 0);
-
-// ---- trend cards (90-day lines; change over 30 days)
-type Card = { label: string; sub: string; now: number | null; color: string; spark: Spark[]; href: string };
-const sparkChange = (s: Spark[]) => {
-	if (s.length < 2) return null;
-	const cut = s[s.length - 1].ts - 30 * 86400;
-	const base = [...s].reverse().find((p) => p.ts <= cut) ?? s[0];
-	return s[s.length - 1].v - base.v;
-};
-const bopNow = next?.big?.bop ? (["k", "p"] as const).map((x) => next.big.bop[x]?.o?.DD).filter((v) => v != null) : [];
-const [sSen, sHouse, sPres, sSweep, sPv] = await Promise.all([
-	senC ? raceSpark(senC.id) : Promise.resolve([]),
-	houseC ? raceSpark(houseC.id) : Promise.resolve([]),
-	presYear ? raceSpark(`${presYear}-president`) : Promise.resolve([]),
-	nextYear ? outcomeSpark(`${nextYear}-bop`, "DD") : Promise.resolve([]),
-	nextYear ? outcomeSpark(`${nextYear}-majority`, "popvote-D") : Promise.resolve([]),
-]);
-const cards: Card[] = [
-	senC && { label: "Democrats win the Senate", sub: `${nextYear}`, now: consensus(senC).D, color: "var(--bt-d)", spark: sSen, href: senC.path },
-	houseC && { label: "Democrats win the House", sub: `${nextYear}`, now: consensus(houseC).D, color: "var(--bt-d)", spark: sHouse, href: houseC.path },
-	presParty && { label: "Democrats win the presidency", sub: `${presYear}`, now: presParty.D, color: "var(--bt-d)", spark: sPres, href: `/${presYear}/president/` },
-	bopNow.length && { label: "Democrats sweep Congress", sub: `${nextYear} balance of power`, now: (bopNow as number[]).reduce((a, b) => a + b, 0) / bopNow.length, color: "var(--bt-d)", spark: sSweep, href: `/${nextYear}/` },
-	sPv.length && { label: "Democrats win the House vote", sub: `${nextYear} national popular vote`, now: sPv[sPv.length - 1].v, color: "var(--bt-d)", spark: sPv, href: `/${nextYear}/` },
-].filter(Boolean) as Card[];
 
 // ---- map & globe
 const senMap = next ? stateRaces(next, "senate") : [];
@@ -126,8 +119,6 @@ function merged(m?: PresMarket, limit = 6) {
 	return [...rows.values()].map((r) => ({ ...r, v: r.vals.reduce((a, b) => a + b, 0) / r.vals.length })).sort((a, b) => b.v - a.v).slice(0, limit);
 }
 const leaders = merged(presCycle?.pres.winner, 6);
-const leaderSparks = await Promise.all(leaders.map((l) => outcomeSpark(`${presYear}-pres-winner`, l.key)));
-const nomD = merged(presCycle?.pres.nomD, 3), nomR = merged(presCycle?.pres.nomR, 3);
 
 // ---- ballot measures closest to a coin flip (skip thin markets)
 const coinFlips = (next?.big?.ballots ?? []).filter((b: any) => !b.thin).sort((a: any, b: any) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5)).slice(0, 6);
@@ -155,52 +146,8 @@ const ticker: { text: string; href: string; tag: string; external?: boolean }[] 
 	...moved.slice(0, 3).map((m) => ({ text: `${name(m.race)}: Democratic odds ${m.delta >= 0 ? "up" : "down"} ${Math.abs(m.delta * 100).toFixed(1)} pts this week`, href: m.race.path, tag: "Movers" })),
 	...closest.slice(0, 2).map(({ r, c }) => ({ text: `Toss-up watch: ${name(r)} at ${c.lead} ${pct(c.lp)}`, href: r.path, tag: "Close race" })),
 ];
-// ---- midterms snapshot: control gauges, median seat counts, headline tiles
-const medianBin = (g: any) => {
-	const src = g?.k ?? g?.p; if (!src) return null;
-	let c = 0;
-	for (const b of src.bins) { c += b.p; if (c >= 0.5) return b.l as string; }
-	return null;
-};
-const senMedian = medianBin(next?.big?.senate), houseMedian = medianBin(next?.big?.house);
-const tossups = races.filter((r) => r.kind !== "control" && consensus(r).rating === "T").length;
-const sweepNow = cards.find((c) => c.label.startsWith("Democrats sweep"))?.now ?? null;
-const pvNow = cards.find((c) => c.label.startsWith("Democrats win the House vote"))?.now ?? null;
-
-// ---- storylines: lead changes and candidate moves
-const flips = next ? await leadChanges(next, 6) : [];
-const presRows = presCycle ? [
-	{ group: `${presYear}-pres-winner`, market: "presidency", items: merged(presCycle.pres.winner, 25) },
-	{ group: `${presYear}-pres-nomD`, market: "Democratic nomination", items: merged(presCycle.pres.nomD, 25) },
-	{ group: `${presYear}-pres-nomR`, market: "Republican nomination", items: merged(presCycle.pres.nomR, 25) },
-] : [];
-const cmoves = presYear ? await candidateMoves(presYear, presRows, 30) : { rising: [], fading: [] };
-
-// ---- the Pulse: social buzz (LunarCrush) vs. market odds
-const findPulse = pulseIndex(social);
-const h2h = races
-	.filter((r) => r.kind === "senate" || r.kind === "governor")
-	.map((r) => racePulse(r, findPulse))
-	.filter((x) => x.sovD != null)
-	.sort((a, b) => ((b.race.k?.v ?? 0) + (b.race.p?.v ?? 0)) - ((a.race.k?.v ?? 0) + (a.race.p?.v ?? 0)))
-	.slice(0, 6);
-/** A candidate's current market odds and where to read about them. */
-const presByKey = new Map(merged(presCycle?.pres.winner, 40).map((l) => [l.key, l]));
-const oddsFor = (p: { key: string; races: string[] }) => {
-	for (const path of p.races) {
-		if (path.endsWith("/president/")) { const l = presByKey.get(p.key); if (l) return { odds: l.v, party: l.pa, href: path, what: `${presYear} presidency` }; continue; }
-		const r = races.find((x) => x.path === path);
-		if (!r) continue;
-		for (const s of [r.k, r.p]) for (const o of s?.o ?? []) if (nameKey(o.n) === p.key) {
-			const c = consensus(r);
-			return { odds: o.pa === "D" ? c.D : o.pa === "R" ? c.R : c.O, party: o.pa, href: r.path, what: r.kind === "house" ? `${r.label}` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}` };
-		}
-	}
-	return null;
-};
+// ---- the Pulse shows when LunarCrush has candidates
 const pulses = Object.values(social?.topics ?? {}).filter((p) => p.kind === "candidate");
-const mostTalked = pulses.slice().sort((a, b) => b.i24 - a.i24).slice(0, 8).map((p) => ({ p, o: oddsFor(p) }));
-const buzzRising = pulses.filter((p) => (p.wow ?? 0) >= 0.4 && p.i24 >= 150_000).sort((a, b) => (b.wow ?? 0) - (a.wow ?? 0)).slice(0, 5).map((p) => ({ p, o: oddsFor(p) }));
 
 const h1Words = "Political News, Election odds from Kalshi and Polymarket, race by race".split(" ");
 const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -209,200 +156,7 @@ const ld = graph(organization(origin), {
 	"@type": "WebSite", "@id": `${origin}/#site`, url: `${origin}/`, name: SITE_NAME, description: SITE_DESCRIPTION, publisher: { "@id": `${origin}/#org` },
 	potentialAction: { "@type": "SearchAction", target: `${origin}/search?q={query}`, "query-input": "required name=query" },
 });
-const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "R" ? "var(--bt-r)" : "var(--bt-oth)");
 ---
-<style>
-	.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
-	.home-hero-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-	.home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; display: block; filter: drop-shadow(0 12px 28px rgb(163 38 42 / 0.25)); }
-	@media (max-width: 760px) { .home-hero { grid-template-columns: 1fr; } .home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; } }
-
-	.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
-	.stat { background: var(--color-surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
-	.stat b { font-family: var(--font-display); font-size: clamp(26px, 3.2vw, 36px); line-height: 1; font-variant-numeric: tabular-nums; }
-	.stat span { font-size: 12.5px; color: var(--color-text-secondary); }
-
-	.globe-panel { background: #11151c; color: #e8ebf0; border-radius: 16px; padding: clamp(18px, 3vw, 32px); display: flex; flex-direction: column; gap: 22px; overflow: hidden; position: relative; }
-	.globe-panel::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 60% at 30% 40%, rgb(163 38 42 / 0.18), transparent 70%); pointer-events: none; }
-	.globe-panel h2 { color: #fff; }
-	.globe-panel .eyebrow { color: #a9b0bc; }
-	.globe-copy { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 28px; align-items: start; }
-	.globe-copy > .gc-intro, .globe-copy > .gc-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-	@media (max-width: 860px) { .globe-copy { grid-template-columns: 1fr; } }
-	.globe-copy p { margin: 0; color: #c3c9d3; max-width: 52ch; }
-	.money-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-	.money-list a { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid #222a35; color: #e8ebf0; text-decoration: none; font-size: 14px; }
-	.money-list a:hover { color: #fff; }
-	.money-list .num { color: #a9b0bc; font-size: 13px; }
-	.live-box { background: #161c25; border: 1px solid #222a35; border-radius: 12px; padding: 10px 12px; }
-	.live-head { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
-	.live-head strong { color: #fff; }
-	.live-status { margin-left: auto; color: #7c8492; font-size: 12px; }
-	.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 0 rgb(76 195 138 / .6); animation: livepulse 1.8s infinite; }
-	@keyframes livepulse { 0% { box-shadow: 0 0 0 0 rgb(76 195 138 / .55); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-	@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
-	.live-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 30px; }
-	.live-list :global(a) { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid #1b222c; color: #e8ebf0; text-decoration: none; font-size: 13px; animation: ltin .5s ease; }
-	.live-list :global(.lt-usd) { font-family: var(--font-mono), monospace; font-weight: 600; }
-	.live-list :global(.lt-what) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.live-list :global(.lt-when) { color: #7c8492; font-size: 12px; }
-	.live-empty { color: #7c8492; font-size: 12.5px; padding: 6px 0; }
-	@keyframes ltin { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
-	.legend-dark { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #a9b0bc; }
-	.legend-dark span { display: inline-flex; align-items: center; gap: 6px; }
-	.legend-dark i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-
-
-	.trend { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
-	.trend:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgb(0 0 0 / .12); }
-	.trend-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-	.trend-val { font-family: var(--font-display); font-size: 34px; line-height: 1; color: var(--bt-d); font-variant-numeric: tabular-nums; }
-	.trend-chg { font-family: var(--font-mono), monospace; font-size: 12.5px; }
-	.up { color: var(--bt-pos); } .down { color: var(--bt-r); }
-	.trend-lab { font-weight: 600; font-size: 14px; }
-	.trend-sub { font-size: 12px; color: var(--color-muted); }
-	.trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 14px; }
-
-	.mover { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
-	.mover small { grid-column: 1; color: var(--color-muted); font-size: 12px; }
-	.mover .num { grid-row: span 2; align-self: center; font-size: 14px; font-weight: 600; }
-
-	.lb { display: grid; grid-template-columns: 22px minmax(0, 1fr) 110px 56px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); }
-	.lb-rank { font-family: var(--font-mono), monospace; color: var(--color-muted); font-size: 13px; }
-	.lb-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.lb-name small { font-weight: 400; color: var(--color-muted); }
-	.lb .num { text-align: right; font-weight: 600; }
-	.noms { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
-	.noms ol { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 3px; }
-
-	.analysis { border-top: 3px solid var(--color-text); padding-top: 18px; }
-	.analysis-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-	.analysis-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
-	.feature { text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 10px; }
-	.feature-img { border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: #11151c; }
-	.feature-img :global(img) { width: 100%; height: 100%; object-fit: cover; display: block; }
-	.feature-img.fallback { display: flex; align-items: center; justify-content: center; }
-	.feature-img.fallback img { width: auto; height: 86%; border-radius: 8px; object-fit: contain; }
-	.feature h3 { font-family: var(--font-display); font-size: clamp(24px, 3vw, 34px); line-height: 1.1; margin: 0; }
-	.feature p { margin: 0; color: var(--color-text-secondary); font-size: 16px; line-height: 1.55; }
-	.post-meta { font-size: 12.5px; color: var(--color-muted); }
-	.headlines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-	.headlines a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--color-border); text-decoration: none; color: inherit; }
-	.headlines a:hover strong { text-decoration: underline; }
-	.headlines strong { font-size: 17px; line-height: 1.3; }
-	.analysis-empty { background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: 12px; padding: 24px; color: var(--color-text-secondary); }
-	@media (max-width: 860px) { .analysis-grid { grid-template-columns: 1fr; } }
-	@media (max-width: 520px) { .noms { grid-template-columns: 1fr; } .lb { grid-template-columns: 18px minmax(0, 1fr) 70px 48px; } }
-
-	.hero-h1 .w { display: inline-block; }
-	:global(html.gsap-pending) .ga { visibility: hidden; }
-	@media (prefers-reduced-motion: reduce) { .trend { transition: none; } }
-
-	.ticker { display: flex; align-items: stretch; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-surface); }
-	.ticker-label { flex: none; display: flex; align-items: center; padding: 0 14px; background: #a3262a; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
-	.ticker-view { overflow: hidden; flex: 1; min-width: 0; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
-	.ticker-track { list-style: none; margin: 0; padding: 0; display: flex; width: max-content; }
-	.ticker-track a { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; white-space: nowrap; text-decoration: none; color: var(--color-text); font-weight: 500; font-size: 14px; border-right: 1px solid var(--color-border); }
-	.ticker-track a:hover { text-decoration: underline; }
-	.ticker-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
-	:global(html.no-ticker-motion) .ticker-view { overflow-x: auto; }
-
-	/* midterms snapshot */
-	.snap { background: #11151c; color: #e8ebf0; border-radius: 18px; padding: clamp(18px, 3vw, 30px); display: flex; flex-direction: column; gap: 18px; position: relative; overflow: hidden; }
-	.snap::before { content: ""; position: absolute; inset: -40% -10% auto auto; width: 70%; height: 140%; background: radial-gradient(closest-side, rgb(163 38 42 / .22), transparent); pointer-events: none; }
-	.snap h2 { color: #fff; margin: 0; }
-	.snap-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; position: relative; }
-	.snap-count { display: flex; flex-direction: column; align-items: flex-end; }
-	.snap-count b { font-family: var(--font-display); font-size: clamp(44px, 6vw, 64px); line-height: .9; color: #fff; font-variant-numeric: tabular-nums; }
-	.snap-count span { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #a9b0bc; }
-	.snap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.1fr); gap: 16px; position: relative; }
-	@media (max-width: 960px) { .snap-grid { grid-template-columns: 1fr 1fr; } .snap-tiles { grid-column: 1 / -1; } }
-	@media (max-width: 560px) { .snap-grid { grid-template-columns: 1fr; } }
-	.gauge-card { background: #161c25; border: 1px solid #222a35; border-radius: 14px; padding: 14px 16px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 4px; transition: border-color .15s; }
-	.gauge-card:hover { border-color: #3d4756; }
-	.gauge-label { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; color: #a9b0bc; }
-	.gauge { width: 100%; height: auto; display: block; }
-	.g-track { fill: none; stroke: #222a35; stroke-width: 18; }
-	.g-r { fill: none; stroke: #e85a4c; stroke-width: 18; }
-	.g-d { fill: none; stroke: #5e92ee; stroke-width: 18; }
-	.g-mid { stroke: #fff; stroke-width: 2; opacity: .7; }
-	.gauge-nums { display: flex; justify-content: space-between; margin-top: -6px; }
-	.gauge-nums b { font-family: var(--font-display); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
-	.gn-d { color: #5e92ee; } .gn-r { color: #e85a4c; text-align: right; }
-	.gauge-sub { font-size: 12px; color: #a9b0bc; }
-	.gauge-money { font: 600 13px var(--font-mono), monospace; color: #f5c451; }
-	.money { color: #e0b44f; font-family: var(--font-mono), monospace; font-weight: 600; }
-	.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-	.snap-tile { background: #161c25; border: 1px solid #222a35; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
-	.snap-tile b { font-family: var(--font-display); font-size: 28px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
-	.snap-tile span { font-size: 12.5px; color: #a9b0bc; }
-	.snap-foot { margin: 0; font-size: 12.5px; color: #7c8492; position: relative; }
-	.snap-foot a { color: #e8ebf0; }
-
-	/* storylines */
-	.flips { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
-	.flip { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); text-decoration: none; color: inherit; overflow: hidden; }
-	.flip::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
-	.flip-tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
-	.flip-race { font-family: var(--font-display); font-size: 20px; }
-	.flip-story { font-size: 14px; color: var(--color-text-secondary); }
-	.flip-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-	.fb { display: block; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
-	.fb i { display: block; height: 100%; background: var(--color-muted); border-radius: 3px; }
-	.fb.now { height: 9px; }
-	.star { display: grid; grid-template-columns: minmax(0, 1fr) 90px 56px; grid-template-rows: auto auto; gap: 2px 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); }
-	.star-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.star-name small { font-weight: 400; color: var(--color-muted); }
-	.star-name em { display: block; font-style: normal; font-weight: 400; font-size: 12px; color: var(--color-muted); }
-	.star-bar { display: block; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
-	.star-bar i { display: block; height: 100%; border-radius: 3px; }
-	.star .num { text-align: right; font-weight: 600; }
-	.star-ft { grid-column: 1 / -1; font-size: 12px; color: var(--color-muted); text-align: left !important; font-weight: 400 !important; }
-
-	/* the pulse */
-	.h2h { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
-	.h2h-row { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--color-surface); border: 1px solid var(--color-border); text-decoration: none; color: inherit; }
-	.h2h-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-	.h2h-top strong { font-family: var(--font-display); font-size: 17px; }
-	.h2h-names { font-size: 13px; color: var(--color-text-secondary); }
-	.h2h-bars { display: grid; grid-template-columns: 88px minmax(0, 1fr) 56px; gap: 6px 10px; align-items: center; }
-	.h2h-lab { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
-	.split2 { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; background: var(--color-border); }
-	.split2 i { display: block; height: 100%; }
-	.split2 .d { background: var(--bt-d); } .split2 .r { background: var(--bt-r); }
-	.h2h-n { font-size: 12px; text-align: right; color: var(--color-text-secondary); }
-	.h2h-call { font-size: 12.5px; font-weight: 600; color: #f5b041; }
-	.talk { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
-	.talk-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.talk-name em { display: block; font-style: normal; font-weight: 400; font-size: 12px; color: var(--color-muted); }
-
-	/* analysis lineup */
-	.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
-	.lu-row { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--color-border); transition: background .15s, padding .2s; }
-	.lu-row:hover { background: var(--bt-hover); padding-left: 10px; }
-	/* the title link covers the row; the author link sits above it */
-	.lineup a { color: inherit; text-decoration: none; }
-	.lu-title::after { content: ""; position: absolute; inset: 0; }
-	a.lu-author { position: relative; z-index: 1; }
-	a.lu-author:hover { text-decoration: underline; color: var(--color-text); }
-	.lu-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-border); }
-	.lu-initials { display: flex; align-items: center; justify-content: center; background: #11151c; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 17px; }
-	.lu-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-	.lu-title { font-family: var(--font-display); font-size: clamp(17px, 2vw, 22px); line-height: 1.2; }
-	.lu-meta { font-size: 13px; color: var(--color-muted); }
-	.lu-author { color: var(--color-text-secondary); font-weight: 600; }
-	.lu-arrow { font-size: 20px; color: var(--color-muted); transition: transform .2s; }
-	.lu-row:hover .lu-arrow { transform: translateX(4px); color: var(--color-text); }
-	@media (max-width: 520px) { .lu-row { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; } .lu-avatar { width: 40px; height: 40px; } .lu-arrow { display: none; } }
-
-	.lb-bar { display: block; height: 4px; margin-top: 5px; background: var(--color-border); border-radius: 2px; overflow: hidden; max-width: 260px; }
-	.lb-bar i { display: block; height: 100%; border-radius: 2px; }
-	.hl-ex { color: var(--color-text-secondary); font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-	.post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-top: 22px; }
-	.post-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
-	.post-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgb(0 0 0 / .12); }
-	.post-card strong { font-size: 16px; line-height: 1.3; }
-</style>
 
 <Base title={`${SITE_NAME}: political news and election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
 	<JsonLd slot="head" data={ld} />
@@ -419,44 +173,18 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 
 
 		{next && (
-			<section class="snap" aria-labelledby="snap-h">
+			<section class="snap" aria-labelledby="snap-h" data-period-section="snapshot">
 				<div class="snap-head">
 					<div>
 						<p class="eyebrow" style="color:#a9b0bc">{nextYear} midterms · snapshot</p>
 						<h2 id="snap-h">Where the {nextYear} midterms stand</h2>
 					</div>
-					<div class="snap-count"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to go</span></div>
-				</div>
-				<div class="snap-grid">
-					{[["Senate", senC, senMedian, 50], ["House", houseC, houseMedian, 218]].map(([ch, r, med, maj]: any) => {
-						if (!r) return null;
-						const c = consensus(r);
-						const dash = 251.3; // half-circle length for r = 80
-						return (
-							<a class="gauge-card" href={r.path}>
-								<span class="gauge-label">{ch} control</span>
-								<svg class="gauge" viewBox="0 0 200 116" role="img" aria-label={`${ch}: Democrats ${pct(c.D)}, Republicans ${pct(c.R)}`}>
-									<path d="M20 100 A80 80 0 0 1 180 100" class="g-track" />
-									<path d="M20 100 A80 80 0 0 1 180 100" class="g-r" />
-									<path d="M20 100 A80 80 0 0 1 180 100" class="g-d" stroke-dasharray={`${(c.D * dash).toFixed(1)} ${dash}`} data-gauge={c.D} />
-									<line x1="100" y1="14" x2="100" y2="30" class="g-mid" />
-								</svg>
-								<div class="gauge-nums">
-									<span class="gn-d"><b data-count-pct={c.D}>{pct(c.D)}</b> Dem</span>
-									<span class="gn-r"><b data-count-pct={c.R}>{pct(c.R)}</b> GOP</span>
-								</div>
-								{med && <span class="gauge-sub">Median outcome: {med} Republican seats · {maj} for control</span>}
-								<span class="gauge-money">{fmtVol(traded$(r))} traded on {ch} control</span>
-							</a>
-						);
-					})}
-					<div class="snap-tiles">
-						{sweepNow != null && <div class="snap-tile"><b data-count-pct={sweepNow}>{pct(sweepNow)}</b><span>Democrats sweep both chambers</span></div>}
-						{pvNow != null && <div class="snap-tile"><b data-count-pct={pvNow}>{pct(pvNow)}</b><span>Democrats win the national House vote</span></div>}
-						<div class="snap-tile"><b data-count={tossups}>{tossups}</b><span>races rated toss-up</span></div>
-						<div class="snap-tile"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span></div>
+					<div class="snap-right">
+						<PeriodPicker {...pickerOf("snapshot")} dark />
+						<div class="snap-count"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to go</span></div>
 					</div>
 				</div>
+				<div data-period-body><SnapshotBody d={home} period={P.snapshot} /></div>
 				<p class="snap-foot">{totalRaces.toLocaleString()} races tracked · {counts.points.toLocaleString()} price points recorded · <a href={`/${nextYear}/`}>Every {nextYear} race →</a></p>
 			</section>
 		)}
@@ -476,145 +204,25 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			</section>
 		)}
 
-		{cards.length > 0 && (
-			<section>
-				<h2>The big picture</h2>
-				<p class="sec-note">Democratic odds now, the change over 30 days, and the last 90 days of trading.</p>
-				<div class="trends">
-					{cards.map((c) => {
-						const chg = sparkChange(c.spark);
-						return (
-							<a class="panel trend ga" data-ga="up" href={c.href}>
-								<span class="trend-lab">{c.label}</span>
-								<div class="trend-top">
-									<span class="trend-val" data-count-pct={c.now ?? 0}>{pct(c.now)}</span>
-									{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg * 100).toFixed(1)} pts / 30d</span>}
-								</div>
-								<Sparkline points={c.spark} color={c.color} label={`${c.label}, last 90 days`} />
-								<span class="trend-sub">{c.sub}</span>
-							</a>
-						);
-					})}
-				</div>
+		{(senC || houseC) && (
+			<section data-period-section="big">
+				<div class="sec-head"><h2>The big picture</h2><PeriodPicker {...pickerOf("big")} /></div>
+				<div data-period-body><BigPictureBody d={home} period={P.big} /></div>
 			</section>
 		)}
 
-		{(flips.length > 0 || cmoves.rising.length > 0) && (
-			<section aria-labelledby="story-h">
-				<h2 id="story-h">What's moving the markets</h2>
-				<p class="sec-note">Races where the favorite has flipped, and the candidates gaining or losing the most ground over the last 30 days.</p>
-				{flips.length > 0 && (
-					<div class="flips">
-						{flips.map((f) => {
-							const toLead = f.nowLeader === "D" ? f.to : 1 - f.to;
-							const fromLead = f.nowLeader === "D" ? f.from : 1 - f.from;
-							const col = f.nowLeader === "D" ? "var(--bt-d)" : "var(--bt-r)";
-							return (
-								<a class="flip ga" data-ga="flip" href={f.race.path} style={`--c:${col}`}>
-									<span class="flip-tag">Lead change · {f.days} days · {fmtVol(traded$(f.race))} traded</span>
-									<strong class="flip-race">{name(f.race)}</strong>
-									<span class="flip-story">{f.who ?? (f.nowLeader === "D" ? "The Democrat" : "The Republican")} was at <b>{pct(fromLead)}</b>, now leads at <b style={`color:${col}`}>{pct(toLead)}</b></span>
-									<div class="flip-bars" aria-hidden="true">
-										<span class="fb"><i style={`width:${fromLead * 100}%`}></i></span>
-										<span class="fb now"><i data-ga-bar style={`width:${toLead * 100}%;background:${col}`}></i></span>
-									</div>
-								</a>
-							);
-						})}
-					</div>
-				)}
-				{(cmoves.rising.length > 0 || cmoves.fading.length > 0) && (
-					<div class="grid2" style="margin-top:16px">
-						{([["Rising stars", cmoves.rising, true], ["Losing ground", cmoves.fading, false]] as const).map(([t, list, up]) => list.length > 0 && (
-							<div class="panel">
-								<h3 style="font-size:18px">{t} <span class="sec-note" style="font-weight:400;font-size:13px">· {presYear}, 30 days</span></h3>
-								{list.map((m) => (
-									<div class="star ga" data-ga="up">
-										<span class="star-name">{m.name}{m.pa && <small> ({m.pa})</small>}<em>{m.market}</em></span>
-										<span class="star-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, Math.abs(m.delta) * 400)}%;background:${up ? "var(--bt-pos)" : "var(--bt-r)"}`}></i></span>
-										<span class={`num ${up ? "up" : "down"}`}>{up ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
-										<span class="star-ft num">{pct(m.then)} → {pct(m.now)}</span>
-									</div>
-								))}
-							</div>
-						))}
-					</div>
-				)}
-			</section>
-		)}
+		<section aria-labelledby="story-h" data-period-section="moving">
+			<div class="sec-head"><h2 id="story-h">What's moving the markets</h2><PeriodPicker {...pickerOf("moving")} /></div>
+			<div data-period-body><MovingBody d={home} period={P.moving} /></div>
+		</section>
 
-
-
-
-
-
-
-
-
-
-
-		{(h2h.length > 0 || mostTalked.length > 0) && (
-			<section class="pulse" aria-labelledby="pulse-h">
-				<div class="analysis-head" style="margin-bottom:4px">
-					<h2 id="pulse-h" style="margin:0">The Pulse: buzz vs. odds</h2>
-					<LunarCrushCredit />
+		{pulses.length > 0 && (
+			<section class="pulse" aria-labelledby="pulse-h" data-period-section="pulse">
+				<div class="sec-head">
+					<h2 id="pulse-h">The Pulse: buzz vs. odds</h2>
+					<div class="pulse-tools"><PeriodPicker {...pickerOf("pulse")} /><LunarCrushCredit /></div>
 				</div>
-				<p class="sec-note">Markets show where the money is; social shows where the conversation is. When the two disagree, something is usually about to give.</p>
-				{h2h.length > 0 && (
-					<div class="h2h">
-						{h2h.map((x) => {
-							const gap = x.sovD! - x.oddsD;
-							const louder = gap > 0 ? { name: x.dName, buzz: x.sovD!, odds: x.oddsD } : { name: x.rName, buzz: 1 - x.sovD!, odds: 1 - x.oddsD };
-							return (
-								<a class="h2h-row ga" data-ga="up" href={x.race.path}>
-									<div class="h2h-top">
-										<strong>{x.race.state} {x.race.kind === "senate" ? "Senate" : "Governor"}</strong>
-										<span class="h2h-names"><span style="color:var(--bt-d)">{x.dName}</span> vs. <span style="color:var(--bt-r)">{x.rName}</span> · <span class="money">{fmtVol(traded$(x.race))}</span></span>
-									</div>
-									<div class="h2h-bars">
-										<span class="h2h-lab">Conversation</span>
-										<span class="split2"><i class="d" data-ga-bar style={`width:${x.sovD! * 100}%`}></i><i class="r" style={`width:${(1 - x.sovD!) * 100}%`}></i></span>
-										<span class="num h2h-n">{Math.round(x.sovD! * 100)} / {Math.round((1 - x.sovD!) * 100)}</span>
-										<span class="h2h-lab">Odds</span>
-										<span class="split2"><i class="d" data-ga-bar style={`width:${x.oddsD * 100}%`}></i><i class="r" style={`width:${(1 - x.oddsD) * 100}%`}></i></span>
-										<span class="num h2h-n">{Math.round(x.oddsD * 100)} / {Math.round((1 - x.oddsD) * 100)}</span>
-									</div>
-									{Math.abs(gap) >= 0.15 && louder.name && (
-										<span class="h2h-call">{louder.name}: {Math.round(louder.buzz * 100)}% of the buzz, {Math.round(louder.odds * 100)}% of the odds</span>
-									)}
-								</a>
-							);
-						})}
-					</div>
-				)}
-				<div class="grid2" style="margin-top:16px">
-					{mostTalked.length > 0 && (
-						<div class="panel">
-							<h3 style="font-size:18px">Most talked-about · last 24 hours</h3>
-							{mostTalked.map(({ p, o }, i) => (
-								<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
-									<span class="lb-rank">{i + 1}</span>
-									<span class="talk-name">{p.name}<em>{compact(p.i24)} interactions · {p.sentiment != null ? `${Math.round(p.sentiment)}% positive` : "sentiment n/a"}</em></span>
-									<span class="num" style={`color:${o?.party === "D" ? "var(--bt-d)" : o?.party === "R" ? "var(--bt-r)" : "var(--color-muted)"}`}>{o ? pct(o.odds) : "—"}</span>
-								</a>
-							))}
-							<p class="sec-note" style="margin:8px 0 0;font-size:12px">Right column: each candidate's market odds in their race.</p>
-						</div>
-					)}
-					{buzzRising.length > 0 && (
-						<div class="panel">
-							<h3 style="font-size:18px">Buzz rising · this week</h3>
-							{buzzRising.map(({ p, o }) => (
-								<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
-									<span class="num up" style="text-align:left">{(p.wow ?? 0) >= 3 ? `×${Math.round(1 + (p.wow ?? 0))}` : `▲${Math.round((p.wow ?? 0) * 100)}%`}</span>
-									<span class="talk-name">{p.name}<em>{o?.what ?? "Politics"} · {compact(p.i24)} interactions today</em></span>
-									<span class="num" style={`color:${o?.party === "D" ? "var(--bt-d)" : o?.party === "R" ? "var(--bt-r)" : "var(--color-muted)"}`}>{o ? pct(o.odds) : "—"}</span>
-								</a>
-							))}
-							<p class="sec-note" style="margin:8px 0 0;font-size:12px">Change in social interactions vs. the week before, with current market odds.</p>
-						</div>
-					)}
-				</div>
+				<div data-period-body><PulseBody d={home} period={P.pulse} /></div>
 			</section>
 		)}
 
@@ -645,71 +253,40 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 		)}
 
 		{senMap.length > 0 && (
-			<section data-ga-map>
-				<h2>The {nextYear} map</h2>
-				<p class="sec-note">Every Senate, governor and House race, shaded by how strongly the markets favor one party. Tap any state or district for its race page.</p>
-				<StateTileMap senate={senMap} governor={govMap} house={houseMap} year={nextYear!} />
+			<section data-ga-map data-period-section="map">
+				<div class="sec-head"><h2>The {nextYear} map</h2><PeriodPicker {...pickerOf("map")} /></div>
+				<div data-period-body><MapBody d={home} period={P.map} /></div>
 			</section>
 		)}
 
 		<div class="grid3">
-			{moved.length > 0 && (
-				<section class="panel">
-					<h2 style="font-size:22px">Biggest moves this week</h2>
-					<p class="sec-note" style="margin:0 0 6px">Change in Democratic odds over 7 days.</p>
-					{moved.map((m) => (
-						<a class="mover ga" data-ga="up" href={m.race.path}>
-							<span>{name(m.race)}</span>
-							<span class={`num ${m.delta >= 0 ? "up" : "down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
-							<small>{pct(m.from)} → {pct(m.to)} Democratic · <span class="money">{fmtVol(traded$(m.race))} traded</span></small>
-						</a>
-					))}
-				</section>
-			)}
+			<section class="panel" data-period-section="movers">
+				<div class="sec-head"><h2 style="font-size:22px">Biggest moves</h2><PeriodPicker {...pickerOf("movers")} /></div>
+				<div data-period-body><MoversBody d={home} period={P.movers} /></div>
+			</section>
 			{closest.length > 0 && (
-				<section class="panel">
-					<h2 style="font-size:22px">Closest {nextYear} races</h2>
-					<ul class="racelist" style="grid-template-columns:1fr">
-						{closest.map(({ r, c }) => <li><a href={r.path}>{name(r)}</a><span class="num"><span class={c.lead === "D" ? "dlead" : "rlead"}>{c.lead} {pct(c.lp)}</span> <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
-					</ul>
-					<p class="datalinks" style="margin-top:10px"><a href={`/${nextYear}/`}>All {nextYear} races →</a></p>
+				<section class="panel" data-period-section="closest">
+					<div class="sec-head"><h2 style="font-size:22px">Closest {nextYear} races</h2><PeriodPicker {...pickerOf("closest")} /></div>
+					<div data-period-body><ClosestBody d={home} period={P.closest} /></div>
 				</section>
 			)}
 			{gaps.length > 0 && (
-				<section class="panel">
-					<h2 style="font-size:22px">Where the exchanges disagree</h2>
-					<p class="sec-note" style="margin:0 0 6px">Largest gaps in Democratic odds between Kalshi and Polymarket.</p>
-					<ul class="racelist" style="grid-template-columns:1fr">
-						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">{(g * 100).toFixed(1)} pts <span class="money">{fmtVol(traded$(r))}</span></span></li>)}
-					</ul>
+				<section class="panel" data-period-section="gaps">
+					<div class="sec-head"><h2 style="font-size:22px">Where the exchanges disagree</h2><PeriodPicker {...pickerOf("gaps")} /></div>
+					<div data-period-body><GapsBody d={home} period={P.gaps} /></div>
 				</section>
 			)}
 		</div>
 
 		{leaders.length > 0 && (
-			<section class="panel">
-				<div class="analysis-head" style="margin-bottom:6px">
-					<h2 style="margin:0">Who wins the White House in {presYear}?</h2>
-					<a href={`/${presYear}/president/`} class="datalinks">Full presidential odds →</a>
+			<section class="panel" data-period-section="leaders">
+				<div class="sec-head">
+					<h2>Who wins the White House in {presYear}?</h2>
+					<div class="pulse-tools"><PeriodPicker {...pickerOf("leaders")} /><a href={`/${presYear}/president/`} class="datalinks">Full presidential odds →</a></div>
 				</div>
-				<p class="sec-note">Each candidate's chance of winning the presidency, averaged across both exchanges, with 90 days of history.</p>
-				{leaders.map((l, i) => (
-					<div class="lb ga" data-ga="up">
-						<span class="lb-rank">{i + 1}</span>
-						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>} <small class="money">{fmtVol(l.vol)} traded</small><span class="lb-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, (l.v / Math.max(leaders[0].v, 0.01)) * 100)}%;background:${partyColor(l.pa)}`}></i></span></span>
-						<Sparkline points={leaderSparks[i]} color={partyColor(l.pa)} height={30} label={`${l.n}, last 90 days`} />
-						<span class="num" style={`color:${partyColor(l.pa)}`}>{pct(l.v)}</span>
-					</div>
-				))}
-				<div class="noms">
-					{([["Democratic nomination", nomD, "var(--bt-d)"], ["Republican nomination", nomR, "var(--bt-r)"]] as const).map(([t, rows, c]) => rows.length > 0 && (
-						<div><strong style="font-size:14px">{t}</strong><ol>{rows.map((r) => <li>{r.n} <span class="num" style={`color:${c}`}>{pct(r.v)}</span></li>)}</ol></div>
-					))}
-				</div>
+				<div data-period-body><LeadersBody d={home} period={P.leaders} /></div>
 			</section>
 		)}
-
-
 
 		<section class="analysis" aria-labelledby="analysis-h">
 			<div class="analysis-head">

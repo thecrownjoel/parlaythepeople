@@ -1,0 +1,57 @@
+---
+/** What's moving: races whose favorite flipped over the period, and the presidential hopefuls gaining or losing most. */
+import { pct, fmtVol } from "../../lib/markets";
+import { leadChangesSince, candidateMovesSince } from "../../lib/trends";
+import { merged, raceName, traded$, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { next, presYear, presCycle } = d;
+const presRows = presCycle ? [
+	{ group: `${presYear}-pres-winner`, market: "presidency", items: merged(presCycle.pres.winner, 25) },
+	{ group: `${presYear}-pres-nomD`, market: "Democratic nomination", items: merged(presCycle.pres.nomD, 25) },
+	{ group: `${presYear}-pres-nomR`, market: "Republican nomination", items: merged(presCycle.pres.nomR, 25) },
+] : [];
+const [flips, cmoves] = await Promise.all([
+	next ? leadChangesSince(next, period.ts, 6) : Promise.resolve([]),
+	presRows.length ? candidateMovesSince(presRows, period.ts) : Promise.resolve({ rising: [], fading: [] }),
+]);
+---
+<p class="sec-note">Races where the favorite has flipped, and the candidates gaining or losing the most ground, {period.since}.</p>
+{flips.length > 0 ? (
+	<div class="flips">
+		{flips.map((f) => {
+			const toLead = f.nowLeader === "D" ? f.to : 1 - f.to;
+			const fromLead = f.nowLeader === "D" ? f.from : 1 - f.from;
+			const col = f.nowLeader === "D" ? "var(--bt-d)" : "var(--bt-r)";
+			return (
+				<a class="flip ga" data-ga="flip" href={f.race.path} style={`--c:${col}`}>
+					<span class="flip-tag">Lead change · {fmtVol(traded$(f.race))} traded</span>
+					<strong class="flip-race">{raceName(f.race)}</strong>
+					<span class="flip-story">{f.who ?? (f.nowLeader === "D" ? "The Democrat" : "The Republican")} was at <b>{pct(fromLead)}</b>, now leads at <b style={`color:${col}`}>{pct(toLead)}</b></span>
+					<div class="flip-bars" aria-hidden="true">
+						<span class="fb"><i style={`width:${fromLead * 100}%`}></i></span>
+						<span class="fb now"><i data-ga-bar style={`width:${toLead * 100}%;background:${col}`}></i></span>
+					</div>
+				</a>
+			);
+		})}
+	</div>
+) : <p class="empty-note">No race has changed favorites {period.since}.</p>}
+{(cmoves.rising.length > 0 || cmoves.fading.length > 0) && (
+	<div class="grid2" style="margin-top:16px">
+		{([["Rising stars", cmoves.rising, true], ["Losing ground", cmoves.fading, false]] as const).map(([t, list, up]) => list.length > 0 && (
+			<div class="panel">
+				<h3 style="font-size:18px">{t} <span class="sec-note" style="font-weight:400;font-size:13px">· {presYear}</span></h3>
+				{list.map((m) => (
+					<div class="star ga" data-ga="up">
+						<span class="star-name">{m.name}{m.pa && <small> ({m.pa})</small>}<em>{m.market}</em></span>
+						<span class="star-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, Math.abs(m.delta) * 400)}%;background:${up ? "var(--bt-pos)" : "var(--bt-r)"}`}></i></span>
+						<span class={`num ${up ? "up" : "down"}`}>{up ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
+						<span class="star-ft num">{pct(m.then)} → {pct(m.now)}</span>
+					</div>
+				))}
+			</div>
+		))}
+	</div>
+)}

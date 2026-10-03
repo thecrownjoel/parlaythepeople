@@ -1,0 +1,136 @@
+---
+/**
+ * The Pulse over a period: share of conversation vs. odds in head-to-heads, the most talked-about
+ * candidates, and whose buzz grew most against the period before. Social history is daily (LunarCrush).
+ */
+import { pct, fmtVol, candidate, consensus } from "../../lib/markets";
+import { pulseIndex, compact, type Pulse } from "../../lib/social";
+import { nameKey } from "../../lib/names";
+import { merged, traded$, type HomeData } from "../../lib/home";
+import type { Period } from "../../lib/period";
+interface Props { d: HomeData; period: Period }
+const { d, period } = Astro.props;
+const { races, social, presYear, presCycle } = d;
+const DAY = 86400;
+const now = Math.floor(Date.now() / 1000);
+const is24 = period.key === "24h";
+const start = Math.floor(period.ts / DAY) * DAY; // day containing the start
+const span = Math.max(DAY, Math.ceil((now - start) / DAY) * DAY);
+const pulses = Object.values(social?.topics ?? {}).filter((p) => p.kind === "candidate");
+const first = Math.min(...pulses.flatMap((p) => p.series.slice(0, 1).map((s) => s[0])), now);
+const sum = (p: Pulse, a: number, b: number) => p.series.reduce((t, [ts, i]) => (ts >= a && ts < b ? t + (i ?? 0) : t), 0);
+/** Interactions in the period (the live 24-hour count for 24H). */
+const win = (p: Pulse | null) => (!p ? 0 : is24 ? p.i24 : sum(p, start, now + DAY));
+/** Interactions in the equal period before, or null without full history for it. */
+const prev = (p: Pulse) => {
+	if (is24) {
+		const days = p.series.slice(-8, -1); // the week before today, per day
+		return days.length >= 7 ? days.reduce((t, s) => t + (s[1] ?? 0), 0) / days.length : null;
+	}
+	return start - span >= first ? sum(p, start - span, start) : null;
+};
+const sentiment = (p: Pulse) => {
+	if (is24) return p.sentiment;
+	const v = p.series.filter(([ts, , s]) => ts >= start && s != null).map((s) => s[2] as number);
+	return v.length ? v.reduce((a, b) => a + b, 0) / v.length : p.sentiment;
+};
+
+const find = pulseIndex(social);
+const h2h = races
+	.filter((r) => r.kind === "senate" || r.kind === "governor")
+	.map((r) => {
+		const dName = candidate(r, "D"), rName = candidate(r, "R");
+		const only = (p: Pulse | null) => (p && p.races.includes(r.path) ? p : null);
+		const dp = only(find(dName)), rp = only(find(rName));
+		const iD = win(dp), iR = win(rp);
+		return { race: r, dName, rName, sovD: dp && rp && iD + iR ? iD / (iD + iR) : null, oddsD: consensus(r).D };
+	})
+	.filter((x) => x.sovD != null)
+	.sort((a, b) => traded$(b.race) - traded$(a.race))
+	.slice(0, 6);
+
+const presByKey = new Map(merged(presCycle?.pres.winner, 40).map((l) => [l.key, l]));
+const oddsFor = (p: Pulse) => {
+	for (const path of p.races) {
+		if (path.endsWith("/president/")) { const l = presByKey.get(p.key); if (l) return { odds: l.v, party: l.pa, href: path, what: `${presYear} presidency` }; continue; }
+		const r = races.find((x) => x.path === path);
+		if (!r) continue;
+		for (const s of [r.k, r.p]) for (const o of s?.o ?? []) if (nameKey(o.n) === p.key) {
+			const c = consensus(r);
+			return { odds: o.pa === "D" ? c.D : o.pa === "R" ? c.R : c.O, party: o.pa, href: r.path, what: r.kind === "house" ? `${r.label}` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}` };
+		}
+	}
+	return null;
+};
+const days = Math.round(span / DAY);
+const mostTalked = pulses.map((p) => ({ p, n: win(p) })).sort((a, b) => b.n - a.n).slice(0, 8).map((x) => ({ ...x, o: oddsFor(x.p) }));
+const floor = 150_000 * (is24 ? 1 : days); // ignore small topics whose growth is noise
+const rising = pulses
+	.map((p) => { const n = win(p), b = prev(p); return { p, n, g: b ? n / b - 1 : null }; })
+	.filter((x) => x.g != null && x.g >= 0.4 && x.n >= floor)
+	.sort((a, b) => b.g! - a.g!)
+	.slice(0, 5)
+	.map((x) => ({ ...x, o: oddsFor(x.p) }));
+const risingPossible = is24 || start - span >= first;
+const clipped = !is24 && period.ts < first;
+const color = (pa?: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "R" ? "var(--bt-r)" : "var(--color-muted)");
+---
+<p class="sec-note">Markets show where the money is; social shows where the conversation is. Conversation {period.since}{clipped ? ` (social history starts ${new Date(first * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })})` : ""}; odds as of now.</p>
+{h2h.length > 0 && (
+	<div class="h2h">
+		{h2h.map((x) => {
+			const gap = x.sovD! - x.oddsD;
+			const louder = gap > 0 ? { name: x.dName, buzz: x.sovD!, odds: x.oddsD } : { name: x.rName, buzz: 1 - x.sovD!, odds: 1 - x.oddsD };
+			return (
+				<a class="h2h-row ga" data-ga="up" href={x.race.path}>
+					<div class="h2h-top">
+						<strong>{x.race.state} {x.race.kind === "senate" ? "Senate" : "Governor"}</strong>
+						<span class="h2h-names"><span style="color:var(--bt-d)">{x.dName}</span> vs. <span style="color:var(--bt-r)">{x.rName}</span> · <span class="money">{fmtVol(traded$(x.race))}</span></span>
+					</div>
+					<div class="h2h-bars">
+						<span class="h2h-lab">Conversation</span>
+						<span class="split2"><i class="d" data-ga-bar style={`width:${x.sovD! * 100}%`}></i><i class="r" style={`width:${(1 - x.sovD!) * 100}%`}></i></span>
+						<span class="num h2h-n">{Math.round(x.sovD! * 100)} / {Math.round((1 - x.sovD!) * 100)}</span>
+						<span class="h2h-lab">Odds</span>
+						<span class="split2"><i class="d" data-ga-bar style={`width:${x.oddsD * 100}%`}></i><i class="r" style={`width:${(1 - x.oddsD) * 100}%`}></i></span>
+						<span class="num h2h-n">{Math.round(x.oddsD * 100)} / {Math.round((1 - x.oddsD) * 100)}</span>
+					</div>
+					{Math.abs(gap) >= 0.15 && louder.name && (
+						<span class="h2h-call">{louder.name}: {Math.round(louder.buzz * 100)}% of the buzz, {Math.round(louder.odds * 100)}% of the odds</span>
+					)}
+				</a>
+			);
+		})}
+	</div>
+)}
+<div class="grid2" style="margin-top:16px">
+	{mostTalked.length > 0 && (
+		<div class="panel">
+			<h3 style="font-size:18px">Most talked-about <span class="sec-note" style="font-weight:400;font-size:13px">· {period.since}</span></h3>
+			{mostTalked.map(({ p, n, o }, i) => {
+				const s = sentiment(p);
+				return (
+					<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
+						<span class="lb-rank">{i + 1}</span>
+						<span class="talk-name">{p.name}<em>{compact(n)} interactions · {s != null ? `${Math.round(s)}% positive` : "sentiment n/a"}</em></span>
+						<span class="num" style={`color:${color(o?.party)}`}>{o ? pct(o.odds) : "—"}</span>
+					</a>
+				);
+			})}
+			<p class="sec-note" style="margin:8px 0 0;font-size:12px">Right column: each candidate's market odds in their race.</p>
+		</div>
+	)}
+	<div class="panel">
+		<h3 style="font-size:18px">Buzz rising <span class="sec-note" style="font-weight:400;font-size:13px">· {is24 ? "today vs. last week" : `vs. the ${days} days before`}</span></h3>
+		{rising.length > 0 ? rising.map(({ p, n, g, o }) => (
+			<a class="talk ga" data-ga="up" href={o?.href ?? p.link}>
+				<span class="num up" style="text-align:left">{g! >= 2 ? `×${(1 + g!).toFixed(1)}` : `▲${Math.round(g! * 100)}%`}</span>
+				<span class="talk-name">{p.name}<em>{o?.what ?? "Politics"} · {compact(n)} interactions</em></span>
+				<span class="num" style={`color:${color(o?.party)}`}>{o ? pct(o.odds) : "—"}</span>
+			</a>
+		)) : (
+			<p class="empty-note">{risingPossible ? `No candidate's conversation jumped 40% or more ${period.since}.` : `Comparing ${days} days with the ${days} before needs more social history than we have yet. Try 24H or 1W.`}</p>
+		)}
+		<p class="sec-note" style="margin:8px 0 0;font-size:12px">Growth in social interactions against the equal period before, with current market odds.</p>
+	</div>
+</div>

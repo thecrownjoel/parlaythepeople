@@ -1,0 +1,95 @@
+---
+/**
+ * Date picker for a homepage section: 24H · 1W · 30D · 60D, or any date from the calendar.
+ * Picking one reloads only that section's body from /partials/home/<section>?p=<period>.
+ * `withNow` adds a "Now" button for sections that show the markets as of a moment.
+ */
+import { PRESETS, HISTORY_START, isoDay, type Period } from "../lib/period";
+interface Props { section: string; period: Period; withNow?: boolean; presets?: string[]; min?: string; dark?: boolean }
+const { section, period, withNow = false, presets = PRESETS.map((p) => p.key), min = HISTORY_START, dark = false } = Astro.props;
+const max = isoDay(Math.floor(Date.now() / 1000));
+const shown = PRESETS.filter((p) => presets.includes(p.key));
+---
+<div class={`pp${dark ? " pp-dark" : ""}`} data-pp={section} role="group" aria-label="Time period">
+	{withNow && <button type="button" data-p="now" aria-pressed={period.now ? "true" : "false"}>Now</button>}
+	{shown.map((p) => <button type="button" data-p={p.key} aria-pressed={period.key === p.key ? "true" : "false"} title={withNow ? `Show the markets ${p.at}` : `Show changes ${p.since}`}>{p.label}</button>)}
+	<label class="pp-cal" data-on={period.custom ? "true" : "false"} title={withNow ? "Show the markets on a date" : "Show changes since a date"}>
+		<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1.5 6.5h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+		<span data-pp-label>{period.custom ? period.label : "Date"}</span>
+		<input type="date" min={min} max={max} value={period.custom ? period.key : ""} aria-label={withNow ? "Show the markets on a date" : "Show changes since a date"} />
+	</label>
+</div>
+
+<script>
+	import { gsap } from "gsap";
+	const cache = new Map<string, string>();
+	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const fmt = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+	async function load(pp: HTMLElement, key: string) {
+		const section = pp.dataset.pp!;
+		const body = pp.closest("[data-period-section]")?.querySelector<HTMLElement>("[data-period-body]");
+		if (!body) return;
+		pp.querySelectorAll("button[data-p]").forEach((b) => b.setAttribute("aria-pressed", String((b as HTMLElement).dataset.p === key)));
+		const cal = pp.querySelector<HTMLElement>(".pp-cal")!;
+		const custom = /^\d{4}-\d{2}-\d{2}$/.test(key);
+		cal.dataset.on = String(custom);
+		cal.querySelector("[data-pp-label]")!.textContent = custom ? fmt(key) : "Date";
+		if (!custom) cal.querySelector("input")!.value = "";
+		const ck = `${section}|${key}`;
+		if (!cache.has(ck)) {
+			body.setAttribute("aria-busy", "true");
+			try {
+				const r = await fetch(`/partials/home/${section}?p=${encodeURIComponent(key)}`);
+				if (!r.ok) throw new Error(String(r.status));
+				cache.set(ck, await r.text());
+			} catch {
+				body.removeAttribute("aria-busy");
+				const note = document.createElement("p");
+				note.className = "pp-error";
+				note.textContent = "Couldn't load that period. Try again in a moment.";
+				body.insertBefore(note, body.firstChild);
+				return;
+			}
+			body.removeAttribute("aria-busy");
+		}
+		// keep the map on the same office tab after the swap
+		const office = body.querySelector<HTMLElement>('[data-office][aria-pressed="true"]')?.dataset.office;
+		body.innerHTML = cache.get(ck)!;
+		if (office) body.querySelector<HTMLElement>(`[data-office="${office}"]`)?.click();
+		if (!reduce) {
+			gsap.fromTo(body.children, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.04, ease: "power2.out", clearProps: "transform,opacity" });
+			body.querySelectorAll("[data-ga-bar]").forEach((b) => gsap.from(b, { scaleX: 0, transformOrigin: "left center", duration: 0.8, ease: "power3.out" }));
+			body.querySelectorAll(".spark-line").forEach((p) => gsap.fromTo(p, { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 1, ease: "power2.inOut" }));
+		}
+	}
+
+	document.addEventListener("click", (e) => {
+		const t = e.target as HTMLElement;
+		const b = t.closest<HTMLButtonElement>("[data-pp] button[data-p]");
+		if (b) return void load(b.closest<HTMLElement>("[data-pp]")!, b.dataset.p!);
+		const cal = t.closest<HTMLElement>("[data-pp] .pp-cal");
+		const input = cal?.querySelector<HTMLInputElement>("input");
+		if (input && t !== input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } }
+	});
+	document.addEventListener("change", (e) => {
+		const input = (e.target as HTMLElement).closest<HTMLInputElement>("[data-pp] input[type=date]");
+		if (input?.value) load(input.closest<HTMLElement>("[data-pp]")!, input.value);
+	});
+</script>
+
+<style>
+	.pp { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--bt-chip); border: 1px solid var(--color-border); border-radius: 9px; }
+	.pp-dark { background: #161c25; border-color: #2a3240; }
+	.pp button, .pp-cal { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; font: 600 12.5px var(--font-mono), monospace; color: var(--color-text-secondary); white-space: nowrap; position: relative; }
+	.pp button:hover, .pp-cal:hover { color: var(--color-text); }
+	.pp button[aria-pressed="true"], .pp-cal[data-on="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgb(0 0 0 / .25), inset 0 0 0 1px var(--color-border); }
+	.pp-dark button[aria-pressed="true"], .pp-dark .pp-cal[data-on="true"] { background: #232b37; color: #fff; }
+	.pp button:focus-visible, .pp-cal:focus-within { outline: 2px solid var(--color-text); outline-offset: 1px; }
+	/* the native date input sits invisibly under the label so the browser's own calendar opens */
+	.pp-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; color-scheme: dark; }
+	:global([data-period-body][aria-busy="true"]) { opacity: .45; transition: opacity .2s; pointer-events: none; }
+	:global(.pp-error) { color: var(--bt-r); font-size: 13px; margin: 0 0 8px; }
+	:global(.sec-head) { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 4px; }
+	:global(.sec-head h2) { margin: 0; }
+</style>
