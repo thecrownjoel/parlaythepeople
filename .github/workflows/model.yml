@@ -1,0 +1,31 @@
+name: Fit forecasting model
+
+# Rebuilds the training set (decided races on both exchanges), pulls LunarCrush history for their
+# candidates, and fits/tests the model. Run by hand; the fitted model (coef.json) and the test report
+# are attached to the run as an artifact.
+on:
+  workflow_dispatch:
+
+jobs:
+  fit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Decided races with daily prices
+        run: python3 ingest/model/training.py
+      - name: LunarCrush history for their candidates
+        env:
+          LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
+        run: python3 ingest/model/social_features.py
+      - name: Fit and test
+        run: python3 ingest/model/fit.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: |
+            ingest/out/model/
+            ingest/model/coef.json

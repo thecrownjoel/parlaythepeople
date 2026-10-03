@@ -1,0 +1,24 @@
+{
+ "features": [
+  "lq"
+ ],
+ "coef": [
+  0.0,
+  1.6141739833687145
+ ],
+ "trained_on": 125,
+ "beats_market": true,
+ "cv": {
+  "model": {
+   "features": [
+    "lq"
+   ],
+   "brier": 0.07502,
+   "logloss": 0.22402
+  },
+  "market": {
+   "brier": 0.0756,
+   "logloss": 0.23928
+  }
+ }
+}

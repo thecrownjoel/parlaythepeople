@@ -7,7 +7,7 @@ import { authorPath } from "../lib/site";
 export const GET: APIRoute = async ({ url }) => {
 	const o = url.origin;
 	const index = await getIndex();
-	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""], [`${o}/posts/`, ""]];
+	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""], [`${o}/posts/`, ""], [`${o}/model/`, ""]];
 	try {
 		const { results } = await env.DB.prepare("SELECT slug, MAX(updated_at) AS mod FROM _emdash_bylines GROUP BY slug").all<{ slug: string; mod: string }>();
 		for (const b of results ?? []) urls.push([`${o}${authorPath(b.slug)}`, b.mod ?? ""]);

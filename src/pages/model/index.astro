@@ -1,0 +1,91 @@
+---
+/** The Parlay estimate: what it is, how it was built and tested, and how it will be scored. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import { MODEL, parlayD } from "../../lib/model";
+import { getIndex, getCycle, consensus, pct } from "../../lib/markets";
+import { raceName } from "../../lib/home";
+import "../../styles/data.css";
+
+const origin = Astro.url.origin;
+const examples = [0.55, 0.6, 0.7, 0.8, 0.85, 0.9].map((m) => ({ m, e: parlayD(m, 1 - m)! }));
+const pctGain = (a: number, b: number) => `${(((a - b) / a) * 100).toFixed(0)}%`;
+const cv = MODEL.cv;
+
+// live: the races where the estimate moves furthest from the market
+const index = await getIndex();
+const next = index?.next ? await getCycle(index.next) : null;
+const live = (next?.races ?? [])
+	.filter((r) => r.kind !== "control")
+	.map((r) => { const c = consensus(r); const m = c.D / (c.D + c.R || 1); const e = parlayD(c.D, c.R)!; return { r, m, e, lead: m >= 0.5 ? "D" : "R" }; })
+	.filter((x) => Math.abs(x.m - 0.5) < 0.4)
+	.sort((a, b) => Math.abs(b.e - b.m) - Math.abs(a.e - a.m))
+	.slice(0, 10);
+
+const faqs: [string, string][] = [
+	["What is the Parlay estimate?", `${SITE_NAME}'s own probability for each race, built by adjusting the prediction-market odds with a model trained on how decided races actually turned out.`],
+	["How is it different from the market odds?", "In decided races, favorites won more often than their market prices implied. The model corrects for that: it makes favorites a bit more likely and longshots a bit less. A 50/50 market stays 50/50."],
+	["Is the Parlay estimate betting advice?", `No. It is election research. ${SITE_NAME} does not make buy or sell recommendations, and what readers do with the research is their own decision.`],
+	["How will we know if it works?", "Every estimate is saved hourly and scored after Election Day against what the markets said, with the Brier score and log loss. The results will be published here, win or lose."],
+];
+const ld = graph(organization(origin), breadcrumbs(origin, [["The Parlay estimate", "/model/"]]), faq(faqs));
+---
+<Base title="The Parlay estimate: how our election model works" description={`How ${SITE_NAME}'s election forecast adjusts Kalshi and Polymarket odds using ${MODEL.trained_on} decided races, how it was tested, and how it will be scored.`} canonical={`${origin}/model/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp model">
+		<header class="dp-head">
+			<p class="eyebrow">Our model</p>
+			<h1>The Parlay estimate</h1>
+			<p class="lede">Prediction markets are good forecasters with a known flaw: their favorites win more often than their prices say. The Parlay estimate corrects for it, using {MODEL.trained_on} decided races from 2024 and 2025 on Kalshi and Polymarket.</p>
+		</header>
+
+		<section>
+			<h2>How it changes the odds</h2>
+			<p class="sec-note">The model stretches the market's confidence; it never flips a favorite, and a 50/50 market stays 50/50.</p>
+			<table class="dtable">
+				<thead><tr><th>Market says the favorite wins</th><th>Parlay estimate</th></tr></thead>
+				<tbody>{examples.map(({ m, e }) => <tr><td class="num">{pct(m)}</td><td class="num"><b>{pct(e)}</b></td></tr>)}</tbody>
+			</table>
+		</section>
+
+		<section>
+			<h2>How it was tested</h2>
+			<p>We collected every decided Senate, House, governor and presidential-state race we could find on both exchanges, with daily prices from up to 90 days before Election Day. Each race was scored by a version of the model that never saw it (five-way cross-validation, repeated), and compared with the raw market odds.</p>
+			<table class="dtable">
+				<thead><tr><th>On races the model never saw</th><th>Market odds</th><th>Parlay estimate</th></tr></thead>
+				<tbody>
+					<tr><td>Log loss (lower is better)</td><td class="num">{cv.market.logloss.toFixed(3)}</td><td class="num"><b>{cv.model.logloss.toFixed(3)}</b> ({pctGain(cv.market.logloss, cv.model.logloss)} better)</td></tr>
+					<tr><td>Brier score (lower is better)</td><td class="num">{cv.market.brier.toFixed(4)}</td><td class="num"><b>{cv.model.brier.toFixed(4)}</b></td></tr>
+				</tbody>
+			</table>
+			<p class="sec-note" style="margin-top:10px">We also tested price momentum, disagreement between the exchanges, thin markets and distance from Election Day. None improved accuracy on held-out races, so none are in the model. Social data from LunarCrush and trade flow from our trade archive are next to be tested; they go in only if they help.</p>
+		</section>
+
+		{live.length > 0 && (
+			<section>
+				<h2>Where the estimate and the markets differ most</h2>
+				<p class="sec-note">{index?.next} races where the model's adjustment is largest. Every race page shows its Parlay estimate beside the market odds.</p>
+				<table class="dtable">
+					<thead><tr><th>Race</th><th>Market</th><th>Parlay estimate</th></tr></thead>
+					<tbody>{live.map(({ r, m, e, lead }) => <tr><td><a href={r.path}>{raceName(r)}</a></td><td class="num">{lead} {pct(Math.max(m, 1 - m))}</td><td class="num"><b>{lead} {pct(Math.max(e, 1 - e))}</b></td></tr>)}</tbody>
+				</table>
+			</section>
+		)}
+
+		<section>
+			<h2>Questions</h2>
+			<dl class="defs">{faqs.map(([q, a]) => <><dt>{q}</dt><dd>{a}</dd></>)}</dl>
+		</section>
+	</div>
+</Base>
+
+<style>
+	.model { max-width: 900px; }
+	.dtable { width: 100%; border-collapse: collapse; font-size: 15px; }
+	.dtable th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); padding: 8px 10px; border-bottom: 2px solid var(--color-border); }
+	.dtable td { padding: 10px; border-bottom: 1px solid var(--color-border); }
+	.dtable a { color: inherit; }
+	.defs dt { font-weight: 600; margin-top: 14px; }
+	.defs dd { margin: 4px 0 0; color: var(--color-text-secondary); line-height: 1.55; }
+</style>

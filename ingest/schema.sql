@@ -84,3 +84,13 @@ CREATE TABLE IF NOT EXISTS social_hourly (
   i24 INTEGER, contributors INTEGER, posts24 INTEGER, sentiment REAL, trend TEXT,
   PRIMARY KEY (topic, ts)
 ) WITHOUT ROWID;
+
+-- The Parlay estimate for each race, logged hourly so it can be scored after the election.
+-- market_d = the markets' two-party Democratic share; model_d = the model's probability the Democrat wins.
+CREATE TABLE IF NOT EXISTS forecasts (
+  race_id TEXT NOT NULL,
+  ts INTEGER NOT NULL,          -- hour, unix seconds
+  market_d REAL, model_d REAL,
+  version TEXT,                 -- model version (see ingest/model/coef.json)
+  PRIMARY KEY (race_id, ts)
+) WITHOUT ROWID;

@@ -30,6 +30,7 @@ if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
 const c = consensus(race);
+const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
 const [social, kTrades] = await Promise.all([getSocial(), getKalshiTrades()]);
 // Kalshi trades for this race's contracts (collected every 10 minutes for the most active contracts)
 const kalshiTickers = (race.k?.o ?? []).filter((o) => o.id).map((o) => ({ id: o.id!, n: o.n, pa: o.pa }));
@@ -131,6 +132,7 @@ function rows(s: Source) {
 }
 const partyName = (p: string | null) => (p === "D" ? "Democratic" : p === "R" ? "Republican" : p === "I" ? "Independent" : "Other");
 const generic = (n: string) => /^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other)$/i.test(n.trim());
+import { parlayD } from "../../../lib/model";
 ---
 <style>
 	.act-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -177,6 +179,7 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 	.qb-up { color: #4cc38a !important; } .qb-down { color: #f07a6c !important; }
 	.qb-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #7c8492; }
 	@media (max-width: 520px) { .qb th:nth-child(5), .qb td:nth-child(5) { display: none; } .qb { font-size: 12.5px; } }
+	.est-how { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 4px; }
 </style>
 <Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated}>
 	<JsonLd slot="head" data={ld} />
@@ -213,6 +216,7 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 				<i class="D" style={`width:${c.D * 100}%`}></i>{c.O > 0.005 && <i class="O" style={`width:${c.O * 100}%`}></i>}<i class="R" style={`width:${c.R * 100}%`}></i>
 			</div>
 			<dl class="facts">
+				{est != null && <div><dt>Parlay estimate <a href="/model/" class="est-how">how?</a></dt><dd class="num" style="font-weight:600;color:var(--bt-${est >= 0.5 ? "d" : "r"})">{est >= 0.5 ? "D" : "R"} {pct(Math.max(est, 1 - est))} <span style="color:var(--color-muted);font-weight:400">vs. market {pct(Math.max(c.D, c.R) / (c.D + c.R || 1))}</span></dd></div>}
 				<div><dt>Market rating</dt><dd><span class={`chip ${c.lead}`}>{RATING_LABEL[c.rating]}</span></dd></div>
 				<div><dt>Kalshi (D / R)</dt><dd class="num">{ks ? `${pct(ks.D, 1)} / ${pct(ks.R, 1)}` : "Not listed"}</dd></div>
 				<div><dt>Polymarket (D / R)</dt><dd class="num">{ps ? `${pct(ps.D, 1)} / ${pct(ps.R, 1)}` : "Not listed"}</dd></div>
