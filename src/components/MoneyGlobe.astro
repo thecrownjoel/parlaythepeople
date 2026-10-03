@@ -23,7 +23,7 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 		<button type="button" data-zoom="out" aria-label="Zoom out">−</button>
 		<button type="button" data-zoom="reset" aria-label="Reset view" title="Reset view">⟲</button>
 	</div>
-	<p class="mg-hint" aria-hidden="true">Drag to move · double-click or Ctrl/⌘ + scroll to zoom</p>
+	<p class="mg-hint" aria-hidden="true">Drag to move · use + and − to zoom</p>
 	<script type="application/json" data-globe-data set:html={json} />
 </div>
 
@@ -191,18 +191,12 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 			if (reduce) requestAnimationFrame(frame);
 		});
 		canvas.addEventListener("pointerup", () => (dragging = false));
-		// zoom: buttons, double-click (zooms toward the spot), Ctrl/⌘ + wheel, and two-finger pinch
+		// zoom: the + / − buttons, plus Ctrl/⌘ + wheel and two-finger pinch
 		root.querySelectorAll<HTMLButtonElement>("[data-zoom]").forEach((b) => b.addEventListener("click", () => {
 			if (b.dataset.zoom === "in") setZoom(zoomTarget * 1.5);
 			else if (b.dataset.zoom === "out") setZoom(zoomTarget / 1.5);
 			else { setZoom(1); dragOffset = 0; tiltOffset = 0; }
 		}));
-		canvas.addEventListener("dblclick", (e) => {
-			const r = canvas.getBoundingClientRect();
-			const ll = proj.invert?.([e.clientX - r.left, e.clientY - r.top]);
-			if (ll) { dragOffset += (-ll[0] - rot) * 0.6; tiltOffset += (-ll[1] - tilt) * 0.6; }
-			setZoom(zoomTarget * 1.8);
-		});
 		canvas.addEventListener("wheel", (e) => {
 			if (!e.ctrlKey && !e.metaKey) return; // plain scrolling keeps scrolling the page
 			e.preventDefault();
@@ -328,7 +322,7 @@ const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.offic
 	.mg-sub { font-size: 12.5px; color: #a9b0bc; }
 	.mg-sub b { color: #fff; font-family: var(--font-mono), monospace; }
 	.mg-zoom { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; gap: 4px; }
-	.mg-zoom button { all: unset; cursor: pointer; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgb(11 15 21 / .8); border: 1px solid #2c3440; color: #e8ebf0; font-size: 18px; font-weight: 600; }
+	.mg-zoom button { all: unset; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: rgb(11 15 21 / .85); border: 1px solid #3a4452; color: #e8ebf0; font-size: 22px; font-weight: 600; }
 	.mg-zoom button:hover { border-color: #4a5566; color: #fff; }
 	.mg-zoom button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 	@media (max-width: 640px) { .mg-label { padding: 6px 9px; } .mg-title { font-size: 11px; } .mg-sub { font-size: 11px; } .mg-hint { display: none; } }
