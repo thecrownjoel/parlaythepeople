@@ -16,7 +16,9 @@ import { SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
 import "../../styles/home.css";
 
-const configured = !!(env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY;
+// the analyst always works (Workers AI until a Claude key is added); it stays out of search until Claude powers it
+const claude = !!(env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY;
+const configured = true;
 const origin = Astro.url.origin;
 const d = await homeData();
 const money = parsePeriod("24h", "24h");
@@ -35,10 +37,10 @@ const examples = [
 	"Who leads the 2028 Republican nomination, and how much has traded?",
 ];
 ---
-<Base title={`AI election analyst | ${SITE_NAME}`} description="Ask anything about the 2026 midterms and 2028 race. Answers come from live Kalshi and Polymarket odds, every trade, LunarCrush social data and our forecasting model, with links to the source." canonical={`${origin}/ai/`} robots={configured ? null : "noindex, follow"}>
+<Base title={`AI election analyst | ${SITE_NAME}`} description="Ask anything about the 2026 midterms and 2028 race. Answers come from live Kalshi and Polymarket odds, every trade, LunarCrush social data and our forecasting model, with links to the source." canonical={`${origin}/ai/`} robots={claude ? null : "noindex, follow"}>
 	<div class="dp ai">
 		<header class="dp-head">
-			<p class="eyebrow">AI analyst{configured ? " · beta" : " · opening soon"}</p>
+			<p class="eyebrow">AI analyst · {claude ? "beta" : "preview"}</p>
 			<h1>Ask the analyst</h1>
 			<p class="lede">Ask anything about the races. Answers come from our own data: live odds on both exchanges, every trade, LunarCrush social data, the Parlay estimate and our research library, with links to the source.</p>
 		</header>
@@ -87,18 +89,34 @@ const examples = [
 	const history: { role: "user" | "assistant"; content: string }[] = [];
 
 	const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-	/** Minimal, safe markdown: paragraphs, bullets, bold, links (http/https and site paths only). */
+	/** Minimal, safe markdown: paragraphs, bullet and numbered lists, bold, italics, links (http/https and site paths only). */
 	function md(s: string) {
 		const inline = (t: string) => esc(t)
 			.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+			.replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>")
 			.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g, (_m, a, h) => `<a href="${h}"${h.startsWith("/") || h.includes("parlaythepeople.com") ? "" : ' target="_blank" rel="noopener nofollow"'}>${a}</a>`);
-		return s.trim().split(/\n{2,}/).map((block) => {
-			const lines = block.split("\n");
-			if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) return `<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*•]\s+/, ""))}</li>`).join("")}</ul>`;
-			if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) return `<ol>${lines.map((l) => `<li>${inline(l.replace(/^\s*\d+[.)]\s+/, ""))}</li>`).join("")}</ol>`;
-			if (/^#{1,4}\s/.test(block)) return `<p><strong>${inline(block.replace(/^#{1,4}\s+/, ""))}</strong></p>`;
-			return `<p>${lines.map(inline).join("<br>")}</p>`;
-		}).join("");
+		const out: string[] = [];
+		let list: "ul" | "ol" | null = null, para: string[] = [];
+		const flushPara = () => { if (para.length) { out.push(`<p>${para.join("<br>")}</p>`); para = []; } };
+		const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+		for (const raw of s.trim().split("\n")) {
+			const line = raw.trimEnd();
+			const ul = line.match(/^\s*[-*•]\s+(.*)$/), ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+			if (ul || ol) {
+				flushPara();
+				const kind = ul ? "ul" : "ol";
+				if (list !== kind) { closeList(); out.push(`<${kind}>`); list = kind; }
+				out.push(`<li>${inline((ul ?? ol)![1])}</li>`);
+			} else if (!line.trim()) {
+				flushPara(); closeList();
+			} else {
+				closeList();
+				const h = line.match(/^#{1,4}\s+(.*)$/);
+				if (h) { flushPara(); out.push(`<p><strong>${inline(h[1])}</strong></p>`); } else para.push(inline(line));
+			}
+		}
+		flushPara(); closeList();
+		return out.join("");
 	}
 	function add(role: "user" | "bot", html: string) {
 		const li = document.createElement("li");
@@ -157,16 +175,16 @@ const examples = [
 	.ai { max-width: 960px; }
 	.ai-chat { background: #11151c; border: 1px solid #222a35; border-radius: 16px; padding: clamp(14px, 3vw, 22px); display: flex; flex-direction: column; gap: 14px; }
 	.ai-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; }
-	.ai-msg { display: flex; }
-	.ai-user { justify-content: flex-end; }
-	.ai-body { max-width: min(680px, 92%); padding: 12px 14px; border-radius: 12px; line-height: 1.55; font-size: 15px; }
-	.ai-bot .ai-body { background: #161c25; border: 1px solid #222a35; color: #e8ebf0; }
-	.ai-user .ai-body { background: #a3262a; color: #fff; }
-	.ai-body :global(p) { margin: 0 0 8px; } .ai-body :global(p:last-child) { margin: 0; }
-	.ai-body :global(ul), .ai-body :global(ol) { margin: 0 0 8px; padding-left: 20px; }
-	.ai-body :global(a) { color: #8fb4ff; }
-	.ai-body :global(.ai-status) { color: #a9b0bc; font-style: italic; }
-	.ai-body :global(.ai-err) { color: #ef7b6f; }
+	:global(.ai-msg) { display: flex; }
+	:global(.ai-user) { justify-content: flex-end; }
+	:global(.ai-body) { max-width: min(680px, 92%); padding: 12px 14px; border-radius: 12px; line-height: 1.55; font-size: 15px; }
+	:global(.ai-bot .ai-body) { background: #161c25; border: 1px solid #222a35; color: #e8ebf0; }
+	:global(.ai-user .ai-body) { background: #a3262a; color: #fff; }
+	:global(.ai-body p) { margin: 0 0 8px; } :global(.ai-body p:last-child) { margin: 0; }
+	:global(.ai-body ul), :global(.ai-body ol) { margin: 0 0 8px; padding-left: 20px; } :global(.ai-body li) { margin: 2px 0; }
+	:global(.ai-body a) { color: #8fb4ff; }
+	:global(.ai-body .ai-status) { color: #a9b0bc; font-style: italic; }
+	:global(.ai-body .ai-err) { color: #ef7b6f; }
 	.ai-examples { display: flex; flex-wrap: wrap; gap: 8px; }
 	.ai-examples button { all: unset; cursor: pointer; font-size: 13px; padding: 7px 11px; border-radius: 999px; border: 1px solid #2c3440; color: #c3c9d3; }
 	.ai-examples button:hover:not(:disabled) { border-color: #4a5566; color: #fff; }
