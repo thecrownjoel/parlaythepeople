@@ -124,3 +124,62 @@ export function stateRaces(data: CycleData, kind: "senate" | "governor"): StateR
 }
 
 export { shares };
+
+/** Each outcome's value in a market group about `days` ago (average of both exchanges). */
+export function outcomesAgo(group: string, days: number): Promise<Map<string, number>> {
+	return cached(`oago:${group}:${days}`, 10 * 60_000, async () => {
+		const t = Math.floor(Date.now() / 1000) - days * 86400;
+		try {
+			const { results } = await env.MARKETS.prepare(
+				"SELECT outcome, k, p, MAX(ts) AS ts FROM outcome_history WHERE group_id = ? AND ts <= ? AND ts > ? GROUP BY outcome",
+			).bind(group, t, t - 6 * 86400).all<{ outcome: string; k: number | null; p: number | null }>();
+			const m = new Map<string, number>();
+			for (const r of results ?? []) {
+				const v = avg(r.k, r.p);
+				if (v != null) m.set(r.outcome, v);
+			}
+			return m;
+		} catch {
+			return new Map();
+		}
+	});
+}
+
+export interface LeadChange { race: Race; days: number; from: number; to: number; nowLeader: "D" | "R"; who: string | null; was: string | null }
+/**
+ * Races whose favorite flipped: the party behind `days` ago now leads (by at least 5 points past even).
+ * Checks 30 days first, then 90, so the freshest flips come first.
+ */
+export async function leadChanges(data: CycleData, n = 6): Promise<LeadChange[]> {
+	const out: LeadChange[] = [];
+	const seen = new Set<string>();
+	for (const days of [30, 90]) {
+		const then = await racesAgo(days);
+		for (const r of data.races) {
+			if (r.kind === "control" || seen.has(r.id) || !then.has(r.id)) continue;
+			const from = then.get(r.id)!, to = consensus(r).D;
+			if ((from - 0.5) * (to - 0.5) >= 0 || Math.abs(to - 0.5) < 0.05) continue;
+			const nowLeader = to > 0.5 ? "D" : "R";
+			seen.add(r.id);
+			out.push({ race: r, days, from, to, nowLeader, who: candidate(r, nowLeader), was: candidate(r, nowLeader === "D" ? "R" : "D") });
+		}
+	}
+	return out.sort((a, b) => a.days - b.days || Math.abs(b.to - b.from) - Math.abs(a.to - a.from)).slice(0, n);
+}
+
+export interface Mover2 { name: string; key: string; pa: string | null; now: number; then: number; delta: number; market: string }
+/** Candidates whose odds moved most over `days` in the presidential markets (winner and both nominations). */
+export async function candidateMoves(year: number, rows: { group: string; market: string; items: { key: string; n: string; pa: string | null; v: number }[] }[], days = 30) {
+	const all: Mover2[] = [];
+	for (const g of rows) {
+		const then = await outcomesAgo(g.group, days);
+		for (const it of g.items) {
+			if (!then.has(it.key)) continue;
+			const t = then.get(it.key)!;
+			all.push({ name: it.n, key: it.key, pa: it.pa, now: it.v, then: t, delta: it.v - t, market: g.market });
+		}
+	}
+	const rising = all.filter((m) => m.delta >= 0.01).sort((a, b) => b.delta - a.delta).slice(0, 5);
+	const fading = all.filter((m) => m.delta <= -0.01).sort((a, b) => a.delta - b.delta).slice(0, 5);
+	return { rising, fading };
+}

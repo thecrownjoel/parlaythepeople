@@ -11,8 +11,9 @@ import Sparkline from "../components/Sparkline.astro";
 import StateTileMap from "../components/StateTileMap.astro";
 import MoneyGlobe from "../components/MoneyGlobe.astro";
 import { getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, daysUntil, PARTY_PLURAL, type Race, type PresMarket, type Source } from "../lib/markets";
-import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, type Spark } from "../lib/trends";
+import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, leadChanges, candidateMoves, type Spark } from "../lib/trends";
 import { nameKey } from "../lib/names";
+import { mediaUrls } from "../lib/media";
 import { organization, graph, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
 
@@ -120,9 +121,17 @@ const nomD = merged(presCycle?.pres.nomD, 3), nomR = merged(presCycle?.pres.nomR
 const coinFlips = (next?.big?.ballots ?? []).filter((b: any) => !b.thin).sort((a: any, b: any) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5)).slice(0, 6);
 
 // ---- analysis
-const [featured, ...restPosts] = posts.entries;
-const sidePosts = restPosts.slice(0, 4);
-const gridPosts = restPosts.slice(4, 12);
+// Analysis lineup: one row per post with the author's photo
+const avatarById = await mediaUrls(posts.entries.slice(0, 10).map((p) => p.data.bylines?.[0]?.byline?.avatarMediaId));
+const lineup = posts.entries.slice(0, 10).map((p) => {
+	const by = p.data.bylines?.[0]?.byline;
+	return {
+		href: `/posts/${p.id}`, title: p.data.title, date: p.data.publishedAt as Date | null | undefined,
+		author: by?.displayName ?? SITE_NAME,
+		avatar: (by?.avatarMediaId && avatarById.get(by.avatarMediaId)) || null,
+		initials: (by?.displayName ?? SITE_NAME).split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase(),
+	};
+});
 // Ticker: newest analysis headlines first, then live market headlines.
 const ticker: { text: string; href: string; tag: string }[] = [
 	...posts.entries.slice(0, 8).map((p) => ({ text: p.data.title, href: `/posts/${p.id}`, tag: "Analysis" })),
@@ -132,6 +141,27 @@ const ticker: { text: string; href: string; tag: string }[] = [
 	...moved.slice(0, 3).map((m) => ({ text: `${name(m.race)}: Democratic odds ${m.delta >= 0 ? "up" : "down"} ${Math.abs(m.delta * 100).toFixed(1)} pts this week`, href: m.race.path, tag: "Movers" })),
 	...closest.slice(0, 2).map(({ r, c }) => ({ text: `Toss-up watch: ${name(r)} at ${c.lead} ${pct(c.lp)}`, href: r.path, tag: "Close race" })),
 ];
+// ---- midterms snapshot: control gauges, median seat counts, headline tiles
+const medianBin = (g: any) => {
+	const src = g?.k ?? g?.p; if (!src) return null;
+	let c = 0;
+	for (const b of src.bins) { c += b.p; if (c >= 0.5) return b.l as string; }
+	return null;
+};
+const senMedian = medianBin(next?.big?.senate), houseMedian = medianBin(next?.big?.house);
+const tossups = races.filter((r) => r.kind !== "control" && consensus(r).rating === "T").length;
+const sweepNow = cards.find((c) => c.label.startsWith("Democrats sweep"))?.now ?? null;
+const pvNow = cards.find((c) => c.label.startsWith("Democrats win the House vote"))?.now ?? null;
+
+// ---- storylines: lead changes and candidate moves
+const flips = next ? await leadChanges(next, 6) : [];
+const presRows = presCycle ? [
+	{ group: `${presYear}-pres-winner`, market: "presidency", items: merged(presCycle.pres.winner, 25) },
+	{ group: `${presYear}-pres-nomD`, market: "Democratic nomination", items: merged(presCycle.pres.nomD, 25) },
+	{ group: `${presYear}-pres-nomR`, market: "Republican nomination", items: merged(presCycle.pres.nomR, 25) },
+] : [];
+const cmoves = presYear ? await candidateMoves(presYear, presRows, 30) : { rising: [], fading: [] };
+
 const h1Words = "Political News, Election odds from Kalshi and Polymarket, race by race".split(" ");
 const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
@@ -221,6 +251,70 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	.ticker-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
 	:global(html.no-ticker-motion) .ticker-view { overflow-x: auto; }
 
+	/* midterms snapshot */
+	.snap { background: #11151c; color: #e8ebf0; border-radius: 18px; padding: clamp(18px, 3vw, 30px); display: flex; flex-direction: column; gap: 18px; position: relative; overflow: hidden; }
+	.snap::before { content: ""; position: absolute; inset: -40% -10% auto auto; width: 70%; height: 140%; background: radial-gradient(closest-side, rgb(163 38 42 / .22), transparent); pointer-events: none; }
+	.snap h2 { color: #fff; margin: 0; }
+	.snap-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; position: relative; }
+	.snap-count { display: flex; flex-direction: column; align-items: flex-end; }
+	.snap-count b { font-family: var(--font-display); font-size: clamp(44px, 6vw, 64px); line-height: .9; color: #fff; font-variant-numeric: tabular-nums; }
+	.snap-count span { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #a9b0bc; }
+	.snap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.1fr); gap: 16px; position: relative; }
+	@media (max-width: 960px) { .snap-grid { grid-template-columns: 1fr 1fr; } .snap-tiles { grid-column: 1 / -1; } }
+	@media (max-width: 560px) { .snap-grid { grid-template-columns: 1fr; } }
+	.gauge-card { background: #161c25; border: 1px solid #222a35; border-radius: 14px; padding: 14px 16px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 4px; transition: border-color .15s; }
+	.gauge-card:hover { border-color: #3d4756; }
+	.gauge-label { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; color: #a9b0bc; }
+	.gauge { width: 100%; height: auto; display: block; }
+	.g-track { fill: none; stroke: #222a35; stroke-width: 18; }
+	.g-r { fill: none; stroke: #e85a4c; stroke-width: 18; }
+	.g-d { fill: none; stroke: #5e92ee; stroke-width: 18; }
+	.g-mid { stroke: #fff; stroke-width: 2; opacity: .7; }
+	.gauge-nums { display: flex; justify-content: space-between; margin-top: -6px; }
+	.gauge-nums b { font-family: var(--font-display); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+	.gn-d { color: #5e92ee; } .gn-r { color: #e85a4c; text-align: right; }
+	.gauge-sub { font-size: 12px; color: #a9b0bc; }
+	.snap-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+	.snap-tile { background: #161c25; border: 1px solid #222a35; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+	.snap-tile b { font-family: var(--font-display); font-size: 28px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
+	.snap-tile span { font-size: 12.5px; color: #a9b0bc; }
+	.snap-foot { margin: 0; font-size: 12.5px; color: #7c8492; position: relative; }
+	.snap-foot a { color: #e8ebf0; }
+
+	/* storylines */
+	.flips { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+	.flip { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-border); text-decoration: none; color: inherit; overflow: hidden; }
+	.flip::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
+	.flip-tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.flip-race { font-family: var(--font-display); font-size: 20px; }
+	.flip-story { font-size: 14px; color: var(--color-text-secondary); }
+	.flip-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+	.fb { display: block; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+	.fb i { display: block; height: 100%; background: var(--color-muted); border-radius: 3px; }
+	.fb.now { height: 9px; }
+	.star { display: grid; grid-template-columns: minmax(0, 1fr) 90px 56px; grid-template-rows: auto auto; gap: 2px 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.star-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.star-name small { font-weight: 400; color: var(--color-muted); }
+	.star-name em { display: block; font-style: normal; font-weight: 400; font-size: 12px; color: var(--color-muted); }
+	.star-bar { display: block; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+	.star-bar i { display: block; height: 100%; border-radius: 3px; }
+	.star .num { text-align: right; font-weight: 600; }
+	.star-ft { grid-column: 1 / -1; font-size: 12px; color: var(--color-muted); text-align: left !important; font-weight: 400 !important; }
+
+	/* analysis lineup */
+	.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
+	.lineup a { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--color-border); text-decoration: none; color: inherit; transition: background .15s, padding .2s; }
+	.lineup a:hover { background: var(--bt-hover); padding-left: 10px; }
+	.lu-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-border); }
+	.lu-initials { display: flex; align-items: center; justify-content: center; background: #11151c; color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 17px; }
+	.lu-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+	.lu-title { font-family: var(--font-display); font-size: clamp(17px, 2vw, 22px); line-height: 1.2; }
+	.lu-meta { font-size: 13px; color: var(--color-muted); }
+	.lu-author { color: var(--color-text-secondary); font-weight: 600; }
+	.lu-arrow { font-size: 20px; color: var(--color-muted); transition: transform .2s; }
+	.lineup a:hover .lu-arrow { transform: translateX(4px); color: var(--color-text); }
+	@media (max-width: 520px) { .lineup a { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; } .lu-avatar { width: 40px; height: 40px; } .lu-arrow { display: none; } }
+
 	.lb-bar { display: block; height: 4px; margin-top: 5px; background: var(--color-border); border-radius: 2px; overflow: hidden; max-width: 260px; }
 	.lb-bar i { display: block; height: 100%; border-radius: 2px; }
 	.hl-ex { color: var(--color-text-secondary); font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -243,6 +337,49 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			<img class="home-hero-logo ga" data-ga="logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
 
+
+		{next && (
+			<section class="snap" aria-labelledby="snap-h">
+				<div class="snap-head">
+					<div>
+						<p class="eyebrow" style="color:#a9b0bc">{nextYear} midterms · snapshot</p>
+						<h2 id="snap-h">Where the {nextYear} midterms stand</h2>
+					</div>
+					<div class="snap-count"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to go</span></div>
+				</div>
+				<div class="snap-grid">
+					{[["Senate", senC, senMedian, 50], ["House", houseC, houseMedian, 218]].map(([ch, r, med, maj]: any) => {
+						if (!r) return null;
+						const c = consensus(r);
+						const dash = 251.3; // half-circle length for r = 80
+						return (
+							<a class="gauge-card" href={r.path}>
+								<span class="gauge-label">{ch} control</span>
+								<svg class="gauge" viewBox="0 0 200 116" role="img" aria-label={`${ch}: Democrats ${pct(c.D)}, Republicans ${pct(c.R)}`}>
+									<path d="M20 100 A80 80 0 0 1 180 100" class="g-track" />
+									<path d="M20 100 A80 80 0 0 1 180 100" class="g-r" />
+									<path d="M20 100 A80 80 0 0 1 180 100" class="g-d" stroke-dasharray={`${(c.D * dash).toFixed(1)} ${dash}`} data-gauge={c.D} />
+									<line x1="100" y1="14" x2="100" y2="30" class="g-mid" />
+								</svg>
+								<div class="gauge-nums">
+									<span class="gn-d"><b data-count-pct={c.D}>{pct(c.D)}</b> Dem</span>
+									<span class="gn-r"><b data-count-pct={c.R}>{pct(c.R)}</b> GOP</span>
+								</div>
+								{med && <span class="gauge-sub">Median outcome: {med} Republican seats · {maj} for control</span>}
+							</a>
+						);
+					})}
+					<div class="snap-tiles">
+						{sweepNow != null && <div class="snap-tile"><b data-count-pct={sweepNow}>{pct(sweepNow)}</b><span>Democrats sweep both chambers</span></div>}
+						{pvNow != null && <div class="snap-tile"><b data-count-pct={pvNow}>{pct(pvNow)}</b><span>Democrats win the national House vote</span></div>}
+						<div class="snap-tile"><b data-count={tossups}>{tossups}</b><span>races rated toss-up</span></div>
+						<div class="snap-tile"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span></div>
+					</div>
+				</div>
+				<p class="snap-foot">{totalRaces.toLocaleString()} races tracked · {counts.points.toLocaleString()} price points recorded · <a href={`/${nextYear}/`}>Every {nextYear} race →</a></p>
+			</section>
+		)}
+
 		{ticker.length > 0 && (
 			<section class="ticker" aria-label="Latest headlines">
 				<span class="ticker-label">Latest</span>
@@ -258,55 +395,54 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			</section>
 		)}
 
-		<section class="stats" aria-label="By the numbers">
-			<div class="stat"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to the {nextYear} election</span></div>
-			<div class="stat"><b data-count={totalRaces}>{totalRaces.toLocaleString()}</b><span>races tracked across {index?.cycles.length ?? 0} election years</span></div>
-			<div class="stat"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span></div>
-			<div class="stat"><b data-count={counts.points}>{counts.points.toLocaleString()}</b><span>price points recorded{counts.since ? ` since ${new Date(counts.since * 1000).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}</span></div>
-		</section>
 
 
-		<section class="analysis" aria-labelledby="analysis-h">
-			<div class="analysis-head">
-				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
-				<a href="/posts" class="datalinks">Every article →</a>
-			</div>
-			{featured ? (
-				<>
-					<div class="analysis-grid">
-						<a class="feature ga" data-ga="up" href={`/posts/${featured.id}`}>
-							{featured.data.featured_image ? (
-								<div class="feature-img"><Image image={featured.data.featured_image} /></div>
-							) : (
-								<div class="feature-img fallback"><img src="/brand/logo-full.jpg" alt="" width="709" height="900" /></div>
-							)}
-							<span class="post-meta">{postDate(featured.data.publishedAt)}{featured.data.bylines?.[0] && ` · ${featured.data.bylines[0].byline.displayName}`}</span>
-							<h3>{featured.data.title}</h3>
-							{featured.data.excerpt && <p>{featured.data.excerpt}</p>}
-						</a>
-						<ul class="headlines">
-							{sidePosts.map((p) => (
-								<li class="ga" data-ga="up"><a href={`/posts/${p.id}`}><span class="post-meta">{postDate(p.data.publishedAt)}{p.data.bylines?.[0] && ` · ${p.data.bylines[0].byline.displayName}`}</span><strong>{p.data.title}</strong>{p.data.excerpt && <span class="hl-ex">{p.data.excerpt}</span>}</a></li>
-							))}
-							{sidePosts.length === 0 && <li class="post-meta" style="padding:12px 0">More analysis is on the way.</li>}
-						</ul>
-					</div>
-					{gridPosts.length > 0 && (
-						<div class="post-grid">
-							{gridPosts.map((p) => (
-								<a class="post-card ga" data-ga="up" href={`/posts/${p.id}`}>
-									<span class="post-meta">{postDate(p.data.publishedAt)}</span>
-									<strong>{p.data.title}</strong>
-									{p.data.excerpt && <span class="hl-ex">{p.data.excerpt}</span>}
+
+
+		{(flips.length > 0 || cmoves.rising.length > 0) && (
+			<section aria-labelledby="story-h">
+				<h2 id="story-h">What's moving the markets</h2>
+				<p class="sec-note">Races where the favorite has flipped, and the candidates gaining or losing the most ground over the last 30 days.</p>
+				{flips.length > 0 && (
+					<div class="flips">
+						{flips.map((f) => {
+							const toLead = f.nowLeader === "D" ? f.to : 1 - f.to;
+							const fromLead = f.nowLeader === "D" ? f.from : 1 - f.from;
+							const col = f.nowLeader === "D" ? "var(--bt-d)" : "var(--bt-r)";
+							return (
+								<a class="flip ga" data-ga="flip" href={f.race.path} style={`--c:${col}`}>
+									<span class="flip-tag">Lead change · {f.days} days</span>
+									<strong class="flip-race">{name(f.race)}</strong>
+									<span class="flip-story">{f.who ?? (f.nowLeader === "D" ? "The Democrat" : "The Republican")} was at <b>{pct(fromLead)}</b>, now leads at <b style={`color:${col}`}>{pct(toLead)}</b></span>
+									<div class="flip-bars" aria-hidden="true">
+										<span class="fb"><i style={`width:${fromLead * 100}%`}></i></span>
+										<span class="fb now"><i data-ga-bar style={`width:${toLead * 100}%;background:${col}`}></i></span>
+									</div>
 								</a>
-							))}
-						</div>
-					)}
-				</>
-			) : (
-				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
-			)}
-		</section>
+							);
+						})}
+					</div>
+				)}
+				{(cmoves.rising.length > 0 || cmoves.fading.length > 0) && (
+					<div class="grid2" style="margin-top:16px">
+						{([["Rising stars", cmoves.rising, true], ["Losing ground", cmoves.fading, false]] as const).map(([t, list, up]) => list.length > 0 && (
+							<div class="panel">
+								<h3 style="font-size:18px">{t} <span class="sec-note" style="font-weight:400;font-size:13px">· {presYear}, 30 days</span></h3>
+								{list.map((m) => (
+									<div class="star ga" data-ga="up">
+										<span class="star-name">{m.name}{m.pa && <small> ({m.pa})</small>}<em>{m.market}</em></span>
+										<span class="star-bar" aria-hidden="true"><i data-ga-bar style={`width:${Math.min(100, Math.abs(m.delta) * 400)}%;background:${up ? "var(--bt-pos)" : "var(--bt-r)"}`}></i></span>
+										<span class={`num ${up ? "up" : "down"}`}>{up ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
+										<span class="star-ft num">{pct(m.then)} → {pct(m.now)}</span>
+									</div>
+								))}
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+		)}
+
 
 		{cards.length > 0 && (
 			<section>
@@ -330,6 +466,32 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 				</div>
 			</section>
 		)}
+
+
+		<section class="analysis" aria-labelledby="analysis-h">
+			<div class="analysis-head">
+				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
+				<a href="/posts" class="datalinks">Every article →</a>
+			</div>
+			{lineup.length > 0 ? (
+				<ol class="lineup">
+					{lineup.map((p) => (
+						<li class="ga" data-ga="line">
+							<a href={p.href}>
+								{p.avatar ? <img class="lu-avatar" src={p.avatar} alt="" width="52" height="52" loading="lazy" /> : <span class="lu-avatar lu-initials" aria-hidden="true">{p.initials}</span>}
+								<span class="lu-text">
+									<strong class="lu-title">{p.title}</strong>
+									<span class="lu-meta"><span class="lu-author">{p.author}</span>{p.date && <> · <time datetime={p.date.toISOString()}>{postDate(p.date)}</time></>}</span>
+								</span>
+								<span class="lu-arrow" aria-hidden="true">→</span>
+							</a>
+						</li>
+					))}
+				</ol>
+			) : (
+				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
+			)}
+		</section>
 
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
@@ -482,6 +644,25 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 			gsap.to(o, { v: end, duration: 1.4, ease: "power2.out", scrollTrigger: { trigger: el, start: "top 92%" },
 				onUpdate: () => (el.textContent = `${Math.round(o.v)}%`) });
 		});
+
+		// Snapshot gauges sweep in
+		document.querySelectorAll<SVGPathElement>("[data-gauge]").forEach((g) => {
+			const len = 251.3 * Number(g.dataset.gauge);
+			gsap.fromTo(g, { attr: { "stroke-dasharray": `0 251.3` } }, { attr: { "stroke-dasharray": `${len} 251.3` }, duration: 1.8, ease: "power3.inOut", delay: 0.3,
+				scrollTrigger: { trigger: g, start: "top 95%" } });
+		});
+		gsap.from(".snap .gauge-card, .snap .snap-tile", { y: 24, opacity: 0, duration: 0.7, stagger: 0.08, ease: "power3.out", delay: 0.2, clearProps: "transform,opacity" });
+
+		// Lead-change cards flip in
+		gsap.set("[data-ga='flip']", { rotateX: -70, opacity: 0, transformPerspective: 800, transformOrigin: "50% 0%" });
+		ScrollTrigger.batch("[data-ga='flip']", { start: "top 92%", once: true,
+			onEnter: (els) => gsap.to(els, { rotateX: 0, opacity: 1, duration: 0.9, ease: "back.out(1.4)", stagger: 0.1, clearProps: "transform,opacity" }) });
+
+		// Analysis lineup slides in line by line
+		gsap.set("[data-ga='line']", { x: -40, opacity: 0 });
+		ScrollTrigger.batch("[data-ga='line']", { start: "top 92%", once: true,
+			onEnter: (els) => gsap.to(els, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out", stagger: 0.08, clearProps: "transform,opacity" }) });
+		gsap.utils.toArray<HTMLElement>(".lu-avatar").forEach((a) => gsap.from(a, { scale: 0, duration: 0.6, ease: "back.out(2.2)", scrollTrigger: { trigger: a, start: "top 92%" } }));
 
 		// Rise-in for cards, rows, articles
 		gsap.set("[data-ga='up']", { y: 26, opacity: 0, transition: "none" });

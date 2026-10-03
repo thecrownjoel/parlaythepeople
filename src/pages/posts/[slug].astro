@@ -1,4 +1,5 @@
 ---
+import { mediaUrls } from "../../lib/media";
 import {
 	getEmDashEntry,
 	getEmDashCollection,
@@ -62,6 +63,8 @@ const seo = getSeoMeta(post, {
 
 // Bylines are already hydrated by getEmDashEntry
 const bylines = post.data.bylines ?? [];
+// byline avatars are served by storage key, not media id
+const avatarUrls = await mediaUrls(bylines.map((c) => c.byline.avatarMediaId));
 
 // Get reading time
 const readingTime = getReadingTime(post.data.content);
@@ -138,9 +141,9 @@ const publishDate =
 								<div class="bylines">
 									{bylines.map((credit) => (
 										<div class="byline">
-											{credit.byline.avatarMediaId && (
+											{credit.byline.avatarMediaId && avatarUrls.get(credit.byline.avatarMediaId) && (
 												<img
-													src={`/_emdash/api/media/file/${credit.byline.avatarMediaId}`}
+													src={avatarUrls.get(credit.byline.avatarMediaId)}
 													alt={credit.byline.displayName}
 													class="byline-avatar"
 												/>

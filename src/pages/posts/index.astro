@@ -1,6 +1,7 @@
 ---
 import { getEmDashCollection, getTermsForEntries } from "emdash";
 import Base from "../../layouts/Base.astro";
+import { mediaUrls } from "../../lib/media";
 import { getReadingTime } from "../../utils/reading-time";
 
 // Sort in the database rather than in JS — lets the DB use its index on
@@ -27,6 +28,8 @@ const tagsByEntry = await getTermsForEntries(
 	"tag",
 );
 
+// byline avatars are served by storage key, not media id
+const avatarUrls = await mediaUrls(posts.flatMap((p) => (p.data.bylines ?? []).map((c) => c.byline.avatarMediaId)));
 const postsWithTags = posts.map((post) => ({
 	post,
 	tags: tagsByEntry.get(post.data.id) ?? [],
@@ -67,9 +70,9 @@ const formatDate = (date: Date) =>
 													<>
 														{index > 0 && <span class="byline-sep">,</span>}
 														<span class="post-byline">
-															{credit.byline.avatarMediaId && (
+															{credit.byline.avatarMediaId && avatarUrls.get(credit.byline.avatarMediaId) && (
 																<img
-																	src={`/_emdash/api/media/file/${credit.byline.avatarMediaId}`}
+																	src={avatarUrls.get(credit.byline.avatarMediaId)}
 																	alt={credit.byline.displayName}
 																	class="post-byline-avatar"
 																/>

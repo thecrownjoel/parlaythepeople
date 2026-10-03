@@ -1,6 +1,7 @@
 ---
 import type { ContentBylineCredit, EditProxy, MediaValue } from "emdash";
 import { Image } from "emdash/ui";
+import { mediaUrls } from "../lib/media";
 
 interface Props {
 	title: string;
@@ -25,6 +26,9 @@ const {
 	bylines,
 	edit,
 } = Astro.props;
+
+// byline avatars are served by storage key, not media id
+const avatarUrls = await mediaUrls((bylines ?? []).map((c) => c.byline.avatarMediaId));
 
 const formattedDate = date
 	? date.toLocaleDateString("en-US", {
@@ -54,9 +58,9 @@ const formattedDate = date
 							<div class="card-bylines">
 								{bylines.slice(0, 1).map((credit) => (
 									<span class="card-byline">
-										{credit.byline.avatarMediaId && (
+										{credit.byline.avatarMediaId && avatarUrls.get(credit.byline.avatarMediaId) && (
 											<img
-												src={`/_emdash/api/media/file/${credit.byline.avatarMediaId}`}
+												src={avatarUrls.get(credit.byline.avatarMediaId)}
 												alt={credit.byline.displayName}
 												class="card-byline-avatar"
 											/>

@@ -8,7 +8,13 @@
 import { env } from "cloudflare:workers";
 
 export type Party = "D" | "R" | "I" | null;
-export interface Outcome { id?: string; tok?: string; n: string; pa: Party; p: number; d: number | null; v: number }
+export interface Outcome {
+	id?: string; tok?: string; n: string; pa: Party;
+	p: number; // price used for odds (bid/ask midpoint, or last trade on wide spreads), dollars
+	d: number | null; // 24-hour price change, dollars
+	v: number; // volume
+	q?: [number | null, number | null, number | null]; // best bid, best ask, last trade, dollars
+}
 export interface Source { o: Outcome[]; url: string; v?: number; D?: number; R?: number; t?: string }
 export interface Race {
 	id: string; cycle: number; kind: "senate" | "governor" | "house" | "control"; st: string; state: string;

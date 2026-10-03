@@ -93,6 +93,21 @@ function rows(s: Source) {
 const partyName = (p: string | null) => (p === "D" ? "Democratic" : p === "R" ? "Republican" : p === "I" ? "Independent" : "Other");
 const generic = (n: string) => /^(democrat|democrats|democratic party|republican|republicans|republican party|independent|other)$/i.test(n.trim());
 ---
+<style>
+	.quote-board { background: #11151c; color: #e8ebf0; border-radius: 12px; padding: 14px 16px; min-width: 0; box-shadow: inset 0 0 0 1px #222a35; }
+	.qb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
+	.qb-head a { font-family: var(--font-body); font-weight: 500; font-size: 12.5px; letter-spacing: 0; text-transform: none; color: #a9b0bc; }
+	.qb { width: 100%; border-collapse: collapse; font-family: var(--font-mono), monospace; font-size: 13.5px; }
+	.qb th { font-family: var(--font-body); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #7c8492; font-weight: 600; padding: 6px 6px; text-align: left; border-bottom: 1px solid #222a35; }
+	.qb td { padding: 9px 6px; border-bottom: 1px solid #1b222c; color: #c3c9d3; white-space: nowrap; }
+	.qb tr:last-child td { border-bottom: 0; }
+	.qb .r { text-align: right; }
+	.qb .cand { font-family: var(--font-body); color: #fff; font-weight: 600; white-space: normal; }
+	.qb-price { color: #fff !important; font-weight: 600; font-size: 16px; }
+	.qb-up { color: #4cc38a !important; } .qb-down { color: #f07a6c !important; }
+	.qb-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #7c8492; }
+	@media (max-width: 520px) { .qb th:nth-child(5), .qb td:nth-child(5) { display: none; } .qb { font-size: 12.5px; } }
+</style>
 <Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
@@ -134,6 +149,39 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 				<div><dt>Gap between exchanges</dt><dd class="num">{gap != null ? `${(gap * 100).toFixed(1)} pts` : "—"}</dd></div>
 				<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}{days > 0 && ` (${days} days)`}</dd></div>
 			</dl>
+		</section>
+
+		<section aria-labelledby="quotes-h">
+			<h2 id="quotes-h">Share prices</h2>
+			<p class="sec-note">Each contract pays $1 if that outcome happens. The price is what traders are paying now, so 60¢ means roughly a 60% chance. Bid is the best offer to buy, ask the best offer to sell.</p>
+			<div class="grid2">
+				{(["k", "p"] as const).filter((x) => race[x]).map((x) => (
+					<div class="quote-board">
+						<div class="qb-head"><span>{SRC_NAME[x]}</span><a href={race[x]!.url} rel="nofollow noopener" target="_blank">Trade on {SRC_NAME[x]} ↗</a></div>
+						<table class="qb">
+							<thead><tr><th>Contract</th><th class="r">Price</th><th class="r">Bid</th><th class="r">Ask</th><th class="r">Last</th><th class="r">24h</th></tr></thead>
+							<tbody>
+								{race[x]!.o.filter((o) => o.p >= 0.005 || race[x]!.o.length <= 4).slice(0, 8).map((o) => {
+									const [bid, ask, last] = o.q ?? [null, null, null];
+									const c = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v * 100)}¢`);
+									const d = o.d == null ? null : Math.round(o.d * 100);
+									return (
+										<tr>
+											<td><span class="cand"><span class={`sw ${o.pa ?? "O"}`}></span>{generic(o.n) ? partyName(o.pa) : o.n}</span></td>
+											<td class="r qb-price">{c(o.p)}</td>
+											<td class="r">{c(bid)}</td>
+											<td class="r">{c(ask)}</td>
+											<td class="r">{c(last)}</td>
+											<td class={`r ${d == null || d === 0 ? "" : d > 0 ? "qb-up" : "qb-down"}`}>{d == null ? "—" : d === 0 ? "0¢" : `${d > 0 ? "▲" : "▼"}${Math.abs(d)}¢`}</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+						<div class="qb-foot"><span>Volume {fmtVol(race[x]!.v ?? 0)}</span><span>As of {fmtDate(data.meta.generated)}</span></div>
+					</div>
+				))}
+			</div>
 		</section>
 
 		<section>
