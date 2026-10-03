@@ -1,0 +1,142 @@
+---
+/**
+ * Spinning globe with an arc from Washington to every state with a race this cycle.
+ * Real data only: arc color = favored party, pulse speed and glow = money traded on that race.
+ * Loads its map data only when scrolled into view; drag to turn; still for reduced-motion users.
+ */
+import type { StateRace } from "../lib/trends";
+interface Props { races: (StateRace & { office: string })[] }
+const { races } = Astro.props;
+const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.lead, p: Math.round(r.lp * 100), v: Math.round(r.vol), u: r.path }))).replace(/</g, "\\u003c");
+---
+<div class="mg" data-globe>
+	<canvas class="mg-canvas" aria-label="Globe showing a line from Washington, D.C. to each state with a race; color shows the favored party and brightness shows trading volume" role="img"></canvas>
+	<p class="mg-hint" aria-hidden="true">Drag to turn</p>
+	<script type="application/json" data-globe-data set:html={json} />
+</div>
+
+<script>
+	import { geoOrthographic, geoPath, geoGraticule10, geoCentroid, geoInterpolate, geoDistance } from "d3-geo";
+	import { feature } from "topojson-client";
+
+	type R = { s: string; o: string; l: "D" | "R" | "I"; p: number; v: number; u: string };
+	const DC: [number, number] = [-77.04, 38.9];
+
+	async function start(root: HTMLElement) {
+		const races = JSON.parse(root.querySelector("[data-globe-data]")!.textContent!) as R[];
+		const [{ default: us }, { default: world }] = await Promise.all([
+			import("us-atlas/states-10m.json"),
+			import("world-atlas/land-110m.json"),
+		]);
+		const states = feature(us as any, (us as any).objects.states) as any;
+		const land = feature(world as any, (world as any).objects.land) as any;
+		const centroid = new Map<string, [number, number]>();
+		for (const f of states.features) centroid.set(f.properties.name, geoCentroid(f) as [number, number]);
+
+		const canvas = root.querySelector("canvas")!;
+		const ctx = canvas.getContext("2d")!;
+		const css = getComputedStyle(root);
+		const col = { D: css.getPropertyValue("--mg-d").trim(), R: css.getPropertyValue("--mg-r").trim(), I: "#c9cdd5" };
+		const maxV = Math.max(1, ...races.map((r) => r.v));
+		const arcs = races
+			.filter((r) => centroid.has(r.s))
+			.map((r, i) => {
+				const to = centroid.get(r.s)!;
+				const w = Math.sqrt(r.v / maxV); // 0..1
+				return { ...r, to, interp: geoInterpolate(DC, to), w, speed: 0.12 + w * 0.5, phase: (i * 0.137) % 1 };
+			});
+
+		const proj = geoOrthographic().clipAngle(90).precision(0.6);
+		const path = geoPath(proj, ctx);
+		const grat = geoGraticule10();
+		let size = 0, rot = 96, tilt = -32, dragging = false, lastX = 0, lastY = 0, last = performance.now();
+		const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+		function resize() {
+			const r = canvas.getBoundingClientRect();
+			const dpr = Math.min(2, devicePixelRatio || 1);
+			size = r.width;
+			canvas.width = r.width * dpr;
+			canvas.height = r.width * dpr;
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			proj.translate([size / 2, size / 2]).scale(size / 2 - 6);
+		}
+
+		function frame(now: number) {
+			const dt = Math.min(64, now - last) / 1000;
+			last = now;
+			if (!dragging && !reduce) rot = (rot - 6 * dt) % 360;
+			proj.rotate([rot, tilt]);
+			const center: [number, number] = [-rot, -tilt];
+			ctx.clearRect(0, 0, size, size);
+			// sphere + glow
+			const g = ctx.createRadialGradient(size * 0.4, size * 0.35, size * 0.05, size / 2, size / 2, size / 2);
+			g.addColorStop(0, "#1c2533"); g.addColorStop(1, "#0b0f15");
+			ctx.beginPath(); path({ type: "Sphere" } as any); ctx.fillStyle = g; ctx.fill();
+			ctx.beginPath(); path(grat); ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.6; ctx.stroke();
+			ctx.beginPath(); path(land); ctx.fillStyle = "#1f2835"; ctx.fill();
+			ctx.beginPath(); path(states); ctx.fillStyle = "#273242"; ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 0.5; ctx.stroke();
+			// arcs
+			const t = now / 1000;
+			for (const a of arcs) {
+				const c = col[a.l];
+				ctx.beginPath(); path({ type: "LineString", coordinates: [DC, a.to] } as any);
+				ctx.strokeStyle = c; ctx.globalAlpha = 0.25 + a.w * 0.5; ctx.lineWidth = 0.8 + a.w * 1.6; ctx.stroke();
+				ctx.globalAlpha = 1;
+				// pulse travelling toward the state
+				const k = reduce ? 1 : (t * a.speed + a.phase) % 1;
+				const pt = a.interp(k) as [number, number];
+				if (geoDistance(pt, center) < Math.PI / 2 - 0.02) {
+					const [x, y] = proj(pt)!;
+					ctx.beginPath(); ctx.arc(x, y, 1.6 + a.w * 2.4, 0, Math.PI * 2);
+					ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 8 + a.w * 10; ctx.fill(); ctx.shadowBlur = 0;
+				}
+				if (geoDistance(a.to, center) < Math.PI / 2) {
+					const [x, y] = proj(a.to)!;
+					ctx.beginPath(); ctx.arc(x, y, 2 + a.w * 3.5, 0, Math.PI * 2); ctx.fillStyle = c; ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+				}
+			}
+			if (geoDistance(DC, center) < Math.PI / 2) {
+				const [x, y] = proj(DC)!;
+				ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = "#ffffff"; ctx.shadowColor = "#a3262a"; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+			}
+			if (running) requestAnimationFrame(frame);
+		}
+
+		let running = false;
+		const run = (on: boolean) => {
+			if (reduce) return; // reduced motion: draw once, redraw only while dragging
+			if (on && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
+			if (!on) running = false;
+		};
+		new IntersectionObserver(([e]) => run(e.isIntersecting && !document.hidden)).observe(canvas);
+		document.addEventListener("visibilitychange", () => run(!document.hidden));
+		canvas.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+		canvas.addEventListener("pointermove", (e) => {
+			if (!dragging) return;
+			rot += (e.clientX - lastX) * 0.4;
+			tilt = Math.max(-70, Math.min(70, tilt - (e.clientY - lastY) * 0.4));
+			lastX = e.clientX; lastY = e.clientY;
+			if (reduce) requestAnimationFrame(frame);
+		});
+		canvas.addEventListener("pointerup", () => (dragging = false));
+		new ResizeObserver(() => { resize(); if (!running) requestAnimationFrame(frame); }).observe(canvas);
+		resize();
+		if (reduce) requestAnimationFrame(frame);
+		else run(true);
+	}
+
+	for (const root of document.querySelectorAll<HTMLElement>("[data-globe]")) {
+		const io = new IntersectionObserver(([e]) => {
+			if (e.isIntersecting) { io.disconnect(); start(root); }
+		}, { rootMargin: "200px" });
+		io.observe(root);
+	}
+</script>
+
+<style>
+	.mg { --mg-d: #5e92ee; --mg-r: #e85a4c; position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
+	.mg-canvas { width: 100%; aspect-ratio: 1; display: block; cursor: grab; touch-action: pan-y; }
+	.mg-canvas:active { cursor: grabbing; }
+	.mg-hint { position: absolute; bottom: 4px; right: 8px; margin: 0; font-size: 11px; color: rgb(255 255 255 / 0.45); pointer-events: none; }
+</style>

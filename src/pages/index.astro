@@ -1,39 +1,46 @@
 ---
-/** Home: the next election at a glance, the presidency, closest races, market disagreements, latest analysis. */
+/**
+ * Home: the next election at a glance, with live trends, the money map, movers, the presidency,
+ * and the Analysis desk (which carries the site between elections).
+ */
 import { getEmDashCollection } from "emdash";
+import { Image } from "emdash/ui";
 import Base from "../layouts/Base.astro";
 import JsonLd from "../components/JsonLd.astro";
-import { getIndex, getCycle, consensus, shares, pct, fmtDate, daysUntil, PARTY_PLURAL, type Race, type CycleData } from "../lib/markets";
+import Sparkline from "../components/Sparkline.astro";
+import StateTileMap from "../components/StateTileMap.astro";
+import MoneyGlobe from "../components/MoneyGlobe.astro";
+import { getIndex, getCycle, consensus, shares, pct, fmtVol, fmtDate, daysUntil, PARTY_PLURAL, type Race, type PresMarket, type Source } from "../lib/markets";
+import { raceSpark, outcomeSpark, movers, historyCounts, stateRaces, type Spark } from "../lib/trends";
+import { nameKey } from "../lib/names";
 import { organization, graph, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
 
 const origin = Astro.url.origin;
 const index = await getIndex();
 const nextYear = index?.next;
-const [next, posts] = await Promise.all([
+const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
+const [next, presCycle, posts, counts] = await Promise.all([
 	nextYear ? getCycle(nextYear) : Promise.resolve(null),
-	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 3 }),
+	presYear ? getCycle(presYear) : Promise.resolve(null),
+	getEmDashCollection("posts", { orderBy: { published_at: "desc" }, limit: 7 }),
+	historyCounts(),
 ]);
 if (Astro.cache?.enabled) Astro.cache.set(posts.cacheHint);
-// the next cycle that has a presidential race
-const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
-const presCycle = presYear ? (presYear === nextYear ? next : await getCycle(presYear)) : null;
-const presParty = (() => {
-	const m = presCycle?.pres.party; if (!m) return null;
-	const arr = (["k", "p"] as const).map((x) => m[x]).filter(Boolean).map((s) => shares(s as any)!);
-	return arr.length ? { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length } : null;
-})();
 
 const races = next?.races ?? [];
-const ctl = (id: string) => races.find((r) => r.id === id);
-const senC = nextYear ? ctl(`${nextYear}-senate-control`) : undefined;
-const houseC = nextYear ? ctl(`${nextYear}-house-control`) : undefined;
-const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 8);
-const gaps = races.filter((r) => r.k && r.p).map((r) => ({ r, g: Math.abs(shares(r.k)!.D - shares(r.p)!.D) })).sort((a, b) => b.g - a.g).slice(0, 5);
+const byId = (id: string) => races.find((r) => r.id === id);
+const senC = nextYear ? byId(`${nextYear}-senate-control`) : undefined;
+const houseC = nextYear ? byId(`${nextYear}-house-control`) : undefined;
+const avgShares = (m?: PresMarket) => {
+	const arr = (["k", "p"] as const).map((x) => m?.[x]).filter(Boolean).map((s) => shares(s as Source)!);
+	return arr.length ? { D: arr.reduce((a, s) => a + s.D, 0) / arr.length, R: arr.reduce((a, s) => a + s.R, 0) / arr.length } : null;
+};
+const presParty = avgShares(presCycle?.pres.party);
 const days = next ? daysUntil(next.meta.election_day) : null;
 const when = next ? fmtDate(next.meta.generated, false) : "";
-const name = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
 
+// ---- lede
 const favored: { party: "D" | "R"; what: string; p: number }[] = [];
 if (senC) favored.push({ party: consensus(senC).lead as "D" | "R", what: "the Senate", p: consensus(senC).lp });
 if (houseC) favored.push({ party: consensus(houseC).lead as "D" | "R", what: "the House", p: consensus(houseC).lp });
@@ -44,61 +51,238 @@ const summary = (["D", "R"] as const)
 	.filter((fs) => fs.length)
 	.map((fs) => `${PARTY_PLURAL[fs[0].party]} are favored to win ${list(fs.map((f) => `${f.what} (${pct(f.p)})`))}`);
 const lede = summary.length
-	? `As of ${when}, prediction markets say ${summary.join("; ")}. Parlay the People tracks every race on Kalshi and Polymarket, side by side, and keeps the price history.`
+	? `As of ${when}, prediction markets say ${summary.join("; ")}. ${SITE_NAME} tracks every race on Kalshi and Polymarket, side by side, keeps the price history, and covers the politics behind the numbers.`
 	: SITE_DESCRIPTION;
+
+// ---- stats band
+const totalRaces = (index?.cycles ?? []).reduce((a, c) => a + c.races, 0);
+const traded = races.reduce((a, r) => a + (r.k?.v ?? 0) + (r.p?.v ?? 0), 0);
+
+// ---- trend cards (90-day lines; change over 30 days)
+type Card = { label: string; sub: string; now: number | null; color: string; spark: Spark[]; href: string };
+const sparkChange = (s: Spark[]) => {
+	if (s.length < 2) return null;
+	const cut = s[s.length - 1].ts - 30 * 86400;
+	const base = [...s].reverse().find((p) => p.ts <= cut) ?? s[0];
+	return s[s.length - 1].v - base.v;
+};
+const bopNow = next?.big?.bop ? (["k", "p"] as const).map((x) => next.big.bop[x]?.o?.DD).filter((v) => v != null) : [];
+const [sSen, sHouse, sPres, sSweep, sPv] = await Promise.all([
+	senC ? raceSpark(senC.id) : Promise.resolve([]),
+	houseC ? raceSpark(houseC.id) : Promise.resolve([]),
+	presYear ? raceSpark(`${presYear}-president`) : Promise.resolve([]),
+	nextYear ? outcomeSpark(`${nextYear}-bop`, "DD") : Promise.resolve([]),
+	nextYear ? outcomeSpark(`${nextYear}-majority`, "popvote-D") : Promise.resolve([]),
+]);
+const cards: Card[] = [
+	senC && { label: "Democrats win the Senate", sub: `${nextYear}`, now: consensus(senC).D, color: "var(--bt-d)", spark: sSen, href: senC.path },
+	houseC && { label: "Democrats win the House", sub: `${nextYear}`, now: consensus(houseC).D, color: "var(--bt-d)", spark: sHouse, href: houseC.path },
+	presParty && { label: "Democrats win the presidency", sub: `${presYear}`, now: presParty.D, color: "var(--bt-d)", spark: sPres, href: `/${presYear}/president/` },
+	bopNow.length && { label: "Democrats sweep Congress", sub: `${nextYear} balance of power`, now: (bopNow as number[]).reduce((a, b) => a + b, 0) / bopNow.length, color: "var(--bt-d)", spark: sSweep, href: `/${nextYear}/` },
+	sPv.length && { label: "Democrats win the House vote", sub: `${nextYear} national popular vote`, now: sPv[sPv.length - 1].v, color: "var(--bt-d)", spark: sPv, href: `/${nextYear}/` },
+].filter(Boolean) as Card[];
+
+// ---- map & globe
+const senMap = next ? stateRaces(next, "senate") : [];
+const govMap = next ? stateRaces(next, "governor") : [];
+const globeRaces = [...senMap.map((r) => ({ ...r, office: "Senate" })), ...govMap.map((r) => ({ ...r, office: "Governor" }))];
+const topMoney = [...globeRaces].sort((a, b) => b.vol - a.vol).slice(0, 6);
+
+// ---- lists
+const name = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
+const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 8);
+const gaps = races.filter((r) => r.k && r.p).map((r) => ({ r, g: Math.abs(shares(r.k)!.D - shares(r.p)!.D) })).sort((a, b) => b.g - a.g).slice(0, 6);
+const moved = next ? await movers(next, 7, 6) : [];
+
+// ---- presidency leaderboard
+function merged(m?: PresMarket, limit = 6) {
+	if (!m) return [];
+	const rows = new Map<string, { key: string; n: string; pa: string | null; vals: number[] }>();
+	for (const x of ["k", "p"] as const) {
+		const s = m[x];
+		if (!s) continue;
+		const tot = s.o.reduce((a, o) => a + o.p, 0) || 1;
+		for (const o of s.o) {
+			const key = nameKey(o.n);
+			const row = rows.get(key) ?? { key, n: o.n, pa: o.pa, vals: [] };
+			row.vals.push(o.p / tot);
+			row.pa = row.pa ?? o.pa;
+			rows.set(key, row);
+		}
+	}
+	return [...rows.values()].map((r) => ({ ...r, v: r.vals.reduce((a, b) => a + b, 0) / r.vals.length })).sort((a, b) => b.v - a.v).slice(0, limit);
+}
+const leaders = merged(presCycle?.pres.winner, 6);
+const leaderSparks = await Promise.all(leaders.map((l) => outcomeSpark(`${presYear}-pres-winner`, l.key)));
+const nomD = merged(presCycle?.pres.nomD, 3), nomR = merged(presCycle?.pres.nomR, 3);
+
+// ---- ballot measures closest to a coin flip (skip thin markets)
+const coinFlips = (next?.big?.ballots ?? []).filter((b: any) => !b.thin).sort((a: any, b: any) => Math.abs(a.p - 0.5) - Math.abs(b.p - 0.5)).slice(0, 6);
+
+// ---- analysis
+const [featured, ...morePosts] = posts.entries;
+const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
+
 const ld = graph(organization(origin), {
 	"@type": "WebSite", "@id": `${origin}/#site`, url: `${origin}/`, name: SITE_NAME, description: SITE_DESCRIPTION, publisher: { "@id": `${origin}/#org` },
 	potentialAction: { "@type": "SearchAction", target: `${origin}/search?q={query}`, "query-input": "required name=query" },
 });
-function ControlCard(r: Race | undefined, label: string) { return r ? { r, c: consensus(r), label } : null; }
-const cards = [ControlCard(senC, "Senate control"), ControlCard(houseC, "House control")].filter(Boolean) as { r: Race; c: ReturnType<typeof consensus>; label: string }[];
+const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "R" ? "var(--bt-r)" : "var(--bt-oth)");
 ---
 <style>
 	.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
 	.home-hero-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 	.home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; border-radius: 14px; display: block; box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); }
-	@media (max-width: 760px) {
-		.home-hero { grid-template-columns: 1fr; }
-		.home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; }
-	}
+	@media (max-width: 760px) { .home-hero { grid-template-columns: 1fr; } .home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; } }
+
+	.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+	.stat { background: var(--color-surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+	.stat b { font-family: var(--font-display); font-size: clamp(26px, 3.2vw, 36px); line-height: 1; font-variant-numeric: tabular-nums; }
+	.stat span { font-size: 12.5px; color: var(--color-text-secondary); }
+
+	.globe-panel { background: #11151c; color: #e8ebf0; border-radius: 16px; padding: clamp(18px, 3vw, 32px); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: center; overflow: hidden; position: relative; }
+	.globe-panel::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 60% at 30% 40%, rgb(163 38 42 / 0.18), transparent 70%); pointer-events: none; }
+	.globe-panel h2 { color: #fff; }
+	.globe-panel .eyebrow { color: #a9b0bc; }
+	.globe-copy { position: relative; display: flex; flex-direction: column; gap: 12px; }
+	.globe-copy p { margin: 0; color: #c3c9d3; max-width: 52ch; }
+	.money-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+	.money-list a { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid #222a35; color: #e8ebf0; text-decoration: none; font-size: 14px; }
+	.money-list a:hover { color: #fff; }
+	.money-list .num { color: #a9b0bc; font-size: 13px; }
+	.legend-dark { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #a9b0bc; }
+	.legend-dark span { display: inline-flex; align-items: center; gap: 6px; }
+	.legend-dark i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+	@media (max-width: 860px) { .globe-panel { grid-template-columns: 1fr; } }
+
+	.trend { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
+	.trend:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgb(0 0 0 / .12); }
+	.trend-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+	.trend-val { font-family: var(--font-display); font-size: 34px; line-height: 1; color: var(--bt-d); font-variant-numeric: tabular-nums; }
+	.trend-chg { font-family: var(--font-mono), monospace; font-size: 12.5px; }
+	.up { color: var(--bt-pos); } .down { color: var(--bt-r); }
+	.trend-lab { font-weight: 600; font-size: 14px; }
+	.trend-sub { font-size: 12px; color: var(--color-muted); }
+	.trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 14px; }
+
+	.mover { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); text-decoration: none; color: inherit; }
+	.mover small { grid-column: 1; color: var(--color-muted); font-size: 12px; }
+	.mover .num { grid-row: span 2; align-self: center; font-size: 14px; font-weight: 600; }
+
+	.lb { display: grid; grid-template-columns: 22px minmax(0, 1fr) 110px 56px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.lb-rank { font-family: var(--font-mono), monospace; color: var(--color-muted); font-size: 13px; }
+	.lb-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.lb-name small { font-weight: 400; color: var(--color-muted); }
+	.lb .num { text-align: right; font-weight: 600; }
+	.noms { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+	.noms ol { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 3px; }
+
+	.analysis { border-top: 3px solid var(--color-text); padding-top: 18px; }
+	.analysis-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+	.analysis-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+	.feature { text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 10px; }
+	.feature-img { border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: #11151c; }
+	.feature-img :global(img) { width: 100%; height: 100%; object-fit: cover; display: block; }
+	.feature-img.fallback { display: flex; align-items: center; justify-content: center; }
+	.feature-img.fallback img { width: auto; height: 86%; border-radius: 8px; object-fit: contain; }
+	.feature h3 { font-family: var(--font-display); font-size: clamp(24px, 3vw, 34px); line-height: 1.1; margin: 0; }
+	.feature p { margin: 0; color: var(--color-text-secondary); font-size: 16px; line-height: 1.55; }
+	.post-meta { font-size: 12.5px; color: var(--color-muted); }
+	.headlines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+	.headlines a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--color-border); text-decoration: none; color: inherit; }
+	.headlines a:hover strong { text-decoration: underline; }
+	.headlines strong { font-size: 17px; line-height: 1.3; }
+	.analysis-empty { background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: 12px; padding: 24px; color: var(--color-text-secondary); }
+	@media (max-width: 860px) { .analysis-grid { grid-template-columns: 1fr; } }
+	@media (max-width: 520px) { .noms { grid-template-columns: 1fr; } .lb { grid-template-columns: 18px minmax(0, 1fr) 70px 48px; } }
+
+	:global(.anim-ready) .reveal-item { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+	:global(.anim-ready.in-view) .reveal-item { opacity: 1; transform: none; }
+	@media (prefers-reduced-motion: reduce) { :global(.anim-ready) .reveal-item { opacity: 1; transform: none; transition: none; } .trend { transition: none; } }
 </style>
-<Base title={`${SITE_NAME}: election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
+
+<Base title={`${SITE_NAME}: political news and election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
 		<header class="dp-head home-hero">
 			<div class="home-hero-text">
 				<p class="eyebrow">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
-				<h1>Election odds from Kalshi and Polymarket, race by race</h1>
+				<h1>Political News, Election odds from Kalshi and Polymarket, race by race</h1>
 				<p class="lede">{lede}</p>
 				{next && <p class="updated">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
 			</div>
 			<img class="home-hero-logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
 
-		<div class="grid3">
-			{cards.map(({ r, c, label }) => (
-				<a class="panel duel" href={r.path} style="text-decoration:none;color:inherit">
-					<span class="eyebrow">{nextYear} · {label}</span>
-					<div class="duel-top">
-						<div class="duel-side"><span class="duel-name">Democrats</span><span class="duel-pct" style="color:var(--bt-d)">{pct(c.D)}</span></div>
-						<div class="duel-side r"><span class="duel-name">Republicans</span><span class="duel-pct" style="color:var(--bt-r)">{pct(c.R)}</span></div>
-					</div>
-					<div class="bar mid"><i class="D" style={`width:${c.D * 100}%`}></i><i class="R" style={`width:${c.R * 100}%`}></i></div>
-				</a>
-			))}
-			{presParty && (
-				<a class="panel duel" href={`/${presYear}/president/`} style="text-decoration:none;color:inherit">
-					<span class="eyebrow">{presYear} · Presidency</span>
-					<div class="duel-top">
-						<div class="duel-side"><span class="duel-name">Democrats</span><span class="duel-pct" style="color:var(--bt-d)">{pct(presParty.D)}</span></div>
-						<div class="duel-side r"><span class="duel-name">Republicans</span><span class="duel-pct" style="color:var(--bt-r)">{pct(presParty.R)}</span></div>
-					</div>
-					<div class="bar mid"><i class="D" style={`width:${presParty.D * 100}%`}></i><i class="R" style={`width:${presParty.R * 100}%`}></i></div>
-				</a>
-			)}
-		</div>
+		<section class="stats" aria-label="By the numbers" data-anim>
+			<div class="stat"><b data-count={days ?? 0}>{days ?? "—"}</b><span>days to the {nextYear} election</span></div>
+			<div class="stat"><b data-count={totalRaces}>{totalRaces.toLocaleString()}</b><span>races tracked across {index?.cycles.length ?? 0} election years</span></div>
+			<div class="stat"><b data-count={traded} data-format="money">{fmtVol(traded)}</b><span>traded on {nextYear} races</span></div>
+			<div class="stat"><b data-count={counts.points}>{counts.points.toLocaleString()}</b><span>price points recorded{counts.since ? ` since ${new Date(counts.since * 1000).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}</span></div>
+		</section>
 
-		<div class="grid2">
+		{cards.length > 0 && (
+			<section data-anim>
+				<h2>The big picture</h2>
+				<p class="sec-note">Democratic odds now, the change over 30 days, and the last 90 days of trading.</p>
+				<div class="trends">
+					{cards.map((c) => {
+						const chg = sparkChange(c.spark);
+						return (
+							<a class="panel trend reveal-item" href={c.href}>
+								<span class="trend-lab">{c.label}</span>
+								<div class="trend-top">
+									<span class="trend-val">{pct(c.now)}</span>
+									{chg != null && <span class={`trend-chg ${chg >= 0 ? "up" : "down"}`}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg * 100).toFixed(1)} pts / 30d</span>}
+								</div>
+								<Sparkline points={c.spark} color={c.color} label={`${c.label}, last 90 days`} />
+								<span class="trend-sub">{c.sub}</span>
+							</a>
+						);
+					})}
+				</div>
+			</section>
+		)}
+
+		{globeRaces.length > 0 && (
+			<section class="globe-panel" aria-labelledby="money-h">
+				<MoneyGlobe races={globeRaces} />
+				<div class="globe-copy">
+					<p class="eyebrow">Where the money is</p>
+					<h2 id="money-h">Every {nextYear} Senate and governor race, live</h2>
+					<p>Each line runs from Washington to a state with a race. Its color is the party the markets favor; the brighter and faster the pulse, the more money has traded on it across Kalshi and Polymarket.</p>
+					<div class="legend-dark"><span><i style="background:#5e92ee"></i>Democrat favored</span><span><i style="background:#e85a4c"></i>Republican favored</span><span><i style="background:#c9cdd5"></i>Independent</span></div>
+					<ul class="money-list">
+						{topMoney.map((r) => (
+							<li><a href={r.path}><span>{r.state} {r.office}</span><span class="num" style={`color:${r.lead === "D" ? "#5e92ee" : r.lead === "R" ? "#e85a4c" : "#c9cdd5"}`}>{r.lead} {pct(r.lp)}</span><span class="num">{fmtVol(r.vol)}</span></a></li>
+						))}
+					</ul>
+				</div>
+			</section>
+		)}
+
+		{senMap.length > 0 && (
+			<section>
+				<h2>The {nextYear} map</h2>
+				<p class="sec-note">Every state with a race, shaded by how strongly the markets favor one party. Tap a state for its race.</p>
+				<StateTileMap senate={senMap} governor={govMap} year={nextYear!} />
+			</section>
+		)}
+
+		<div class="grid3">
+			{moved.length > 0 && (
+				<section class="panel">
+					<h2 style="font-size:22px">Biggest moves this week</h2>
+					<p class="sec-note" style="margin:0 0 6px">Change in Democratic odds over 7 days.</p>
+					{moved.map((m) => (
+						<a class="mover" href={m.race.path}>
+							<span>{name(m.race)}</span>
+							<span class={`num ${m.delta >= 0 ? "up" : "down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</span>
+							<small>{pct(m.from)} → {pct(m.to)} Democratic</small>
+						</a>
+					))}
+				</section>
+			)}
 			{closest.length > 0 && (
 				<section class="panel">
 					<h2 style="font-size:22px">Closest {nextYear} races</h2>
@@ -111,25 +295,73 @@ const cards = [ControlCard(senC, "Senate control"), ControlCard(houseC, "House c
 			{gaps.length > 0 && (
 				<section class="panel">
 					<h2 style="font-size:22px">Where the exchanges disagree</h2>
-					<p class="sec-note" style="margin:0 0 8px">Largest gaps in Democratic odds between Kalshi and Polymarket.</p>
+					<p class="sec-note" style="margin:0 0 6px">Largest gaps in Democratic odds between Kalshi and Polymarket.</p>
 					<ul class="racelist" style="grid-template-columns:1fr">
-						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">K {pct(shares(r.k)!.D)} · P {pct(shares(r.p)!.D)} · {(g * 100).toFixed(1)} pts</span></li>)}
+						{gaps.map(({ r, g }) => <li><a href={r.path}>{name(r)}</a><span class="num">{(g * 100).toFixed(1)} pts</span></li>)}
 					</ul>
 				</section>
 			)}
 		</div>
 
-		{posts.entries.length > 0 && (
-			<section>
-				<h2>Latest analysis</h2>
-				<div class="grid3">
-					{posts.entries.map((p) => (
-						<a class="panel" href={`/posts/${p.id}`} style="text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:6px">
-							<strong style="font-size:18px">{p.data.title}</strong>
-							{p.data.excerpt && <span style="color:var(--color-text-secondary);font-size:14px">{p.data.excerpt}</span>}
-						</a>
+		{leaders.length > 0 && (
+			<section class="panel" data-anim>
+				<div class="analysis-head" style="margin-bottom:6px">
+					<h2 style="margin:0">Who wins the White House in {presYear}?</h2>
+					<a href={`/${presYear}/president/`} class="datalinks">Full presidential odds →</a>
+				</div>
+				<p class="sec-note">Each candidate's chance of winning the presidency, averaged across both exchanges, with 90 days of history.</p>
+				{leaders.map((l, i) => (
+					<div class="lb reveal-item">
+						<span class="lb-rank">{i + 1}</span>
+						<span class="lb-name">{l.n} {l.pa && <small>({l.pa})</small>}</span>
+						<Sparkline points={leaderSparks[i]} color={partyColor(l.pa)} height={30} label={`${l.n}, last 90 days`} />
+						<span class="num" style={`color:${partyColor(l.pa)}`}>{pct(l.v)}</span>
+					</div>
+				))}
+				<div class="noms">
+					{([["Democratic nomination", nomD, "var(--bt-d)"], ["Republican nomination", nomR, "var(--bt-r)"]] as const).map(([t, rows, c]) => rows.length > 0 && (
+						<div><strong style="font-size:14px">{t}</strong><ol>{rows.map((r) => <li>{r.n} <span class="num" style={`color:${c}`}>{pct(r.v)}</span></li>)}</ol></div>
 					))}
 				</div>
+			</section>
+		)}
+
+		<section class="analysis" aria-labelledby="analysis-h">
+			<div class="analysis-head">
+				<h2 id="analysis-h" style="margin:0;font-size:32px">Analysis</h2>
+				<a href="/posts" class="datalinks">All analysis →</a>
+			</div>
+			{featured ? (
+				<div class="analysis-grid">
+					<a class="feature" href={`/posts/${featured.id}`}>
+						{featured.data.featured_image ? (
+							<div class="feature-img"><Image image={featured.data.featured_image} /></div>
+						) : (
+							<div class="feature-img fallback"><img src="/brand/logo-full.jpg" alt="" width="709" height="900" /></div>
+						)}
+						<span class="post-meta">{postDate(featured.data.publishedAt)}{featured.data.bylines?.[0] && ` · ${featured.data.bylines[0].byline.displayName}`}</span>
+						<h3>{featured.data.title}</h3>
+						{featured.data.excerpt && <p>{featured.data.excerpt}</p>}
+					</a>
+					<ul class="headlines">
+						{morePosts.map((p) => (
+							<li><a href={`/posts/${p.id}`}><span class="post-meta">{postDate(p.data.publishedAt)}{p.data.bylines?.[0] && ` · ${p.data.bylines[0].byline.displayName}`}</span><strong>{p.data.title}</strong>{p.data.excerpt && <span style="color:var(--color-text-secondary);font-size:14px">{p.data.excerpt}</span>}</a></li>
+						))}
+						{morePosts.length === 0 && <li class="post-meta" style="padding:12px 0">More analysis is on the way.</li>}
+					</ul>
+				</div>
+			) : (
+				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
+			)}
+		</section>
+
+		{coinFlips.length > 0 && (
+			<section>
+				<h2>Ballot measures on a knife's edge</h2>
+				<p class="sec-note">State measures the markets see as closest to a coin flip.</p>
+				<ul class="racelist">
+					{coinFlips.map((b: any) => <li><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{b.st}: {b.n}</span><span class="num">{pct(b.p)} pass</span></li>)}
+				</ul>
 			</section>
 		)}
 
@@ -142,3 +374,28 @@ const cards = [ControlCard(senC, "Senate control"), ControlCard(houseC, "House c
 		</section>
 	</div>
 </Base>
+
+<script>
+	// Count-up numbers and reveal-on-scroll; everything is already visible without this script.
+	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const fmt = (v: number, money: boolean) =>
+		money ? (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`) : Math.round(v).toLocaleString();
+	const io = new IntersectionObserver((entries) => {
+		for (const e of entries) {
+			if (!e.isIntersecting) continue;
+			io.unobserve(e.target);
+			e.target.classList.add("in-view");
+			if (reduce) continue;
+			e.target.querySelectorAll<HTMLElement>("[data-count]").forEach((el) => {
+				const end = Number(el.dataset.count), money = el.dataset.format === "money", t0 = performance.now(), dur = 1400;
+				const step = (t: number) => {
+					const k = Math.min(1, (t - t0) / dur), ease = 1 - Math.pow(1 - k, 3);
+					el.textContent = fmt(end * ease, money);
+					if (k < 1) requestAnimationFrame(step);
+				};
+				requestAnimationFrame(step);
+			});
+		}
+	}, { threshold: 0.2 });
+	document.querySelectorAll<HTMLElement>("[data-anim]").forEach((el) => { el.classList.add("anim-ready"); io.observe(el); });
+</script>

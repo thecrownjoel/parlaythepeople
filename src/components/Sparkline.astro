@@ -1,0 +1,33 @@
+---
+/** Small trend line with a soft area fill and an end dot. Draws in once when it scrolls into view. */
+import type { Spark } from "../lib/trends";
+interface Props { points: Spark[]; color?: string; height?: number; label: string }
+const { points, color = "var(--bt-d)", height = 44, label } = Astro.props;
+const W = 160, H = height, pad = 4;
+const vs = points.map((p) => p.v);
+let lo = Math.min(...vs), hi = Math.max(...vs);
+if (hi - lo < 0.06) { const m = (hi + lo) / 2; lo = m - 0.03; hi = m + 0.03; }
+const t0 = points[0]?.ts ?? 0, t1 = points[points.length - 1]?.ts ?? 1;
+const x = (t: number) => pad + ((t - t0) / Math.max(1, t1 - t0)) * (W - pad * 2);
+const y = (v: number) => pad + (1 - (v - lo) / (hi - lo)) * (H - pad * 2);
+const d = points.map((p, i) => `${i ? "L" : "M"}${x(p.ts).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+const area = points.length > 1 ? `${d}L${x(t1).toFixed(1)},${H}L${x(t0).toFixed(1)},${H}Z` : "";
+const last = points[points.length - 1];
+const id = `sp${Math.random().toString(36).slice(2, 8)}`;
+---
+{points.length > 1 ? (
+	<svg class="spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
+		<defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color={color} stop-opacity="0.28" /><stop offset="1" stop-color={color} stop-opacity="0" /></linearGradient></defs>
+		<path d={area} fill={`url(#${id})`} />
+		<path class="spark-line" d={d} fill="none" stroke={color} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" pathLength="1" />
+		<circle cx={x(last.ts)} cy={y(last.v)} r="3" fill={color} />
+	</svg>
+) : <span class="spark-none">Trend appears as history builds</span>}
+<style>
+	.spark { width: 100%; height: auto; display: block; overflow: visible; }
+	.spark-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
+	:global(.anim-ready) .spark-line { stroke-dashoffset: 1; transition: stroke-dashoffset 1.4s cubic-bezier(.2,.7,.2,1); }
+	:global(.anim-ready.in-view) .spark-line { stroke-dashoffset: 0; }
+	.spark-none { font-size: 12px; color: var(--color-muted); }
+	@media (prefers-reduced-motion: reduce) { :global(.anim-ready) .spark-line { stroke-dashoffset: 0; transition: none; } }
+</style>

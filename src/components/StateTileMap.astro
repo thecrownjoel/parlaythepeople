@@ -1,0 +1,73 @@
+---
+/** Tile map of the 50 states + DC, colored by market rating for the cycle's Senate or governor races. */
+import type { StateRace } from "../lib/trends";
+import { RATING_LABEL, pct } from "../lib/markets";
+interface Props { senate: StateRace[]; governor: StateRace[]; year: number }
+const { senate, governor, year } = Astro.props;
+const GRID: Record<string, [number, number]> = {
+	AK: [0, 0], ME: [11, 0], VT: [10, 1], NH: [11, 1],
+	WA: [1, 2], ID: [2, 2], MT: [3, 2], ND: [4, 2], MN: [5, 2], IL: [6, 2], WI: [7, 2], MI: [8, 2], NY: [9, 2], RI: [10, 2], MA: [11, 2],
+	OR: [1, 3], NV: [2, 3], WY: [3, 3], SD: [4, 3], IA: [5, 3], IN: [6, 3], OH: [7, 3], PA: [8, 3], NJ: [9, 3], CT: [10, 3],
+	CA: [1, 4], UT: [2, 4], CO: [3, 4], NE: [4, 4], MO: [5, 4], KY: [6, 4], WV: [7, 4], VA: [8, 4], MD: [9, 4], DE: [10, 4],
+	AZ: [2, 5], NM: [3, 5], KS: [4, 5], AR: [5, 5], TN: [6, 5], NC: [7, 5], SC: [8, 5], DC: [9, 5],
+	OK: [4, 6], LA: [5, 6], MS: [6, 6], AL: [7, 6], GA: [8, 6],
+	HI: [0, 7], TX: [4, 7], FL: [9, 7],
+};
+const maps = [["senate", "Senate", senate], ["governor", "Governor", governor]] as const;
+const ORDER = ["SD", "LD", "lD", "T", "lR", "LR", "SR"];
+---
+<div class="stm" data-stm>
+	<div class="stm-tabs" role="group" aria-label="Office shown on the map">
+		{maps.map(([k, name, rs], i) => <button type="button" data-office={k} aria-pressed={i === 0 ? "true" : "false"}>{name} <span>{rs.length}</span></button>)}
+	</div>
+	{maps.map(([k, name, rs], i) => {
+		const by = new Map(rs.map((r) => [r.st, r]));
+		return (
+			<div class="stm-grid" data-map={k} hidden={i !== 0} role="list" aria-label={`${year} ${name} races by state`}>
+				{Object.entries(GRID).map(([st, [c, r]]) => {
+					const race = by.get(st);
+					return race ? (
+						<a role="listitem" class={`stm-tile rt-${race.rating === "I" ? "T" : race.rating}`} href={race.path} style={`grid-column:${c + 1};grid-row:${r + 1}`}
+							title={`${race.label}: ${RATING_LABEL[race.rating]}, ${race.lead} ${pct(race.lp)}${race.who ? ` (${race.who})` : ""}`}>
+							<b>{st}</b><span>{race.lead} {Math.round(race.lp * 100)}</span>
+						</a>
+					) : (
+						<span role="listitem" class="stm-tile stm-none" style={`grid-column:${c + 1};grid-row:${r + 1}`} title={`${st}: no ${name.toLowerCase()} race in ${year}`}><b>{st}</b></span>
+					);
+				})}
+			</div>
+		);
+	})}
+	<div class="stm-legend">{ORDER.map((r) => <span><i class={`rt-${r}`}></i>{RATING_LABEL[r]}</span>)}<span><i class="stm-none"></i>No race</span></div>
+</div>
+<script>
+	for (const el of document.querySelectorAll<HTMLElement>("[data-stm]")) {
+		el.querySelectorAll<HTMLButtonElement>("[data-office]").forEach((b) => b.addEventListener("click", () => {
+			el.querySelectorAll("[data-office]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+			el.querySelectorAll<HTMLElement>("[data-map]").forEach((m) => (m.hidden = m.dataset.map !== b.dataset.office));
+		}));
+	}
+</script>
+<style>
+	.stm-tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--bt-chip); border-radius: 8px; margin-bottom: 14px; }
+	.stm-tabs button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px; color: var(--color-text-secondary); }
+	.stm-tabs button span { font-family: var(--font-mono), monospace; font-weight: 400; color: var(--color-muted); margin-left: 4px; }
+	.stm-tabs button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+	.stm-tabs button:focus-visible { outline: 2px solid var(--color-text); }
+	.stm-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(8, auto); gap: 4px; max-width: 760px; }
+	.stm-grid[hidden] { display: none; }
+	.stm-tile { aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--color-text); font-size: 11px; line-height: 1.15; min-width: 0; transition: transform .15s; }
+	.stm-tile b { font-size: 13px; font-weight: 700; }
+	.stm-tile span { font-family: var(--font-mono), monospace; font-size: 10px; opacity: .85; }
+	a.stm-tile:hover, a.stm-tile:focus-visible { transform: scale(1.08); outline: 2px solid var(--color-text); z-index: 1; }
+	.stm-none { background: var(--bt-chip); color: var(--color-muted); }
+	.rt-SD { background: var(--bt-d); color: #fff; } .rt-LD { background: color-mix(in oklab, var(--bt-d) 62%, var(--color-surface)); }
+	.rt-lD { background: color-mix(in oklab, var(--bt-d) 30%, var(--color-surface)); } .rt-T { background: var(--bt-toss); }
+	.rt-lR { background: color-mix(in oklab, var(--bt-r) 30%, var(--color-surface)); } .rt-LR { background: color-mix(in oklab, var(--bt-r) 62%, var(--color-surface)); }
+	.rt-SR { background: var(--bt-r); color: #fff; }
+	.stm-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--color-text-secondary); }
+	.stm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+	.stm-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+	@media (max-width: 640px) { .stm-tile b { font-size: 10px; } .stm-tile span { display: none; } .stm-grid { gap: 3px; } }
+	@media (prefers-reduced-motion: reduce) { .stm-tile { transition: none; } }
+</style>
