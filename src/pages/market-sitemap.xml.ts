@@ -8,6 +8,12 @@ export const GET: APIRoute = async ({ url }) => {
 	const o = url.origin;
 	const index = await getIndex();
 	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""], [`${o}/posts/`, ""], [`${o}/model/`, ""]];
+	// daily market reports since money and headlines began, plus the archive page
+	urls.push([`${o}/daily/`, ""]);
+	for (let t = Date.parse("2026-09-30T00:00:00Z"); t < Date.now() - 86_400_000; t += 86_400_000) {
+		const d = new Date(t).toISOString().slice(0, 10);
+		urls.push([`${o}/daily/${d}/`, new Date(t + 86_400_000).toISOString().slice(0, 10)]);
+	}
 	try {
 		const { results } = await env.DB.prepare("SELECT slug, MAX(updated_at) AS mod FROM _emdash_bylines GROUP BY slug").all<{ slug: string; mod: string }>();
 		for (const b of results ?? []) urls.push([`${o}${authorPath(b.slug)}`, b.mod ?? ""]);

@@ -1,0 +1,123 @@
+---
+/** One day in the election markets: control odds, biggest moves, lead changes, money and headlines. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { dailyReport, dailySummary, isoDate, DAILY_START } from "../../lib/daily";
+import { pct, fmtVol } from "../../lib/markets";
+import { raceName } from "../../lib/home";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const date = Astro.params.date ?? "";
+if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Astro.rewrite("/404");
+const rep = await dailyReport(date);
+if (!rep) return Astro.rewrite("/404");
+const origin = Astro.url.origin;
+const long = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+const summary = dailySummary(rep, raceName, (x) => pct(x), fmtVol);
+const prev = isoDate(rep.start - 86400), next = isoDate(rep.start + 86400);
+const today = isoDate(Math.floor(Date.now() / 1000));
+const ago = (ts: number) => new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET";
+const ld = graph(organization(origin), {
+	"@type": "Article", headline: `Election markets on ${long}`, datePublished: new Date(rep.end * 1000).toISOString(), dateModified: new Date(rep.end * 1000).toISOString(),
+	author: { "@id": `${origin}/#org` }, publisher: { "@id": `${origin}/#org` }, url: `${origin}/daily/${date}/`, description: summary,
+}, breadcrumbs(origin, [["Daily market report", "/daily/"], [long, `/daily/${date}/`]]));
+---
+<Base title={`Election markets on ${long}`} description={summary.slice(0, 158)} canonical={`${origin}/daily/${date}/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp daily">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/daily/">Daily market report</a><span aria-hidden="true">/</span><span>{date}</span></nav>
+		<header class="dp-head">
+			<p class="eyebrow">Daily market report{date === today ? " · so far today" : ""}</p>
+			<h1>Election markets on {long}</h1>
+			<p class="lede">{summary}</p>
+			<p class="updated">Kalshi and Polymarket, averaged · times in UTC days{date === today ? " · updates through the day" : ""}</p>
+		</header>
+
+		{rep.control.some((c) => c.to != null) && (
+			<section class="grid2">
+				{rep.control.filter((c) => c.to != null).map((c) => {
+					const d = c.from != null ? c.to! - c.from : null;
+					return (
+						<a class="panel dr-ctl" href={c.r.path}>
+							<span class="eyebrow">{c.r.label}</span>
+							<b><span style="color:var(--bt-d)">D {pct(c.to)}</span> · <span style="color:var(--bt-r)">R {pct(1 - c.to!)}</span></b>
+							{d != null && <span class={d >= 0 ? "dr-up" : "dr-down"}>Democratic odds {Math.abs(d) < 0.0005 ? "unchanged" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(1)} pts`} on the day</span>}
+						</a>
+					);
+				})}
+			</section>
+		)}
+
+		<section>
+			<h2>Biggest moves</h2>
+			{rep.movers.length ? (
+				<table class="dtable">
+					<thead><tr><th>Race</th><th>Start of day</th><th>End of day</th><th>Change (D)</th></tr></thead>
+					<tbody>{rep.movers.map((m) => <tr><td><a href={m.r.path}>{raceName(m.r)}</a></td><td class="num">D {pct(m.from)}</td><td class="num">D {pct(m.to)}</td><td class={`num ${m.delta >= 0 ? "dr-up" : "dr-down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</td></tr>)}</tbody>
+				</table>
+			) : <p class="sec-note">No race moved a point or more.</p>}
+		</section>
+
+		{rep.flips.length > 0 && (
+			<section>
+				<h2>Lead changes</h2>
+				<ul class="racelist" style="grid-template-columns:1fr">
+					{rep.flips.map((m) => <li><a href={m.r.path}>{raceName(m.r)}</a><span class="num">{m.to >= 0.5 ? "Democrat" : "Republican"} now favored: D {pct(m.from)} → {pct(m.to)}</span></li>)}
+				</ul>
+			</section>
+		)}
+
+		{rep.money && (
+			<section>
+				<h2>Where the money went</h2>
+				<p class="sec-note"><b class="dr-money">{fmtVol(rep.money.usd)}</b> traded on {rep.cycle.meta.cycle} races across {rep.money.n.toLocaleString()} trades.</p>
+				<ul class="racelist" style="grid-template-columns:1fr">
+					{rep.money.top.map((x) => <li>{x.r ? <a href={x.r.path}>{raceName(x.r)}</a> : <span>{x.id}</span>}<span class="num dr-money">{fmtVol(x.usd)}</span></li>)}
+				</ul>
+				{rep.big.length > 0 && (
+					<>
+						<h3 style="margin-top:16px">Biggest single trades</h3>
+						<ul class="racelist" style="grid-template-columns:1fr">
+							{rep.big.map((t) => {
+								const r = rep.cycle.races.find((x) => x.id === t.race_id);
+								return <li><span>{r ? <a href={r.path}>{raceName(r)}</a> : t.race_id}: {t.src === "k" ? (t.side === "yes" ? "Yes" : "No") : t.side === "BUY" ? "Buy" : "Sell"} {t.outcome}{t.yes_price != null ? ` at ${Math.round(t.yes_price * 100)}¢` : ""}, {ago(t.ts)}</span><span class="num dr-money">{fmtVol(t.usd)}</span></li>;
+							})}
+						</ul>
+					</>
+				)}
+			</section>
+		)}
+
+		{rep.news.length > 0 && (
+			<section>
+				<h2>Headlines</h2>
+				<ul class="dr-news">{rep.news.map((n) => <li><a href={n.url} target="_blank" rel="noopener nofollow">{n.title}</a> <span>{n.source}</span></li>)}</ul>
+			</section>
+		)}
+
+		<nav class="dr-nav" aria-label="Other days">
+			{prev >= DAILY_START && <a href={`/daily/${prev}/`}>← {prev}</a>}
+			<a href="/daily/">All days</a>
+			{next <= today && <a href={`/daily/${next}/`}>{next} →</a>}
+		</nav>
+	</div>
+</Base>
+
+<style>
+	.daily { max-width: 960px; }
+	.dr-ctl { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: inherit; }
+	.dr-ctl b { font-family: var(--font-display); font-size: 30px; }
+	.dr-up { color: var(--bt-pos); } .dr-down { color: var(--bt-r); }
+	.dr-money { color: #e0b44f; font-family: var(--font-mono), monospace; }
+	.dtable { width: 100%; border-collapse: collapse; font-size: 15px; }
+	.dtable th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); padding: 8px; border-bottom: 2px solid var(--color-border); }
+	.dtable td { padding: 9px 8px; border-bottom: 1px solid var(--color-border); }
+	.dtable a { color: inherit; }
+	.dr-news { list-style: none; margin: 0; padding: 0; }
+	.dr-news li { padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.dr-news a { color: inherit; font-weight: 600; }
+	.dr-news span { color: var(--color-muted); font-size: 13px; margin-left: 6px; }
+	.dr-nav { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--color-border); padding-top: 16px; }
+	@media (max-width: 560px) { .dtable th:nth-child(2), .dtable td:nth-child(2) { display: none; } }
+</style>

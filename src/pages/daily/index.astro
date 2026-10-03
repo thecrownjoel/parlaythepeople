@@ -1,0 +1,25 @@
+---
+/** The daily market report archive: one page per day, newest first. */
+import Base from "../../layouts/Base.astro";
+import { isoDate, DAILY_START, DAILY_MONEY_START } from "../../lib/daily";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const origin = Astro.url.origin;
+const today = Math.floor(Date.now() / 1000 / 86400) * 86400;
+const days: string[] = [];
+for (let t = today; isoDate(t) >= DAILY_START && days.length < 120; t -= 86400) days.push(isoDate(t));
+const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+---
+<Base title={`Daily election market report | ${SITE_NAME}`} description="What moved in the Kalshi and Polymarket election markets each day: control of Congress, the biggest moves, lead changes, money traded and the day's headlines." canonical={`${origin}/daily/`}>
+	<div class="dp" style="max-width:900px">
+		<header class="dp-head">
+			<p class="eyebrow">Daily market report</p>
+			<h1>What moved the election markets, day by day</h1>
+			<p class="lede">Every day: who's favored for the Senate and House, the races that moved most, lead changes, where the money went and the headlines. Money and headlines begin {fmt(DAILY_MONEY_START)}; prices go back to November 2024.</p>
+		</header>
+		<ul class="racelist" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))">
+			{days.map((d, i) => <li><a href={`/daily/${d}/`}>{fmt(d)}</a><span class="num">{i === 0 ? "today" : ""}</span></li>)}
+		</ul>
+	</div>
+</Base>
