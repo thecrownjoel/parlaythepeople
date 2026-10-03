@@ -4,7 +4,9 @@ name: Collect market prices
 # uploads to Cloudflare (R2 for cycle files, D1 for the races index and price history).
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # every 5 minutes: GitHub often delays or drops scheduled runs, so asking twice as often keeps
+    # real gaps near 10 minutes (runs take 1-2 minutes and never overlap; see concurrency)
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 concurrency:
