@@ -17,7 +17,7 @@ import LunarCrushCredit from "../../../components/LunarCrushCredit.astro";
 import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
-import { moneySince } from "../../../lib/money";
+import { moneySince, kalshiRecent } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
 import { renderMulti, rangeOf } from "../../../lib/chart";
@@ -36,7 +36,9 @@ const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
 const [social, kTrades] = await Promise.all([getSocial(), getKalshiTrades()]);
 // Kalshi trades for this race's contracts (collected every 10 minutes for the most active contracts)
 const kalshiTickers = (race.k?.o ?? []).filter((o) => o.id).map((o) => ({ id: o.id!, n: o.n, pa: o.pa }));
-const kalshiByTicker = kalshiTickers.map((t) => kTrades?.trades?.[t.id] ?? []);
+// every contract's recent trades from the archive; the collector's snapshot (busiest contracts only) as a fallback
+const kArchive = await kalshiRecent(kalshiTickers.map((t) => t.id));
+const kalshiByTicker = kalshiTickers.map((t) => (kArchive[t.id]?.length ? kArchive[t.id] : kTrades?.trades?.[t.id] ?? []));
 // market stats from the collector
 const sum = (xs: (number | null | undefined)[]) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
 const kStats = race.k ? { v24: sum(race.k.o.map((o: any) => o.m?.v24)), oi: sum(race.k.o.map((o: any) => o.m?.oi)) } : null;

@@ -110,3 +110,22 @@ export function raceBigTrades(raceId: string, n = 8): Promise<BigTrade[]> {
 		}
 	});
 }
+
+/** Recent Kalshi trades per contract from the archive, in the tape's format: [ts, contracts, yes price, taker side]. */
+export async function kalshiRecent(tickers: string[], perTicker = 30): Promise<Record<string, [number, number, number | null, string][]>> {
+	if (!tickers.length) return {};
+	return cached(`krec:${tickers.join(",")}`, 2 * 60_000, async () => {
+		const out: Record<string, [number, number, number | null, string][]> = {};
+		try {
+			const since = Math.floor(Date.now() / 1000) - 14 * DAY;
+			const { results } = await env.TRADES.prepare(
+				`SELECT market, ts, size, yes_price, side FROM trades WHERE src = 'k' AND market IN (${tickers.map(() => "?").join(",")}) AND ts >= ? ORDER BY ts DESC LIMIT ?`,
+			).bind(...tickers, since, perTicker * tickers.length).all<{ market: string; ts: number; size: number; yes_price: number | null; side: string }>();
+			for (const r of results ?? []) {
+				const rows = (out[r.market] ??= []);
+				if (rows.length < perTicker) rows.push([r.ts, r.size, r.yes_price, r.side]);
+			}
+		} catch { /* fall back to the collector's snapshot */ }
+		return out;
+	});
+}
