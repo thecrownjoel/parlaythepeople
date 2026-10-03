@@ -29,6 +29,8 @@ import LeadersBody from "../components/home/LeadersBody.astro";
 import MoneyBody from "../components/home/MoneyBody.astro";
 import { homeData, SECTIONS, type SectionKey } from "../lib/home";
 import { parsePeriod } from "../lib/period";
+import { biggestTrades } from "../lib/money";
+import { raceName } from "../lib/home";
 import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
 import "../styles/data.css";
 import "../styles/home.css";
@@ -138,9 +140,16 @@ const lineup = posts.entries.slice(0, 10).map((p) => {
 	};
 });
 // Ticker: newest analysis headlines first, then live market headlines.
+// the day's biggest single trades, for the ticker
+const bigToday = (await biggestTrades(Math.floor(Date.now() / 1000) - 86400, 3)).map((t) => {
+	const r = races.find((x) => x.id === t.race_id);
+	const side = t.src === "k" ? (t.side === "yes" ? "Yes on" : "No on") : t.side === "BUY" ? "bought" : "sold";
+	return { text: `${fmtVol(t.usd)} trade: ${side} ${t.outcome ?? "the race"}${t.yes_price != null ? ` at ${Math.round(t.yes_price * 100)}¢` : ""}${r ? `, ${raceName(r)}` : ""}`, href: r?.path ?? "/#money-went-h", tag: "Big money" };
+});
 const ticker: { text: string; href: string; tag: string; external?: boolean }[] = [
 	...(news?.items ?? []).slice(0, 16).map((n) => ({ text: n.title, href: n.url, tag: n.source || n.tag, external: true })),
 	...posts.entries.slice(0, 2).map((p) => ({ text: p.data.title, href: `/posts/${p.id}`, tag: SITE_NAME })),
+	...bigToday,
 	...(senC ? [{ text: `${PARTY_PLURAL[consensus(senC).lead as "D" | "R"]} ${pct(consensus(senC).lp)} to win the Senate`, href: senC.path, tag: "Markets" }] : []),
 	...(houseC ? [{ text: `${PARTY_PLURAL[consensus(houseC).lead as "D" | "R"]} ${pct(consensus(houseC).lp)} to win the House`, href: houseC.path, tag: "Markets" }] : []),
 	...(presParty ? [{ text: `${presYear} presidency: Democrats ${pct(presParty.D)}, Republicans ${pct(presParty.R)}`, href: `/${presYear}/president/`, tag: "Markets" }] : []),
