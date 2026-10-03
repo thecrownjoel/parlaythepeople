@@ -8,7 +8,6 @@ import {
 } from "emdash/ui";
 import { createPublicPageContext } from "emdash/page";
 import CountrySwitcher from "../components/CountrySwitcher.astro";
-import MadeBy from "../components/MadeBy.astro";
 import SearchOverlay from "../components/SearchOverlay.astro";
 import ExchangeBrands from "../components/ExchangeBrands.astro";
 import { Font } from "astro:assets";
@@ -234,7 +233,6 @@ const isLoggedIn = !!Astro.locals.user;
 				</div>
 				<div class="footer-bottom">
 					<div class="footer-meta">
-						<MadeBy />
 						<p class="footer-copyright">
 							Market data from <a href="https://kalshi.com">Kalshi</a> and <a href="https://polymarket.com">Polymarket</a>. Not affiliated with either exchange. Not betting or investment advice.
 						</p>
