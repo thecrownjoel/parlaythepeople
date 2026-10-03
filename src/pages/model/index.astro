@@ -9,7 +9,7 @@ import { raceName } from "../../lib/home";
 import "../../styles/data.css";
 
 const origin = Astro.url.origin;
-const examples = [0.55, 0.6, 0.7, 0.8, 0.85, 0.9].map((m) => ({ m, e: parlayD(m, 1 - m)! }));
+const examples = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95].map((m) => ({ m, e: parlayD(m, 1 - m)! }));
 const pctGain = (a: number, b: number) => `${(((a - b) / a) * 100).toFixed(0)}%`;
 const cv = MODEL.cv;
 
@@ -25,8 +25,9 @@ const live = (next?.races ?? [])
 
 const faqs: [string, string][] = [
 	["What is the Parlay estimate?", `${SITE_NAME}'s own probability for each race, built by adjusting the prediction-market odds with a model trained on how decided races actually turned out.`],
-	["How is it different from the market odds?", "In decided races, favorites won more often than their market prices implied. The model corrects for that: it makes favorites a bit more likely and longshots a bit less. A 50/50 market stays 50/50."],
+	["How is it different from the market odds?", "In decided races, clear favorites (priced at 80% or more) won more often than their prices implied. The model corrects for that. Competitive races, with the favorite under 70%, keep the market's odds."],
 	["Is the Parlay estimate betting advice?", `No. It is election research. ${SITE_NAME} does not make buy or sell recommendations, and what readers do with the research is their own decision.`],
+	["Does social media buzz predict winners?", "Not on its own, so far. On 2024's decided races, a candidate getting more of the online conversation than their share of the odds was not more likely to win. The Pulse shows it because it often explains why a market is moving, and we will keep testing it as data grows."],
 	["How will we know if it works?", "Every estimate is saved hourly and scored after Election Day against what the markets said, with the Brier score and log loss. The results will be published here, win or lose."],
 ];
 const ld = graph(organization(origin), breadcrumbs(origin, [["The Parlay estimate", "/model/"]]), faq(faqs));
@@ -37,12 +38,12 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["The Parlay estimat
 		<header class="dp-head">
 			<p class="eyebrow">Our model</p>
 			<h1>The Parlay estimate</h1>
-			<p class="lede">Prediction markets are good forecasters with a known flaw: their favorites win more often than their prices say. The Parlay estimate corrects for it, using {MODEL.trained_on} decided races from 2024 and 2025 on Kalshi and Polymarket.</p>
+			<p class="lede">Prediction markets are good forecasters with a known flaw: in lopsided races, their favorites win more often than their prices say. The Parlay estimate corrects for it, using {MODEL.trained_on} decided races from 2024 and 2025 on Kalshi and Polymarket, and leaves competitive races at the market's odds.</p>
 		</header>
 
 		<section>
 			<h2>How it changes the odds</h2>
-			<p class="sec-note">The model stretches the market's confidence; it never flips a favorite, and a 50/50 market stays 50/50.</p>
+			<p class="sec-note">Races where the favorite is under 70% keep the market's odds; the adjustment phases in between 70% and 80% and applies fully above that. It never flips a favorite.</p>
 			<table class="dtable">
 				<thead><tr><th>Market says the favorite wins</th><th>Parlay estimate</th></tr></thead>
 				<tbody>{examples.map(({ m, e }) => <tr><td class="num">{pct(m)}</td><td class="num"><b>{pct(e)}</b></td></tr>)}</tbody>
@@ -59,7 +60,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["The Parlay estimat
 					<tr><td>Brier score (lower is better)</td><td class="num">{cv.market.brier.toFixed(4)}</td><td class="num"><b>{cv.model.brier.toFixed(4)}</b></td></tr>
 				</tbody>
 			</table>
-			<p class="sec-note" style="margin-top:10px">We also tested price momentum, disagreement between the exchanges, thin markets and distance from Election Day. None improved accuracy on held-out races, so none are in the model. Social data from LunarCrush and trade flow from our trade archive are next to be tested; they go in only if they help.</p>
+			<p class="sec-note" style="margin-top:10px">In decided races where markets priced the favorite between 65% and 80%, favorites won about as often as priced, which is why competitive races are left alone. We also tested price momentum, disagreement between the exchanges, thin markets, distance from Election Day and LunarCrush social data (each favorite's share of the conversation against its share of the odds, and sentiment, on 43 races with full social history). None improved accuracy on held-out races, so none are in the model yet. They will be retested on 2026's results, with several times more races, along with trade flow from our trade archive.</p>
 		</section>
 
 		{live.length > 0 && (

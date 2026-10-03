@@ -37,6 +37,9 @@ def estimate(model, pd):
     q = pd if fav else 1 - pd
     z = model["coef"][0] + sum(w * logit(q) for w, f in zip(model["coef"][1:], model["features"]) if f == "lq")
     pq = 1 / (1 + math.exp(-z))
+    lo, hi = model.get("blend") or (0.5, 0.5 + 1e-9)
+    t = min(1.0, max(0.0, (q - lo) / (hi - lo)))  # competitive races keep the market's odds
+    pq = (1 - t) * q + t * pq
     return pq if fav else 1 - pq
 
 
@@ -45,7 +48,7 @@ def main():
         open(os.path.join(OUT, "forecast.sql"), "w").write("")
         return print("forecast: logged hourly; skipped this run")
     model = json.load(open(os.path.join(HERE, "coef.json")))
-    version = f"lq{model['coef'][1]:.3f}-n{model['trained_on']}"
+    version = f"lq{model['coef'][1]:.3f}-b{int(model.get('blend', [0])[0] * 100)}-n{model['trained_on']}"
     lines = []
     for f in sorted(glob.glob(os.path.join(OUT, "cycles", "*.json"))):
         for r in json.load(open(f)).get("races", []):

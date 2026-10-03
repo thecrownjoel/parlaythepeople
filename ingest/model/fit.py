@@ -24,6 +24,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.path.dirname(HERE), "out", "model")
 HORIZONS = [1, 3, 7, 14, 21, 30, 45, 60, 90]
+# Competitive races keep the market's odds: the correction is only reliable for lopsided races, so it is
+# phased in as the favorite's price rises from BLEND[0] to BLEND[1] (set before testing, not tuned).
+BLEND = (0.70, 0.80)
 EPS = 1e-4
 
 
@@ -156,8 +159,12 @@ def solve(A, b):
     return [M[i][n] / M[i][i] for i in range(n)]
 
 
-def predict(w, feats, e):
-    return sigmoid(w[0] + sum(wi * FEATURES[f](e) for wi, f in zip(w[1:], feats)))
+def predict(w, feats, e, blend=False):
+    p = sigmoid(w[0] + sum(wi * FEATURES[f](e) for wi, f in zip(w[1:], feats)))
+    if blend:
+        t = min(1.0, max(0.0, (e["q"] - BLEND[0]) / (BLEND[1] - BLEND[0])))
+        p = (1 - t) * e["q"] + t * p
+    return p
 
 
 def scores(pairs):
@@ -168,7 +175,7 @@ def scores(pairs):
     return round(brier, 5), round(ll, 5)
 
 
-def cross_val(rows, feats, folds=5, seed=7, l2=1.0):
+def cross_val(rows, feats, folds=5, seed=7, l2=1.0, blend=False):
     races = sorted({e["race"] for e in rows})
     random.Random(seed).shuffle(races)
     fold_of = {r: i % folds for i, r in enumerate(races)}
@@ -178,7 +185,7 @@ def cross_val(rows, feats, folds=5, seed=7, l2=1.0):
         test = [e for e in rows if fold_of[e["race"]] == f]
         w = fit(train, feats, l2)
         for e in test:
-            model.append((predict(w, feats, e), e["y"], 1 / e["_n"]))
+            model.append((predict(w, feats, e, blend), e["y"], 1 / e["_n"]))
             market.append((e["q"], e["y"], 1 / e["_n"]))
     return scores(model), scores(market)
 
@@ -228,7 +235,10 @@ def main():
             improved = True
             report["steps"].append({"features": list(chosen), "cv_logloss": round(best, 5)})
 
-    model_cv, market_cv = cross_val(rows, chosen, seed=1)
+    # final scores: the blended model, averaged over 10 fold splits
+    runs = [cross_val(rows, chosen, seed=sd, blend=True) for sd in range(1, 11)]
+    model_cv = tuple(round(sum(r[0][i] for r in runs) / len(runs), 5) for i in (0, 1))
+    market_cv = runs[0][1]
     for lo, hi in ((1, 7), (14, 30), (45, 90)):
         sub = [e for e in rows if lo <= e["h"] <= hi]
         mc, kc = cross_val(sub, chosen, seed=1) if len({e["race"] for e in sub}) >= 10 else ((None, None), (None, None))
@@ -242,7 +252,7 @@ def main():
     print("final:", report["model"], "| market:", report["market"], "| coef:", report["coef"])
     os.makedirs(OUT, exist_ok=True)
     json.dump(report, open(os.path.join(OUT, "report.json"), "w"), indent=1)
-    json.dump({"features": chosen, "coef": w, "trained_on": report["races"], "beats_market": report["beats_market"],
+    json.dump({"features": chosen, "coef": w, "blend": list(BLEND), "trained_on": report["races"], "beats_market": report["beats_market"],
                "cv": {"model": report["model"], "market": report["market"]}},
               open(os.path.join(HERE, "coef.json"), "w"), indent=1)
 
