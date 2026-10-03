@@ -1,56 +1,76 @@
 ---
 /**
- * Spinning globe with an arc from Washington to every state with a race this cycle.
- * Real data only: arc color = favored party, pulse speed and glow = money traded on that race.
- * Loads its map data only when scrolled into view; drag to turn; still for reduced-motion users.
+ * Spinning globe: an arc from Washington to every race this cycle (Senate and governor arcs end at
+ * the state's center, House arcs at a fixed point inside the state). Real data only: arc color =
+ * favored party, glow = money traded. Live Polymarket trades fire a comet down the race's arc,
+ * sized by the trade's dollar value, and are listed in #live-trades if the page has one.
+ * Loads map data and the live feed only when scrolled into view; drag to turn; still for reduced motion.
  */
 import type { StateRace } from "../lib/trends";
-interface Props { races: (StateRace & { office: string })[] }
-const { races } = Astro.props;
-const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.lead, p: Math.round(r.lp * 100), v: Math.round(r.vol), u: r.path }))).replace(/</g, "\\u003c");
+interface Props { races: (StateRace & { office: string; key: string })[]; cycle: number }
+const { races, cycle } = Astro.props;
+const json = JSON.stringify(races.map((r) => ({ k: r.key, s: r.state, o: r.office, l: r.lead, v: Math.round(r.vol) }))).replace(/</g, "\\u003c");
 ---
-<div class="mg" data-globe>
-	<canvas class="mg-canvas" aria-label="Globe showing a line from Washington, D.C. to each state with a race; color shows the favored party and brightness shows trading volume" role="img"></canvas>
+<div class="mg" data-globe data-cycle={cycle}>
+	<canvas class="mg-canvas" aria-label="Globe showing a line from Washington, D.C. to every race; color shows the favored party, brightness shows trading volume, and live trades flash along their race's line" role="img"></canvas>
 	<p class="mg-hint" aria-hidden="true">Drag to turn</p>
 	<script type="application/json" data-globe-data set:html={json} />
 </div>
 
 <script>
-	import { geoOrthographic, geoPath, geoGraticule10, geoCentroid, geoInterpolate, geoDistance } from "d3-geo";
+	import { geoOrthographic, geoPath, geoGraticule10, geoCentroid, geoInterpolate, geoDistance, geoBounds, geoContains } from "d3-geo";
 	import { feature } from "topojson-client";
 
-	type R = { s: string; o: string; l: "D" | "R" | "I"; p: number; v: number; u: string };
+	type R = { k: string; s: string; o: string; l: "D" | "R" | "I"; v: number };
+	type Burst = { interp: (t: number) => [number, number]; to: [number, number]; color: string; size: number; t0: number };
 	const DC: [number, number] = [-77.04, 38.9];
+	const COLORS: Record<string, string> = { D: "#5e92ee", R: "#e85a4c", I: "#c9cdd5", O: "#c9cdd5" };
+
+	// deterministic pseudo-random numbers, so a House district's point stays put between visits
+	function rng(seed: string) {
+		let h = 2166136261;
+		for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+		return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296;
+	}
 
 	async function start(root: HTMLElement) {
 		const races = JSON.parse(root.querySelector("[data-globe-data]")!.textContent!) as R[];
-		const [{ default: us }, { default: world }] = await Promise.all([
-			import("us-atlas/states-10m.json"),
-			import("world-atlas/land-110m.json"),
-		]);
+		const [{ default: us }, { default: world }] = await Promise.all([import("us-atlas/states-10m.json"), import("world-atlas/land-110m.json")]);
 		const states = feature(us as any, (us as any).objects.states) as any;
 		const land = feature(world as any, (world as any).objects.land) as any;
-		const centroid = new Map<string, [number, number]>();
-		for (const f of states.features) centroid.set(f.properties.name, geoCentroid(f) as [number, number]);
+		const byName = new Map<string, any>();
+		for (const f of states.features) byName.set(f.properties.name, f);
+
+		const pointIn = (st: string, seed: string): [number, number] | null => {
+			const f = byName.get(st);
+			if (!f) return null;
+			const c = geoCentroid(f) as [number, number];
+			const [[x0, y0], [x1, y1]] = geoBounds(f);
+			const r = rng(seed);
+			for (let i = 0; i < 40; i++) {
+				const p: [number, number] = [x0 + (x1 - x0) * r(), y0 + (y1 - y0) * r()];
+				if (geoContains(f, p)) return p;
+			}
+			return c;
+		};
 
 		const canvas = root.querySelector("canvas")!;
 		const ctx = canvas.getContext("2d")!;
-		const css = getComputedStyle(root);
-		const col = { D: css.getPropertyValue("--mg-d").trim(), R: css.getPropertyValue("--mg-r").trim(), I: "#c9cdd5" };
 		const maxV = Math.max(1, ...races.map((r) => r.v));
-		const arcs = races
-			.filter((r) => centroid.has(r.s))
-			.map((r, i) => {
-				const to = centroid.get(r.s)!;
-				const w = Math.sqrt(r.v / maxV); // 0..1
-				return { ...r, to, interp: geoInterpolate(DC, to), w, speed: 0.12 + w * 0.5, phase: (i * 0.137) % 1 };
-			});
+		const arcs = races.map((r, i) => {
+			const to = r.o === "House" ? pointIn(r.s, r.k) : (byName.get(r.s) ? (geoCentroid(byName.get(r.s)) as [number, number]) : null);
+			if (!to) return null;
+			const w = Math.sqrt(r.v / maxV);
+			return { ...r, to, interp: geoInterpolate(DC, to), w, house: r.o === "House", speed: 0.1 + w * 0.5, phase: (i * 0.137) % 1 };
+		}).filter(Boolean) as any[];
+		const arcByKey = new Map(arcs.map((a) => [a.k, a]));
 
 		const proj = geoOrthographic().clipAngle(90).precision(0.6);
 		const path = geoPath(proj, ctx);
 		const grat = geoGraticule10();
 		let size = 0, rot = 96, tilt = -32, dragging = false, lastX = 0, lastY = 0, last = performance.now();
 		const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const bursts: Burst[] = [];
 
 		function resize() {
 			const r = canvas.getBoundingClientRect();
@@ -68,35 +88,60 @@ const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.le
 			if (!dragging && !reduce) rot = (rot - 6 * dt) % 360;
 			proj.rotate([rot, tilt]);
 			const center: [number, number] = [-rot, -tilt];
+			const visible = (p: [number, number]) => geoDistance(p, center) < Math.PI / 2 - 0.02;
 			ctx.clearRect(0, 0, size, size);
-			// sphere + glow
 			const g = ctx.createRadialGradient(size * 0.4, size * 0.35, size * 0.05, size / 2, size / 2, size / 2);
 			g.addColorStop(0, "#1c2533"); g.addColorStop(1, "#0b0f15");
 			ctx.beginPath(); path({ type: "Sphere" } as any); ctx.fillStyle = g; ctx.fill();
 			ctx.beginPath(); path(grat); ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.6; ctx.stroke();
 			ctx.beginPath(); path(land); ctx.fillStyle = "#1f2835"; ctx.fill();
 			ctx.beginPath(); path(states); ctx.fillStyle = "#273242"; ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 0.5; ctx.stroke();
-			// arcs
 			const t = now / 1000;
 			for (const a of arcs) {
-				const c = col[a.l];
+				const c = COLORS[a.l];
 				ctx.beginPath(); path({ type: "LineString", coordinates: [DC, a.to] } as any);
-				ctx.strokeStyle = c; ctx.globalAlpha = 0.25 + a.w * 0.5; ctx.lineWidth = 0.8 + a.w * 1.6; ctx.stroke();
+				ctx.strokeStyle = c;
+				ctx.globalAlpha = a.house ? 0.12 + a.w * 0.4 : 0.25 + a.w * 0.5;
+				ctx.lineWidth = a.house ? 0.5 + a.w : 0.8 + a.w * 1.6;
+				ctx.stroke();
 				ctx.globalAlpha = 1;
-				// pulse travelling toward the state
-				const k = reduce ? 1 : (t * a.speed + a.phase) % 1;
-				const pt = a.interp(k) as [number, number];
-				if (geoDistance(pt, center) < Math.PI / 2 - 0.02) {
-					const [x, y] = proj(pt)!;
-					ctx.beginPath(); ctx.arc(x, y, 1.6 + a.w * 2.4, 0, Math.PI * 2);
-					ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 8 + a.w * 10; ctx.fill(); ctx.shadowBlur = 0;
+				if (!a.house || a.w > 0.15) {
+					const k = reduce ? 1 : (t * a.speed + a.phase) % 1;
+					const pt = a.interp(k) as [number, number];
+					if (visible(pt)) {
+						const [x, y] = proj(pt)!;
+						ctx.beginPath(); ctx.arc(x, y, (a.house ? 1 : 1.6) + a.w * 2.4, 0, Math.PI * 2);
+						ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 8 + a.w * 10; ctx.fill(); ctx.shadowBlur = 0;
+					}
 				}
-				if (geoDistance(a.to, center) < Math.PI / 2) {
+				if (visible(a.to)) {
 					const [x, y] = proj(a.to)!;
-					ctx.beginPath(); ctx.arc(x, y, 2 + a.w * 3.5, 0, Math.PI * 2); ctx.fillStyle = c; ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+					ctx.beginPath(); ctx.arc(x, y, (a.house ? 1.2 : 2) + a.w * 3.5, 0, Math.PI * 2); ctx.fillStyle = c; ctx.globalAlpha = a.house ? 0.6 : 0.85; ctx.fill(); ctx.globalAlpha = 1;
 				}
 			}
-			if (geoDistance(DC, center) < Math.PI / 2) {
+			// live trades: a bright comet down the arc, then a ring at the race
+			for (let i = bursts.length - 1; i >= 0; i--) {
+				const b = bursts[i];
+				const age = (now - b.t0) / 1000;
+				if (age > 3.2) { bursts.splice(i, 1); continue; }
+				const k = Math.min(1, age / 1.4);
+				for (let tail = 0; tail < 6; tail++) {
+					const kk = Math.max(0, k - tail * 0.03);
+					const pt = b.interp(kk);
+					if (!visible(pt)) continue;
+					const [x, y] = proj(pt)!;
+					ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, b.size * (1 - tail / 6)), 0, Math.PI * 2);
+					ctx.fillStyle = tail === 0 ? "#ffffff" : b.color; ctx.globalAlpha = 1 - tail / 6;
+					ctx.shadowColor = b.color; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+				}
+				if (age > 1.4 && visible(b.to)) {
+					const [x, y] = proj(b.to)!;
+					const ra = (age - 1.4) / 1.8;
+					ctx.beginPath(); ctx.arc(x, y, 4 + ra * (14 + b.size * 4), 0, Math.PI * 2);
+					ctx.strokeStyle = b.color; ctx.globalAlpha = 1 - ra; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
+				}
+			}
+			if (visible(DC)) {
 				const [x, y] = proj(DC)!;
 				ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = "#ffffff"; ctx.shadowColor = "#a3262a"; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
 			}
@@ -105,7 +150,7 @@ const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.le
 
 		let running = false;
 		const run = (on: boolean) => {
-			if (reduce) return; // reduced motion: draw once, redraw only while dragging
+			if (reduce) return;
 			if (on && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
 			if (!on) running = false;
 		};
@@ -124,6 +169,79 @@ const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.le
 		resize();
 		if (reduce) requestAnimationFrame(frame);
 		else run(true);
+
+		liveTrades(root.dataset.cycle!, arcByKey, (b) => { bursts.push({ ...b, t0: performance.now() }); if (reduce || !running) requestAnimationFrame(frame); });
+	}
+
+	/** Polymarket's public market WebSocket: every trade on this cycle's race contracts. */
+	async function liveTrades(cycle: string, arcByKey: Map<string, any>, onBurst: (b: Omit<Burst, "t0">) => void) {
+		let lookup: { races: [string, string, string][]; tokens: Record<string, [number, string, string, number]>; seed?: string[] };
+		try { lookup = await (await fetch(`/api/v1/tokens/${cycle}.json`)).json(); } catch { return; }
+		const list = document.getElementById("live-trades");
+		const status = document.getElementById("live-status");
+		const ids = Object.keys(lookup.tokens);
+		const recent: { html: string; ts: number }[] = [];
+		const ago = (ts: number) => { const s = Math.max(0, Math.round((Date.now() - ts) / 1000)); return s < 60 ? `${s}s ago` : `${Math.round(s / 60)}m ago`; };
+		const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+		const render = () => {
+			if (!list || !recent.length) return; // keep the placeholder until the first trade
+			list.innerHTML = recent.map((r) => r.html.replace("{ago}", ago(r.ts))).join("");
+		};
+		/** One trade: a burst on the globe (colored by the party it backs) and a line in the list. */
+		const show = (hit: [number, string, string, number], usd: number, side: string, ts: number, burst = true) => {
+			const [ri, party, name, isYes] = hit;
+			const [, label, href] = lookup.races[ri];
+			// the party the trade backs: buying Yes or selling No backs `party`; selling Yes or buying No backs the other side
+			const backs = (isYes === 1) === (side !== "SELL");
+			const effective = backs ? party : party === "D" ? "R" : party === "R" ? "D" : "O";
+			const color = effective === "D" ? "#5e92ee" : effective === "R" ? "#e85a4c" : "#c9cdd5";
+			const arc = arcByKey.get(href);
+			if (burst && arc) onBurst({ interp: arc.interp, to: arc.to, color, size: 2 + Math.min(6, Math.log10(Math.max(1, usd)) * 1.6) });
+			const verb = side === "SELL" ? "Sold" : "Bought";
+			recent.unshift({ ts, html: `<li><a href="${esc(href)}"><span class="lt-usd" style="color:${color}">$${usd >= 1000 ? (usd / 1000).toFixed(1) + "K" : Math.max(1, Math.round(usd))}</span><span class="lt-what">${verb} ${isYes ? "" : "No on "}${esc(name)} · ${esc(label)}</span><span class="lt-when">{ago}</span></a></li>` });
+			recent.sort((a, b) => b.ts - a.ts);
+			recent.length = Math.min(recent.length, 6);
+			render();
+		};
+		// Seed with the latest real trades so the panel isn't empty when markets are quiet
+		(async () => {
+			const seed = lookup.seed ?? [];
+			const batches = [];
+			for (let i = 0; i < seed.length; i += 40) batches.push(seed.slice(i, i + 40));
+			const results = await Promise.all(batches.map((b) =>
+				fetch(`https://data-api.polymarket.com/trades?limit=25&takerOnly=true&market=${b.join(",")}`).then((r) => (r.ok ? r.json() : [])).catch(() => [])));
+			const trades = results.flat().filter((t: any) => lookup.tokens[t.asset]).sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 6);
+			trades.reverse().forEach((t: any, i: number) =>
+				setTimeout(() => show(lookup.tokens[t.asset], Number(t.size) * Number(t.price), t.side, t.timestamp * 1000), 600 + i * 900));
+		})();
+		setInterval(render, 5000);
+		let ws: WebSocket | null = null, backoff = 2000, lastTrade = 0;
+		const setStatus = (t: string) => { if (status) status.textContent = t; };
+		const connect = () => {
+			if (document.hidden) return;
+			ws = new WebSocket("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+			ws.onopen = () => {
+				backoff = 2000;
+				for (let i = 0; i < ids.length; i += 500) ws!.send(JSON.stringify({ assets_ids: ids.slice(i, i + 500), type: "market" }));
+				setStatus(lastTrade ? "Live" : "Live · waiting for the next trade");
+			};
+			ws.onmessage = (m) => {
+				let d: any;
+				try { d = JSON.parse(m.data); } catch { return; }
+				for (const e of Array.isArray(d) ? d : [d]) {
+					if (e?.event_type !== "last_trade_price") continue;
+					const hit = lookup.tokens[e.asset_id];
+					if (!hit) continue;
+					lastTrade = Date.now();
+					setStatus("Live");
+					show(hit, Number(e.size) * Number(e.price), e.side, lastTrade);
+				}
+			};
+			ws.onclose = () => { setStatus("Reconnecting…"); setTimeout(connect, (backoff = Math.min(backoff * 2, 30000))); };
+			ws.onerror = () => ws?.close();
+		};
+		document.addEventListener("visibilitychange", () => { if (!document.hidden && (!ws || ws.readyState > 1)) connect(); });
+		connect();
 	}
 
 	for (const root of document.querySelectorAll<HTMLElement>("[data-globe]")) {
@@ -135,7 +253,7 @@ const json = JSON.stringify(races.map((r) => ({ s: r.state, o: r.office, l: r.le
 </script>
 
 <style>
-	.mg { --mg-d: #5e92ee; --mg-r: #e85a4c; position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
+	.mg { position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
 	.mg-canvas { width: 100%; aspect-ratio: 1; display: block; cursor: grab; touch-action: pan-y; }
 	.mg-canvas:active { cursor: grabbing; }
 	.mg-hint { position: absolute; bottom: 4px; right: 8px; margin: 0; font-size: 11px; color: rgb(255 255 255 / 0.45); pointer-events: none; }

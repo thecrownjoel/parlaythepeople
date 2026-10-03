@@ -113,7 +113,7 @@ export function historyCounts(): Promise<{ points: number; since: number | null 
 
 export interface StateRace { st: string; state: string; label: string; path: string; lead: "D" | "R" | "I"; lp: number; D: number; rating: string; vol: number; who: string | null }
 /** The headline race per state for an office (Senate or governor), for maps and the globe. */
-export function stateRaces(data: CycleData, kind: "senate" | "governor"): StateRace[] {
+export function stateRaces(data: CycleData, kind: "senate" | "governor" | "house"): StateRace[] {
 	return data.races
 		.filter((r) => r.kind === kind)
 		.map((r) => {

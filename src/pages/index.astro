@@ -87,8 +87,13 @@ const cards: Card[] = [
 // ---- map & globe
 const senMap = next ? stateRaces(next, "senate") : [];
 const govMap = next ? stateRaces(next, "governor") : [];
-const globeRaces = [...senMap.map((r) => ({ ...r, office: "Senate" })), ...govMap.map((r) => ({ ...r, office: "Governor" }))];
-const topMoney = [...globeRaces].sort((a, b) => b.vol - a.vol).slice(0, 6);
+const houseMap = next ? stateRaces(next, "house") : [];
+const globeRaces = [
+	...senMap.map((r) => ({ ...r, office: "Senate", key: r.path })),
+	...govMap.map((r) => ({ ...r, office: "Governor", key: r.path })),
+	...houseMap.map((r) => ({ ...r, office: "House", key: r.path })),
+];
+const topMoney = [...globeRaces].sort((a, b) => b.vol - a.vol).slice(0, 5);
 
 // ---- lists
 const name = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
@@ -194,6 +199,20 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 	.money-list a { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid #222a35; color: #e8ebf0; text-decoration: none; font-size: 14px; }
 	.money-list a:hover { color: #fff; }
 	.money-list .num { color: #a9b0bc; font-size: 13px; }
+	.live-box { background: #161c25; border: 1px solid #222a35; border-radius: 12px; padding: 10px 12px; }
+	.live-head { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+	.live-head strong { color: #fff; }
+	.live-status { margin-left: auto; color: #7c8492; font-size: 12px; }
+	.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 0 rgb(76 195 138 / .6); animation: livepulse 1.8s infinite; }
+	@keyframes livepulse { 0% { box-shadow: 0 0 0 0 rgb(76 195 138 / .55); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+	@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+	.live-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 30px; }
+	.live-list :global(a) { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid #1b222c; color: #e8ebf0; text-decoration: none; font-size: 13px; animation: ltin .5s ease; }
+	.live-list :global(.lt-usd) { font-family: var(--font-mono), monospace; font-weight: 600; }
+	.live-list :global(.lt-what) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.live-list :global(.lt-when) { color: #7c8492; font-size: 12px; }
+	.live-empty { color: #7c8492; font-size: 12.5px; padding: 6px 0; }
+	@keyframes ltin { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 	.legend-dark { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #a9b0bc; }
 	.legend-dark span { display: inline-flex; align-items: center; gap: 6px; }
 	.legend-dark i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -475,12 +494,17 @@ const partyColor = (pa: string | null) => (pa === "D" ? "var(--bt-d)" : pa === "
 
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
-				<MoneyGlobe races={globeRaces} />
+				<MoneyGlobe races={globeRaces} cycle={nextYear!} />
 				<div class="globe-copy">
 					<p class="eyebrow">Where the money is</p>
-					<h2 id="money-h">Every {nextYear} Senate and governor race, live</h2>
-					<p>Each line runs from Washington to a state with a race. Its color is the party the markets favor; the brighter and faster the pulse, the more money has traded on it across Kalshi and Polymarket.</p>
+					<h2 id="money-h">Every {nextYear} Senate, House and governor race, live</h2>
+					<p>Each line runs from Washington to a race: Senate and governor races to the state, House races to a point inside it. Its color is the party the markets favor, and the brighter the pulse, the more money has traded on it. When a trade happens on Polymarket, it flashes down that race's line as it happens.</p>
 					<div class="legend-dark"><span><i style="background:#5e92ee"></i>Democrat favored</span><span><i style="background:#e85a4c"></i>Republican favored</span><span><i style="background:#c9cdd5"></i>Independent</span></div>
+					<div class="live-box" aria-live="polite">
+						<div class="live-head"><span class="live-dot" aria-hidden="true"></span><strong>Live trades</strong><span id="live-status" class="live-status">Connecting to Polymarket…</span></div>
+						<ul id="live-trades" class="live-list"><li class="live-empty">Trades on {nextYear} races appear here the moment they happen.</li></ul>
+					</div>
+					<p class="eyebrow" style="color:#a9b0bc;margin-top:6px">Most money traded</p>
 					<ul class="money-list">
 						{topMoney.map((r) => (
 							<li><a href={r.path}><span>{r.state} {r.office}</span><span class="num" style={`color:${r.lead === "D" ? "#5e92ee" : r.lead === "R" ? "#e85a4c" : "#c9cdd5"}`}>{r.lead} {pct(r.lp)}</span><span class="num">{fmtVol(r.vol)}</span></a></li>
