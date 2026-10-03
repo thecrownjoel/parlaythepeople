@@ -161,3 +161,18 @@ export function raceSearchTitle(r: Race) {
 	if (r.kind === "house") return `${r.label} House race ${r.cycle} odds${matchup}`;
 	return `${r.state} ${r.kind === "senate" ? "Senate" : "governor"} race ${r.cycle} odds${matchup}`;
 }
+
+/** The current odds as a history point, so charts always end at "now" even when prices haven't moved. */
+export function latestPoint(data: CycleData, raceId: string): HistoryPoint | null {
+	const ts = Math.floor(new Date(data.meta.generated).getTime() / 1000);
+	if (raceId === `${data.meta.cycle}-president`) {
+		const m = data.pres.party;
+		if (!m) return null;
+		const k = m.k ? shares(m.k) : null, p = m.p ? shares(m.p) : null;
+		return { ts, k_d: k?.D ?? null, k_r: k?.R ?? null, p_d: p?.D ?? null, p_r: p?.R ?? null };
+	}
+	const r = data.races.find((x) => x.id === raceId);
+	if (!r) return null;
+	const k = shares(r.k), p = shares(r.p);
+	return { ts, k_d: k?.D ?? null, k_r: k?.R ?? null, p_d: p?.D ?? null, p_r: p?.R ?? null };
+}

@@ -138,8 +138,7 @@ const generic = (n: string) => /^(democrat|democrats|democratic party|republican
 
 		<section>
 			<h2>Price history</h2>
-			<p class="sec-note">{moveText}</p>
-			<div class="panel"><HistoryChart points={history} label="Democratic odds" party={c.lead === "R" && !race.k && !race.p ? "R" : "D"} /></div>
+			<div class="panel"><HistoryChart raceId={race.id} data={data} label="Democratic odds" /></div>
 		</section>
 
 		<section>

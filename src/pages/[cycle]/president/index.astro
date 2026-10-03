@@ -3,7 +3,7 @@
 import Base from "../../../layouts/Base.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import HistoryChart from "../../../components/HistoryChart.astro";
-import { getCycle, getHistory, shares, pct, fmtVol, fmtDate, daysUntil, type Source, type PresMarket } from "../../../lib/markets";
+import { getCycle, shares, pct, fmtVol, fmtDate, daysUntil, type Source, type PresMarket } from "../../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
 import "../../../styles/data.css";
 
@@ -18,7 +18,6 @@ const year = data.meta.cycle;
 const path = `/${year}/president/`;
 const when = fmtDate(data.meta.generated, false);
 const days = daysUntil(data.meta.election_day);
-const history = await getHistory(`${year}-president`);
 
 const partyShares = (m?: PresMarket) => {
 	const arr = (["k", "p"] as const).map((x) => m?.[x]).filter(Boolean).map((s) => shares(s as Source)!);
@@ -110,7 +109,7 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 
 		<section>
 			<h2>Which party wins: price history</h2>
-			<div class="panel"><HistoryChart points={history} label="Democratic odds to win the presidency" /></div>
+			<div class="panel"><HistoryChart raceId={`${year}-president`} data={data} label="Democratic odds to win the presidency" /></div>
 		</section>
 
 		{markets.filter(([, m, rows]) => m && rows.length).map(([heading, m, rows]) => (

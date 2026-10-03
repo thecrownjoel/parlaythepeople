@@ -20,3 +20,5 @@ CREATE TABLE IF NOT EXISTS race_history (
   k_d REAL, k_r REAL, p_d REAL, p_r REAL,
   PRIMARY KEY (race_id, ts)
 ) WITHOUT ROWID;
+-- lets the hourly retention pass touch only the slice of history crossing a boundary
+CREATE INDEX IF NOT EXISTS race_history_ts ON race_history (ts);

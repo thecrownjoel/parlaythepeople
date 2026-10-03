@@ -14,8 +14,13 @@ KALSHI_CATEGORIES = {"Elections", "Politics"}
 # "Tuesday after the first Monday in November".
 ELECTION_DAYS = {2026: "2026-11-03", 2028: "2028-11-07"}
 
-# Race history: keep every 10-minute point for this many days, then one per hour.
+# Race history retention: every 10-minute point for HISTORY_FULL_DAYS, then one per hour until
+# HISTORY_HOURLY_DAYS, then one per day forever. Election weeks keep every point forever.
 HISTORY_FULL_DAYS = 7
+HISTORY_HOURLY_DAYS = 90
+
+# Live site, used to skip races whose odds haven't changed since the last run.
+SITE_URL = "https://parlaythepeople.com"
 
 # A build that finds less than this for the next upcoming cycle is treated as a
 # failed pull and is not published.

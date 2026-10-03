@@ -555,50 +555,93 @@ def sql_num(x):
     return "NULL" if x is None else repr(round(float(x), 4))
 
 
+def race_points(C):
+    """(race_id, row fields, k_d, k_r, p_d, p_r) for every race in a cycle, plus the presidential party race."""
+    out = []
+    for r in C.races.values():
+        k, p = r["k"] or {}, r["p"] or {}
+        out.append((r["id"], dict(kind=r["kind"], st=r["st"], state=r["state"], dist=r["dist"], label=r["label"],
+                                  path=r["path"], d=r["D"], r=r["R"], lead="D" if r["D"] >= r["R"] else "R",
+                                  vol=(k.get("v") or 0) + (p.get("v") or 0)),
+                    k.get("D"), k.get("R"), p.get("D"), p.get("R")))
+    party = C.pres.get("party", {})
+    if party:
+        def share(src, pa):
+            o = party.get(src, {}).get("o", [])
+            tot = sum(x["p"] for x in o) or 1
+            return sum(x["p"] for x in o if x.get("pa") == pa) / tot if o else None
+        kd, kr, pd, pr = share("k", "D"), share("k", "R"), share("p", "D"), share("p", "R")
+        out.append((f"{C.year}-president", dict(kind="president", st="US", state="United States", dist=None,
+                                                label=f"{C.year} Presidential election", path=f"/{C.year}/president/",
+                                                d=kd if kd is not None else pd, r=kr if kr is not None else pr, lead=None,
+                                                vol=party.get("p", {}).get("v") or 0),
+                    kd, kr, pd, pr))
+    return out
+
+
+def previous_points(year):
+    """The odds the site is currently showing for a cycle, so unchanged races aren't rewritten."""
+    try:
+        prev = get(f"{config.SITE_URL}/api/v1/{year}.json")
+        if not isinstance(prev, dict) or "races" not in prev:
+            return {}
+        C = Cycle(year)
+        C.races = {r["id"]: r for r in prev["races"]}
+        C.pres = prev.get("pres", {})
+        return {rid: vals for rid, _row, *vals in race_points(C)}
+    except Exception:
+        return {}
+
+
+def changed(a, b):
+    return any((x is None) != (y is None) or (x is not None and abs(x - y) >= 0.0005) for x, y in zip(a, b))
+
+
+def election_windows(cycles):
+    """Unix-second ranges kept at full 10-minute detail forever: the day before Election Day to 3 days after."""
+    wins = []
+    for C in cycles:
+        d = datetime.datetime.fromisoformat(election_day(C.year) + "T00:00:00-05:00")
+        wins.append((int(d.timestamp()) - 86400, int(d.timestamp()) + 4 * 86400))
+    return wins
+
+
 def write_d1_sql(cycles):
     ts = int(NOW.timestamp())
-    lines = []
+    lines, written, skipped = [], 0, 0
     for C in cycles:
-        for r in C.races.values():
-            k, p = r["k"] or {}, r["p"] or {}
-            lead = "D" if r["D"] >= r["R"] else "R"
+        prev = previous_points(C.year)
+        for rid, row, *vals in race_points(C):
+            if rid in prev and not changed(vals, prev[rid]):
+                skipped += 1
+                continue
+            written += 1
             lines.append(
                 "INSERT INTO races (id,cycle,kind,st,state,dist,label,path,d,r,k_d,p_d,lead,vol,updated_at) VALUES ("
-                + ",".join([sql_str(r["id"]), str(C.year), sql_str(r["kind"]), sql_str(r["st"]), sql_str(r["state"]),
-                            sql_str(r["dist"]), sql_str(r["label"]), sql_str(r["path"]), sql_num(r["D"]), sql_num(r["R"]),
-                            sql_num(k.get("D")), sql_num(p.get("D")), sql_str(lead),
-                            sql_num((k.get("v") or 0) + (p.get("v") or 0)), str(ts)])
-                + ") ON CONFLICT(id) DO UPDATE SET d=excluded.d,r=excluded.r,k_d=excluded.k_d,p_d=excluded.p_d,"
-                  "lead=excluded.lead,vol=excluded.vol,label=excluded.label,updated_at=excluded.updated_at;")
+                + ",".join([sql_str(rid), str(C.year), sql_str(row["kind"]), sql_str(row["st"]), sql_str(row["state"]),
+                            sql_str(row["dist"]), sql_str(row["label"]), sql_str(row["path"]), sql_num(row["d"]),
+                            sql_num(row["r"]), sql_num(vals[0]), sql_num(vals[2]), sql_str(row["lead"]),
+                            sql_num(row["vol"]), str(ts)])
+                # The races summary is refreshed hourly (new races are added at once) to save writes;
+                # pages read odds from the cycle files and history, not from this table.
+                + (") ON CONFLICT(id) DO UPDATE SET d=excluded.d,r=excluded.r,k_d=excluded.k_d,p_d=excluded.p_d,"
+                   "lead=excluded.lead,vol=excluded.vol,label=excluded.label,updated_at=excluded.updated_at;"
+                   if NOW.minute < 10 else ") ON CONFLICT(id) DO NOTHING;"))
             lines.append("INSERT OR REPLACE INTO race_history (race_id,ts,k_d,k_r,p_d,p_r) VALUES ("
-                         + ",".join([sql_str(r["id"]), str(ts), sql_num(k.get("D")), sql_num(k.get("R")),
-                                     sql_num(p.get("D")), sql_num(p.get("R"))]) + ");")
-        # presidency party odds as a history series too
-        party = C.pres.get("party", {})
-        if party:
-            def share(src, pa):
-                o = party.get(src, {}).get("o", [])
-                tot = sum(x["p"] for x in o) or 1
-                return sum(x["p"] for x in o if x.get("pa") == pa) / tot if o else None
-            pid = f"{C.year}-president"
-            lines.append("INSERT INTO races (id,cycle,kind,st,state,dist,label,path,d,r,k_d,p_d,lead,vol,updated_at) VALUES ("
-                         + ",".join([sql_str(pid), str(C.year), "'president'", "'US'", "'United States'", "NULL",
-                                     sql_str(f"{C.year} Presidential election"), sql_str(f"/{C.year}/president/"),
-                                     sql_num(share('k', 'D') if party.get('k') else share('p', 'D')),
-                                     sql_num(share('k', 'R') if party.get('k') else share('p', 'R')),
-                                     sql_num(share('k', 'D') if party.get('k') else None),
-                                     sql_num(share('p', 'D') if party.get('p') else None), "NULL",
-                                     sql_num(party.get('p', {}).get('v')), str(ts)])
-                         + ") ON CONFLICT(id) DO UPDATE SET d=excluded.d,r=excluded.r,k_d=excluded.k_d,p_d=excluded.p_d,"
-                           "vol=excluded.vol,updated_at=excluded.updated_at;")
-            lines.append("INSERT OR REPLACE INTO race_history (race_id,ts,k_d,k_r,p_d,p_r) VALUES ("
-                         + ",".join([sql_str(pid), str(ts),
-                                     sql_num(share('k', 'D') if party.get('k') else None), sql_num(share('k', 'R') if party.get('k') else None),
-                                     sql_num(share('p', 'D') if party.get('p') else None), sql_num(share('p', 'R') if party.get('p') else None)]) + ");")
-    # thin out old history: keep one point per hour beyond the full-resolution window
-    cutoff = ts - config.HISTORY_FULL_DAYS * 86400
-    lines.append(f"DELETE FROM race_history WHERE ts < {cutoff} AND ts % 3600 >= 600;")
+                         + ",".join([sql_str(rid), str(ts)] + [sql_num(v) for v in vals]) + ");")
+    # Tiered retention, once an hour. Only the slice that just crossed each boundary is examined,
+    # so this stays cheap however much history accumulates. Election weeks are never thinned.
+    if NOW.minute < 10:
+        keep = " AND ".join(f"NOT (ts BETWEEN {a} AND {b})" for a, b in election_windows(cycles)) or "1"
+        for newer, older, bucket in ((config.HISTORY_FULL_DAYS, config.HISTORY_HOURLY_DAYS, 3600),
+                                     (config.HISTORY_HOURLY_DAYS, None, 86400)):
+            hi = ts - newer * 86400
+            lo = hi - 2 * 86400
+            rng = f"ts >= {lo} AND ts < {hi}"
+            lines.append(f"DELETE FROM race_history WHERE {rng} AND {keep} AND (race_id, ts) NOT IN "
+                         f"(SELECT race_id, MAX(ts) FROM race_history WHERE {rng} GROUP BY race_id, ts / {bucket});")
     open(os.path.join(OUT, "d1.sql"), "w").write("\n".join(lines) + "\n")
+    print(f"history: {written} races changed, {skipped} unchanged")
     return len(lines)
 
 
