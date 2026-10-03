@@ -24,6 +24,8 @@ export const GET: APIRoute = async ({ url }) => {
 	lines.push(
 		"## Key pages", "",
 		`- [Methodology](${o}/methodology/): how prices become probabilities, ratings, update schedule`,
+		`- [The Parlay estimate](${o}/model/): our own probability per race (market odds adjusted by a model trained on decided races), how it was tested, and where it differs from the markets`,
+		`- [Guide](${o}/guide/): every feature explained, including date selectors and The Pulse (LunarCrush social data)`,
 		`- [Data & API](${o}/data/): free JSON and CSV feeds`,
 		`- [Analysis](${o}/posts): articles about the markets`,
 		`- [Full race list as text](${o}/llms-full.txt)`, "",

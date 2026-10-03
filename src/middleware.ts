@@ -1,17 +1,19 @@
 import { defineMiddleware } from "astro:middleware";
 
 /**
- * Redirects www to the bare domain, and adds the market data to EmDash's own robots.txt and sitemap index:
+ * Redirects http and www to https://parlaythepeople.com, and adds the market data to EmDash's own robots.txt and sitemap index:
  * - robots.txt: explicit welcome for search and AI crawlers, plus our sitemap and llms.txt
  * - sitemap.xml: lists /market-sitemap.xml alongside EmDash's per-collection sitemaps
  */
 const AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"];
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
-	// One canonical host: send www.parlaythepeople.com to parlaythepeople.com
-	if (ctx.url.hostname.startsWith("www.")) {
+	// One canonical address: https, no www (http://www.… goes straight to https://… in one hop)
+	const local = ctx.url.hostname === "localhost" || ctx.url.hostname === "127.0.0.1";
+	if (!local && (ctx.url.hostname.startsWith("www.") || ctx.url.protocol === "http:")) {
 		const to = new URL(ctx.url);
-		to.hostname = to.hostname.slice(4);
+		to.protocol = "https:";
+		if (to.hostname.startsWith("www.")) to.hostname = to.hostname.slice(4);
 		return Response.redirect(to.toString(), 301);
 	}
 	const res = await next();
