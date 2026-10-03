@@ -158,9 +158,9 @@
 	],
 	"bylines": [
 		{
-			"id": "byline-desk",
-			"slug": "parlay-the-people-desk",
-			"displayName": "Parlay the People Desk"
+			"id": "byline-omri",
+			"slug": "omri-cohen",
+			"displayName": "Omri Cohen"
 		}
 	],
 	"menus": [
@@ -366,7 +366,7 @@
 				"status": "published",
 				"bylines": [
 					{
-						"byline": "byline-desk"
+						"byline": "byline-omri"
 					}
 				],
 				"taxonomies": {

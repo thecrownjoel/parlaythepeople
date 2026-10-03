@@ -3,6 +3,7 @@
 import Base from "../../../layouts/Base.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import HistoryChart from "../../../components/HistoryChart.astro";
+import { nameKey } from "../../../lib/names";
 import { getCycle, shares, pct, fmtVol, fmtDate, daysUntil, type Source, type PresMarket } from "../../../lib/markets";
 import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../../lib/site";
 import "../../../styles/data.css";
@@ -34,8 +35,7 @@ function merged(m?: PresMarket, limit = 15) {
 		if (!s) continue;
 		const tot = s.o.reduce((a, o) => a + o.p, 0) || 1;
 		for (const o of s.o) {
-			// "Donald J. Trump" and "Donald Trump" are the same person; "Donald Trump Jr." is not
-			const key = o.n.toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/).filter((w) => w.length > 1).join(" ");
+			const key = nameKey(o.n);
 			const row = rows.get(key) ?? { n: o.n, pa: o.pa, k: null, p: null, v: 0 };
 			row[x] = o.p / tot;
 			row.pa = row.pa ?? o.pa;

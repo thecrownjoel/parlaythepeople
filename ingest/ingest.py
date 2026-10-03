@@ -532,10 +532,10 @@ def finish_cycle(C):
     for key, pa in (("nomD", "D"), ("nomR", "R")):
         for src in ("k", "p"):
             for o in C.pres.get(key, {}).get(src, {}).get("o", []):
-                party_by_name[o["n"].lower()] = pa
+                party_by_name[name_key(o["n"])] = pa
     for src in ("k", "p"):
         for o in C.pres.get("winner", {}).get(src, {}).get("o", []):
-            o["pa"] = o.get("pa") or party_by_name.get(o["n"].lower())
+            o["pa"] = o.get("pa") or party_by_name.get(name_key(o["n"]))
         for o in C.pres.get("party", {}).get(src, {}).get("o", []):
             o["pa"] = o.get("pa") or party_of(o["n"])
     C.races = {k: r for k, r in C.races.items() if r["k"] or r["p"]}
@@ -579,18 +579,107 @@ def race_points(C):
     return out
 
 
+SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
+
+
+def name_key(n):
+    """Match a candidate across exchanges by last name + first initial:
+    "J.D. Vance" == "JD Vance"; "Donald J. Trump" == "Donald Trump"; "Donald Trump Jr." stays separate."""
+    words = re.sub(r"[^a-z ]", " ", n.lower().replace(".", " ")).split()
+    if not words:
+        return ""
+    suffix = words[-1] if len(words) > 1 and words[-1] in SUFFIXES else ""
+    core = words[:-1] if suffix else words
+    last = core[-1]
+    return f"{last}{' ' + suffix if suffix else ''}|{core[0][0] if len(core) > 1 else ''}"
+
+
+def cycle_from_payload(d):
+    C = Cycle(d["meta"]["cycle"])
+    C.races = {r["id"]: r for r in d.get("races", [])}
+    C.big = d.get("big", C.big)
+    C.pres = d.get("pres", {})
+    return C
+
+
+def outcome_markets(C):
+    """Every non-race market whose history is kept: presidential candidates, balance of power,
+    seat counts, the House popular vote and ballot measures. One entry per market per exchange."""
+    y, ms = C.year, []
+    ref = lambda src, o: o.get("id") if src == "k" else o.get("tok")  # noqa: E731
+    for key in ("winner", "nomD", "nomR"):
+        for src in ("k", "p"):
+            s = C.pres.get(key, {}).get(src)
+            if s:
+                ms.append({"group": f"{y}-pres-{key}", "src": src, "kind": "share",
+                           "items": [(name_key(o["n"]), ref(src, o), o["p"]) for o in s["o"] if name_key(o["n"])]})
+    for src in ("k", "p"):
+        b = C.big.get("bop", {}).get(src)
+        if b:
+            refs = b.get("ids" if src == "k" else "toks", {})
+            ms.append({"group": f"{y}-bop", "src": src, "kind": "share", "items": [(k, refs.get(k), v) for k, v in b["o"].items()]})
+    for big, group, maj, derive in (("senate", "senate-seats", 50, "senate-R"), ("house", "house-seats", 218, "house-R"),
+                                    ("pv", "popvote", 0, "popvote-D")):
+        for src in ("k", "p"):
+            g = C.big.get(big, {}).get(src)
+            if g:
+                ms.append({"group": f"{y}-{group}", "src": src, "kind": "bins", "maj": maj, "derive": derive,
+                           "bins": [(b["l"], b["lo"], b["hi"]) for b in g["bins"]],
+                           "items": [(f"{src}:{b['l']}", ref(src, b), b["p"]) for b in g["bins"]]})
+    for src in ("k", "p"):
+        items = [(f"{b['st']}: {b['n']}", ref(src, b), b["p"]) for b in C.big.get("ballots", []) if b["src"] == src]
+        if items:
+            ms.append({"group": f"{y}-ballots", "src": src, "kind": "raw", "items": items})
+    return ms
+
+
+def market_values(m, price):
+    """{(group, outcome): value} for one market, given price(ref, live_price) -> price or None."""
+    got = [(o, price(r, p)) for o, r, p in m["items"]]
+    got = [(o, v) for o, v in got if v is not None]
+    if not got:
+        return {}
+    if m["kind"] == "raw":
+        return {(m["group"], o): v for o, v in got}
+    tot = sum(v for _, v in got) or 1
+    out = {(m["group"], o): v / tot for o, v in got}
+    if m["kind"] == "bins":
+        share = dict((o, v / tot) for o, v in got)
+        maj, t = m["maj"], 0.0
+        for (label, lo, hi), (o, _r, _p) in zip(m["bins"], m["items"]):
+            v = share.get(o)
+            if v is None:
+                continue
+            if m["derive"] == "popvote-D":
+                t += v if lo is not None and lo >= 0 else 0
+            elif lo is not None and lo >= maj:
+                t += v
+            elif lo is not None and hi is not None and lo < maj <= hi:
+                t += v * (hi - maj + 1) / (hi - lo + 1)
+        # derived headline series, e.g. ("2026-majority", "senate-R") = chance Republicans hold 50+ seats
+        out[(f"{m['group'][:4]}-majority", m["derive"])] = t
+    return out
+
+
+def outcome_points(C):
+    """{(group, outcome): (kalshi, polymarket)} for the current prices; tiny outcomes (<0.2%) skipped."""
+    acc = {}
+    for m in outcome_markets(C):
+        for key, v in market_values(m, lambda r, p: p).items():
+            acc.setdefault(key, [None, None])[0 if m["src"] == "k" else 1] = v
+    return {k: tuple(v) for k, v in acc.items() if max(x or 0 for x in v) >= 0.002 or k[0].endswith("-majority")}
+
+
 def previous_points(year):
-    """The odds the site is currently showing for a cycle, so unchanged races aren't rewritten."""
+    """What the site is currently showing for a cycle, so unchanged races and outcomes aren't rewritten."""
     try:
         prev = get(f"{config.SITE_URL}/api/v1/{year}.json")
         if not isinstance(prev, dict) or "races" not in prev:
-            return {}
-        C = Cycle(year)
-        C.races = {r["id"]: r for r in prev["races"]}
-        C.pres = prev.get("pres", {})
-        return {rid: vals for rid, _row, *vals in race_points(C)}
+            return {}, {}
+        C = cycle_from_payload(prev)
+        return {rid: vals for rid, _row, *vals in race_points(C)}, outcome_points(C)
     except Exception:
-        return {}
+        return {}, {}
 
 
 def changed(a, b):
@@ -608,9 +697,16 @@ def election_windows(cycles):
 
 def write_d1_sql(cycles):
     ts = int(NOW.timestamp())
-    lines, written, skipped = [], 0, 0
+    lines, written, skipped, written_o, skipped_o = [], 0, 0, 0, 0
     for C in cycles:
-        prev = previous_points(C.year)
+        prev, prev_out = previous_points(C.year)
+        for key, vals in outcome_points(C).items():
+            if key in prev_out and not changed(vals, prev_out[key]):
+                skipped_o += 1
+                continue
+            written_o += 1
+            lines.append("INSERT OR REPLACE INTO outcome_history (group_id,outcome,ts,k,p) VALUES ("
+                         + ",".join([sql_str(key[0]), sql_str(key[1]), str(ts), sql_num(vals[0]), sql_num(vals[1])]) + ");")
         for rid, row, *vals in race_points(C):
             if rid in prev and not changed(vals, prev[rid]):
                 skipped += 1
@@ -640,8 +736,10 @@ def write_d1_sql(cycles):
             rng = f"ts >= {lo} AND ts < {hi}"
             lines.append(f"DELETE FROM race_history WHERE {rng} AND {keep} AND (race_id, ts) NOT IN "
                          f"(SELECT race_id, MAX(ts) FROM race_history WHERE {rng} GROUP BY race_id, ts / {bucket});")
+            lines.append(f"DELETE FROM outcome_history WHERE {rng} AND {keep} AND (group_id, outcome, ts) NOT IN "
+                         f"(SELECT group_id, outcome, MAX(ts) FROM outcome_history WHERE {rng} GROUP BY group_id, outcome, ts / {bucket});")
     open(os.path.join(OUT, "d1.sql"), "w").write("\n".join(lines) + "\n")
-    print(f"history: {written} races changed, {skipped} unchanged")
+    print(f"history: {written} races changed, {skipped} unchanged; {written_o} outcomes changed, {skipped_o} unchanged")
     return len(lines)
 
 

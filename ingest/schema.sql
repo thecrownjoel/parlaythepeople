@@ -22,3 +22,15 @@ CREATE TABLE IF NOT EXISTS race_history (
 ) WITHOUT ROWID;
 -- lets the hourly retention pass touch only the slice of history crossing a boundary
 CREATE INDEX IF NOT EXISTS race_history_ts ON race_history (ts);
+
+-- Price history for non-race markets: presidential candidates and nominees, balance of power,
+-- seat-count and popular-vote bins (plus derived majority odds) and ballot measures.
+-- group_id like 2028-pres-winner, 2026-bop, 2026-senate-seats, 2026-majority, 2026-ballots.
+CREATE TABLE IF NOT EXISTS outcome_history (
+  group_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,        -- candidate name key, DD/DR/RD/RR, "k:<bin>"/"p:<bin>", senate-R, "ST: measure"
+  ts INTEGER NOT NULL,
+  k REAL, p REAL,               -- Kalshi / Polymarket value (share of the market, or pass odds for ballots)
+  PRIMARY KEY (group_id, outcome, ts)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS outcome_history_ts ON outcome_history (ts);

@@ -53,14 +53,26 @@ const ld = graph(organization(origin), {
 function ControlCard(r: Race | undefined, label: string) { return r ? { r, c: consensus(r), label } : null; }
 const cards = [ControlCard(senC, "Senate control"), ControlCard(houseC, "House control")].filter(Boolean) as { r: Race; c: ReturnType<typeof consensus>; label: string }[];
 ---
+<style>
+	.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
+	.home-hero-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+	.home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; border-radius: 14px; display: block; box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); }
+	@media (max-width: 760px) {
+		.home-hero { grid-template-columns: 1fr; }
+		.home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; }
+	}
+</style>
 <Base title={`${SITE_NAME}: election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
-		<header class="dp-head">
-			<p class="eyebrow">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
-			<h1>Election odds from Kalshi and Polymarket, race by race</h1>
-			<p class="lede">{lede}</p>
-			{next && <p class="updated">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
+		<header class="dp-head home-hero">
+			<div class="home-hero-text">
+				<p class="eyebrow">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
+				<h1>Election odds from Kalshi and Polymarket, race by race</h1>
+				<p class="lede">{lede}</p>
+				{next && <p class="updated">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
+			</div>
+			<img class="home-hero-logo" src="/brand/logo-full.jpg" width="709" height="900" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
 
 		<div class="grid3">

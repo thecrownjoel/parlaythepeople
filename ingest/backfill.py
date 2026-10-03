@@ -5,8 +5,10 @@ Fills race_history with one point per day (noon UTC) for every race and the pres
 party race, from when each market opened up to the day live collection began. Safe to re-run:
 rows are INSERT OR IGNORE and days already covered by live collection are skipped.
 
-Usage:  python3 ingest/backfill.py [--since-days N]
+Usage:  python3 ingest/backfill.py [--since-days N] [--outcomes]
         then: npx wrangler d1 execute ballottape-markets --remote --file ingest/out/backfill.sql
+--outcomes backfills outcome_history instead (presidential candidates, balance of power, seat counts,
+popular vote, ballot measures).
 Needs ingest/out/cycles/*.json from a normal ingest run.
 """
 import concurrent.futures as cf
@@ -18,7 +20,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
-from ingest import get, fnum  # noqa: E402
+from ingest import get, fnum, cycle_from_payload, outcome_markets, market_values  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out")
@@ -109,7 +111,46 @@ def first_live_day():
         return day_of(NOW)
 
 
+def outcomes_main():
+    """Daily history for every non-race market (see ingest.outcome_markets)."""
+    markets = []
+    for f in sorted(glob.glob(os.path.join(OUT, "cycles", "*.json"))):
+        markets += outcome_markets(cycle_from_payload(json.load(open(f))))
+    tickers = sorted({r for m in markets if m["src"] == "k" for _o, r, _p in m["items"] if r})
+    tokens = sorted({r for m in markets if m["src"] == "p" for _o, r, _p in m["items"] if r})
+    print(f"{len(markets)} markets, {len(tickers)} Kalshi and {len(tokens)} Polymarket outcomes, {DAYS} days")
+    ks, ps = kalshi_daily(tickers), poly_daily(tokens)
+    stop = first_live_day()
+    acc = {}  # (group, outcome, day) -> [k, p]
+    for m in markets:
+        series = ks if m["src"] == "k" else ps
+        refs = [r for _o, r, _p in m["items"] if r]
+        days = sorted({d for r in refs for d in series.get(r, {})})
+        last = {}
+        for d in days:
+            if d >= stop:
+                break
+            for r in refs:
+                v = series.get(r, {}).get(d)
+                if v is not None:
+                    last[r] = v
+            if m["kind"] != "raw" and len(last) < 2:
+                continue
+            for (g, o), v in market_values(m, lambda r, _p: last.get(r)).items():
+                acc.setdefault((g, o, d), [None, None])[0 if m["src"] == "k" else 1] = v
+    rows = [(g, o, d * 86400 + 43200, *v) for (g, o, d), v in acc.items() if max(x or 0 for x in v) >= 0.002 or g.endswith("-majority")]
+    fmt = lambda x: "NULL" if x is None else repr(round(x, 4))  # noqa: E731
+    q = lambda x: "'" + x.replace("'", "''") + "'"  # noqa: E731
+    with open(os.path.join(OUT, "backfill.sql"), "w") as fh:
+        for i in range(0, len(rows), 200):
+            vals = ",".join(f"({q(r[0])},{q(r[1])},{r[2]},{fmt(r[3])},{fmt(r[4])})" for r in rows[i:i + 200])
+            fh.write(f"INSERT OR IGNORE INTO outcome_history (group_id,outcome,ts,k,p) VALUES {vals};\n")
+    print(f"{len(rows)} daily outcome points in {len({r[0] for r in rows})} groups -> out/backfill.sql")
+
+
 def main():
+    if "--outcomes" in sys.argv:
+        return outcomes_main()
     races = []  # (race_id, kalshi outcomes, polymarket outcomes)
     for f in sorted(glob.glob(os.path.join(OUT, "cycles", "*.json"))):
         c = json.load(open(f))
