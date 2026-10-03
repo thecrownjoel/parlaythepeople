@@ -16,6 +16,7 @@ import { racesAt } from "./trends";
 import { moneySince } from "./money";
 import { getSocial, pulseIndex, compact, type Pulse } from "./social";
 import { parlayD, MODEL } from "./model";
+import { dailyReport, dailySummary, isoDate } from "./daily";
 
 const DAY = 86400;
 interface Doc { key: string; body: string; meta: Record<string, string> }
@@ -114,6 +115,18 @@ export async function buildKnowledge(origin = "https://parlaythepeople.com"): Pr
 	for (const [d, items] of byDay) {
 		docs.push({ key: `news/${d}.md`, meta: { title: `Political headlines, ${d}`, kind: "news", date: d },
 			body: `# Political headlines, ${d}\n\n${items.map((n) => `- ${n.title} (${n.source ?? "news"}) ${n.url}`).join("\n")}\n` });
+	}
+	// daily market reports for the last 30 days
+	for (let i = 1; i <= 30; i++) {
+		const date = isoDate(now - i * DAY);
+		const rep = await dailyReport(date).catch(() => null);
+		if (!rep) continue;
+		const nm = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : r.kind === "control" ? r.label : `${r.state} ${r.kind === "senate" ? "Senate" : "Governor"}`);
+		const lines = [`# Election markets on ${date}`, `Report: ${origin}/daily/${date}/`, "", dailySummary(rep, nm, (x) => pct(x), fmtVol), ""];
+		if (rep.movers.length) lines.push("Biggest moves (Democratic odds, start to end of day):", ...rep.movers.map((m) => `- ${nm(m.r)}: ${pct(m.from)} to ${pct(m.to)}`), "");
+		if (rep.flips.length) lines.push("Lead changes:", ...rep.flips.map((m) => `- ${nm(m.r)}: now ${m.to >= 0.5 ? "Democrat" : "Republican"} favored`), "");
+		if (rep.money) lines.push(`Money traded: ${fmtVol(rep.money.usd)} on ${rep.cycle.meta.cycle} races. Most: ${rep.money.top.slice(0, 5).map((x) => `${x.r ? nm(x.r) : x.id} ${fmtVol(x.usd)}`).join("; ")}.`);
+		docs.push({ key: `daily/${date}.md`, body: lines.join("\n") + "\n", meta: { title: `Election markets on ${date}`, url: `${origin}/daily/${date}/`, kind: "daily", date } });
 	}
 	// analysis articles
 	try {

@@ -195,7 +195,7 @@ const ld = graph(organization(origin), {
 					</div>
 				</div>
 				<div data-period-body><SnapshotBody d={home} period={P.snapshot} /></div>
-				<p class="snap-foot">{totalRaces.toLocaleString()} races tracked · {counts.points.toLocaleString()} price points recorded · <a href={`/${nextYear}/`}>Every {nextYear} race →</a></p>
+				<p class="snap-foot">{totalRaces.toLocaleString()} races tracked · {counts.points.toLocaleString()} price points recorded · <a href={`/${nextYear}/`}>Every {nextYear} race →</a> · <a href={`/daily/${new Date().toISOString().slice(0, 10)}/`}>Today's market report →</a></p>
 			</section>
 		)}
 
@@ -342,7 +342,7 @@ const ld = graph(organization(origin), {
 			<h2>Explore</h2>
 			<p class="datalinks">
 				{(index?.cycles ?? []).map((c) => <a href={c.offices.includes("president") && c.races < 5 ? `/${c.year}/president/` : `/${c.year}/`}>{c.year} elections</a>)}
-				<a href="/methodology/">Methodology</a><a href="/data/">Data &amp; API</a>
+				<a href="/daily/">Daily market report</a><a href="/model/">Our model</a><a href="/methodology/">Methodology</a><a href="/data/">Data &amp; API</a>
 			</p>
 		</section>
 	</div>
