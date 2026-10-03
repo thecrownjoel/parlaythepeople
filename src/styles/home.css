@@ -1,8 +1,9 @@
 /* Homepage sections. Global (not scoped) so sections swapped in by a date picker are styled too. */
-.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
+/* .dp-head.home-hero: beats .dp-head (flex column) whichever stylesheet loads last */
+.dp-head.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
 .home-hero-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .home-hero-logo { width: clamp(220px, 24vw, 300px); height: auto; display: block; filter: drop-shadow(0 12px 28px rgb(163 38 42 / 0.25)); }
-@media (max-width: 760px) { .home-hero { grid-template-columns: 1fr; } .home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; } }
+@media (max-width: 760px) { .dp-head.home-hero { grid-template-columns: 1fr; } .home-hero-logo { width: min(100%, 340px); justify-self: center; order: -1; } }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
 .stat { background: var(--color-surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
