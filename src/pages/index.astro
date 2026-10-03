@@ -168,7 +168,7 @@ const ld = graph(organization(origin), {
 });
 ---
 
-<Base title={`${SITE_NAME}: political news and election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`}>
+<Base title={`${SITE_NAME}: political news and election odds from Kalshi and Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`} image={`${origin}/og/home.png`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
 		<header class="dp-head home-hero">

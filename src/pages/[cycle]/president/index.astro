@@ -90,7 +90,7 @@ const markets: [string, PresMarket | undefined, typeof winner][] = [
 	["Republican nominee", pres.nomR, nomR],
 ];
 ---
-<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={data.meta.generated}>
+<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={data.meta.generated} image={`${Astro.url.origin}/og/president/${data.meta.cycle}.png`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/elections/">Elections</a><span aria-hidden="true">/</span><a href={`/${year}/`}>{year}</a><span aria-hidden="true">/</span><span aria-current="page">President</span></nav>
