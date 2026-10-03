@@ -17,6 +17,7 @@ import LunarCrushCredit from "../../../components/LunarCrushCredit.astro";
 import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
+import { moneySince } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
 import { renderMulti, rangeOf } from "../../../lib/chart";
@@ -85,6 +86,7 @@ const moveText = move == null || !first
 		: `Democratic odds have ${move > 0 ? "risen" : "fallen"} ${Math.abs(move * 100).toFixed(1)} points since ${fmtDate(first.ts, false)}.`;
 
 const gap = ks && ps ? Math.abs(ks.D - ps.D) : null;
+const week7 = (await moneySince(Math.floor(Date.now() / 1000) - 7 * 86400)).get(race.id)?.usd ?? 0;
 const srcSentence = [race.k && `Kalshi: Democrats ${pct(ks!.D)}, Republicans ${pct(ks!.R)}`, race.p && `Polymarket: Democrats ${pct(ps!.D)}, Republicans ${pct(ps!.R)}`]
 	.filter(Boolean).join(". ") + "." + (gap != null ? ` The two exchanges differ by ${(gap * 100).toFixed(1)} points.` : "");
 const raceWord = race.kind === "control" ? `control of the ${officeName} in ${race.cycle}` : `the ${race.cycle} ${race.kind === "house" ? race.label + " House" : race.state + " " + (race.kind === "senate" ? "Senate" : "governor")} race`;
@@ -92,6 +94,10 @@ const faqs: [string, string][] = [
 	[`Who is favored to win ${raceWord}?`, lede],
 	["What do Kalshi and Polymarket say?", srcSentence],
 	["How have the odds moved this week?", moveText],
+	...(est != null ? [[`What is the Parlay estimate for ${raceWord}?`, Math.abs(est - c.D / (c.D + c.R || 1)) < 0.005
+		? `The Parlay estimate matches the market: ${est >= 0.5 ? "Democrats" : "Republicans"} ${pct(Math.max(est, 1 - est))}. Our model leaves competitive races, where the favorite is under 70%, at the market's odds.`
+		: `The Parlay estimate gives ${est >= 0.5 ? "Democrats" : "Republicans"} ${pct(Math.max(est, 1 - est))}, against ${pct(Math.max(c.D, c.R) / (c.D + c.R || 1))} in the markets. Our model, trained on decided races, finds that clear favorites win more often than their prices imply.`] as [string, string]] : []),
+	[`How much money has been traded on ${raceWord}?`, `${fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))} has traded on Kalshi and Polymarket combined${week7 ? `, ${fmtVol(week7)} of it in the past 7 days` : ""}.`],
 	[`When is the ${race.cycle} election?`, `Election Day is ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}${days > 0 ? `, ${days} days from now` : ""}.`],
 ];
 
