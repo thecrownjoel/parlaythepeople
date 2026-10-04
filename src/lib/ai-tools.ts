@@ -53,7 +53,7 @@ export const TOOLS = [
 	},
 	{
 		name: "odds_history",
-		description: "Democratic odds over time for a race on each exchange. days: 1, 7, 30, 90, 365 or 0 for all history (back to Nov 2024).",
+		description: "Democratic odds over time for a race on each exchange. days: 1, 7, 30, 90, 365 or 0 for all history (back to Nov 2024; beyond 90 days is Pro only).",
 		input_schema: { type: "object", properties: { race_id: { type: "string" }, days: { type: "integer", default: 30 } }, required: ["race_id"] },
 	},
 	{
@@ -249,7 +249,8 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 			};
 		}
 		case "odds_history": {
-			const days = Number(input.days ?? 30);
+			// history beyond 90 days is part of Pro
+			const days = ctx.pro ? Number(input.days ?? 30) : Math.min(90, Number(input.days ?? 30) || 90);
 			const range = days === 0 ? RANGES.find((x) => x.key === "all")! : days <= 1 ? RANGES[0] : days <= 7 ? RANGES[1] : days <= 30 ? RANGES[2] : days <= 90 ? RANGES[3] : RANGES[4];
 			const pts = await getSeries(String(input.race_id), range);
 			const step = Math.max(1, Math.ceil(pts.length / (ctx.pro ? 400 : 60)));

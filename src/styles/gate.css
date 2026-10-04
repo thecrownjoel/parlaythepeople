@@ -1,0 +1,30 @@
+/* The Pro and sign-up gate (src/lib/gate.ts). Global so fragments swapped into a page by date pickers are styled. */
+.gate { position: relative; isolation: isolate; border-radius: 14px; overflow: hidden; min-height: 300px; }
+.gate-preview { filter: blur(7px) saturate(.85); opacity: .55; pointer-events: none; user-select: none; max-height: 560px; overflow: hidden;
+	mask-image: linear-gradient(to bottom, #000 55%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+.gate-card { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(480px, calc(100% - 32px));
+	display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 26px 26px 22px; border-radius: 16px;
+	background: color-mix(in srgb, var(--color-surface) 84%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+	border: 1px solid color-mix(in srgb, #a3262a 55%, var(--color-border)); box-shadow: 0 18px 50px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .04); }
+.gate-eyebrow { display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 4px 10px; border-radius: 999px; background: rgb(163 38 42 / .16);
+	color: #f08a7e; font: 700 11.5px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; }
+.gate-title { margin: 2px 0 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(19px, 2.4vw, 23px); line-height: 1.15; color: var(--color-text); }
+.gate-body { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--color-text-secondary); max-width: 40ch; }
+.gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+.gate-btn { display: inline-flex; padding: 10px 16px; border-radius: 10px; background: #a3262a; color: #fff !important; font-weight: 700; font-size: 14px; text-decoration: none !important; }
+.gate-btn:hover { background: #b9302f; }
+.gate-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.gate-ghost { background: transparent; border: 1px solid var(--color-border); color: var(--color-text) !important; }
+.gate-ghost:hover { background: rgb(255 255 255 / .05); border-color: var(--color-text-secondary); }
+.gate[data-gate="trades"] { min-height: 250px; margin-top: 4px; }
+@media (max-width: 520px) { .gate { min-height: 360px; } .gate-card { padding: 20px 16px 18px; } }
+
+/* Locked controls: a small lock after buttons the viewer's plan doesn't open (set by the script in Base.astro). */
+html[data-history="30d"] [data-lock~="60d"]::after,
+html[data-history="30d"] [data-lock~="time"]::after,
+html[data-history="60d"] [data-lock~="time"]::after,
+html:not([data-archive="1"]) [data-lock~="archive"]::after {
+	content: ""; display: inline-block; width: 9px; height: 10px; margin-left: 5px; vertical-align: -1px; opacity: .75;
+	background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='7' rx='1.6'/%3E%3Cpath d='M5.2 7V5.1a2.8 2.8 0 0 1 5.6 0V7' fill='none' stroke='%23000' stroke-width='1.8'/%3E%3C/svg%3E") center / contain no-repeat;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='7' rx='1.6'/%3E%3Cpath d='M5.2 7V5.1a2.8 2.8 0 0 1 5.6 0V7' fill='none' stroke='%23000' stroke-width='1.8'/%3E%3C/svg%3E") center / contain no-repeat;
+}

@@ -57,7 +57,7 @@ const examples = [
 				{examples.map((q) => <button type="button" data-q={q} disabled={!configured}>{q}</button>)}
 			</div>
 			<div class="ai-bar">
-				<label class="ai-deep" data-deep-wrap hidden><input type="checkbox" data-deep /> <span><strong>Deep analysis</strong> <span data-deep-cost>5 credits</span>: more lookups, trade flow, a structured brief</span></label>
+				<label class="ai-deep" data-deep-wrap hidden><input type="checkbox" data-deep /> <span><strong>Deep analysis</strong> <span data-deep-cost>about 20¢</span>: more lookups, trade flow, a structured brief</span></label>
 				<p class="ai-plan" data-plan aria-live="polite"></p>
 			</div>
 			<form class="ai-form" data-ai-form>
@@ -144,8 +144,8 @@ const examples = [
 				throw new Error(j.error === "busy" ? "The free analyst is at capacity for today. [Pro](/pro/) keeps working, or try again tomorrow."
 					: j.error === "pro_only" ? "Deep analysis is part of [Pro](/pro/)."
 					: j.plan === "anon" ? "You've used today's 10 free questions. [Sign in](/account/?next=/ai/) for 25 a day, or see [Pro](/pro/)."
-					: j.plan === "free" ? "You've used today's free questions. [Pro](/pro/) gives you 600 credits a month."
-					: "You've used this month's credits. More are on the way when your plan resets; [contact us](/pro/) for a credit pack.");
+					: j.plan === "free" ? "You've used today's free questions. With [Pro](/pro/), AI is pay as you go, about 4¢ a question, with $3 included each month."
+					: "Your AI balance is used up. Top it up on [your account](/account/) to keep going.");
 			}
 			if (!r.ok || !r.body) throw new Error("The analyst is unavailable right now. Please try again in a minute.");
 			const reader = r.body.getReader();
@@ -178,11 +178,13 @@ const examples = [
 	}
 	const deep = root?.querySelector<HTMLInputElement>("[data-deep]");
 	const planEl = root?.querySelector<HTMLElement>("[data-plan]");
-	let status: { plan: string; plan_name: string; signed_in: boolean; left: number; unit: string; deep: boolean; deep_cost: number } | null = null;
+	let status: { plan: string; plan_name: string; signed_in: boolean; left: number; unit: string; deep: boolean; deep_cost: number; ask_cost: number } | null = null;
 	function showLeft(left: number) {
 		if (!status || !planEl) return;
 		status.left = left;
-		const n = `${left.toLocaleString("en-US")} ${left === 1 ? status.unit.replace(/s$/, "") : status.unit} left${status.unit === "questions" ? " today" : " this month"}`;
+		const n = status.unit === "cents"
+			? `$${(left / 100).toFixed(2)} of AI left (about ${Math.floor(left / Math.max(1, status.ask_cost))} questions)`
+			: `${left.toLocaleString("en-US")} ${left === 1 ? "question" : "questions"} left today`;
 		planEl.innerHTML = status.plan === "anon" ? `${n} · <a href="/account/?next=/ai/">Sign in</a> for more · <a href="/pro/">Pro</a>`
 			: status.plan === "free" ? `${n} · <a href="/pro/">Get Pro</a>`
 			: `${esc(status.plan_name)} · ${n}`;
@@ -191,7 +193,7 @@ const examples = [
 		status = j;
 		showLeft(j.left);
 		const wrap = root?.querySelector<HTMLElement>("[data-deep-wrap]");
-		if (wrap && j.deep) { wrap.hidden = false; wrap.querySelector("[data-deep-cost]")!.textContent = `${j.deep_cost} credits`; }
+		if (wrap && j.deep) { wrap.hidden = false; wrap.querySelector("[data-deep-cost]")!.textContent = `about ${j.deep_cost}¢`; }
 	}).catch(() => {});
 	if (root?.dataset.configured === "1") {
 		form?.addEventListener("submit", (e) => { e.preventDefault(); const q = box!.value; box!.value = ""; ask(q); });

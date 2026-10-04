@@ -12,6 +12,10 @@ import LeadersBody from "../../../components/home/LeadersBody.astro";
 import MoneyBody from "../../../components/home/MoneyBody.astro";
 import { homeData, SECTIONS, type SectionKey } from "../../../lib/home";
 import { parsePeriod } from "../../../lib/period";
+import Gate from "../../../components/Gate.astro";
+import { viewerPlan } from "../../../lib/auth";
+import { periodGate } from "../../../lib/gate";
+import { PLANS } from "../../../lib/plans";
 export const partial = true;
 
 const BODIES = { snapshot: SnapshotBody, big: BigPictureBody, moving: MovingBody, pulse: PulseBody, map: MapBody, movers: MoversBody, closest: ClosestBody, gaps: GapsBody, leaders: LeadersBody, money: MoneyBody };
@@ -23,8 +27,12 @@ const raw = Astro.url.searchParams.get("p");
 const period = parsePeriod(raw === "now" && !sec.asOf ? sec.def : raw, sec.def);
 const d = await homeData();
 const Body = BODIES[key];
-// prices refresh every 10 minutes; let the edge and browser reuse a section for a few
-Astro.response.headers.set("cache-control", "public, max-age=300");
+// older periods depend on the viewer's plan: the 60-day view needs a free account, any date needs Pro
+const open = periodGate(PLANS.anon, period.key) === null;
+const plan = open ? null : await viewerPlan(Astro.cookies);
+const gate = plan ? periodGate(plan, period.key) : null;
+// prices refresh every 10 minutes; open periods are the same for everyone, so the edge can reuse them for a few
+Astro.response.headers.set("cache-control", open ? "public, max-age=300" : "private, no-store");
 Astro.response.headers.set("x-robots-tag", "noindex");
 ---
-<Body d={d} period={period} />
+{gate ? <Gate kind={gate} plan={plan!} next="/"><Body d={d} period={parsePeriod(sec.def, sec.def)} /></Gate> : <Body d={d} period={period} />}

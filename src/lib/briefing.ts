@@ -3,7 +3,7 @@
  *
  * - Briefing: every morning (11:00 UTC, 7am Eastern) the scheduled handler starts one BriefingWorkflow per eligible
  *   reader. The workflow gathers each followed race's numbers, trade flow and headlines, has the analyst model write a
- *   short brief (one call, no tool loop), emails it and keeps a copy. Costs CREDITS.briefing.
+ *   short brief (one call, no tool loop), emails it and keeps a copy. Charged as AI usage (model cost × AI_MARKUP).
  * - Alerts: every 10 minutes, followed races whose Democratic odds moved at least the reader's threshold in 24 hours,
  *   and single trades of at least their whale size, go out in one email. No model call; free on paid plans.
  */
@@ -114,7 +114,7 @@ export class BriefingWorkflow extends WorkflowEntrypoint<Env, { userId: string; 
 			const a = (await accountForUser(userId))!;
 			const event = await charge(a, "briefing", STANDARD_MODEL);
 			const w = await writeBriefing(items);
-			await settle(event, { tin: w.tin, tout: w.tout, cost: costUsd(STANDARD_MODEL, w.tin, w.tout), ok: !!w.text });
+			await settle(a, event, { tin: w.tin, tout: w.tout, cost: costUsd(STANDARD_MODEL, w.tin, w.tout), ok: !!w.text });
 			if (!w.text) throw new Error("empty briefing");
 			await db().prepare("INSERT INTO briefings (user_id, day, ts, races, body) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET ts = excluded.ts, races = excluded.races, body = excluded.body")
 				.bind(userId, day, now(), items.length, w.text).run();

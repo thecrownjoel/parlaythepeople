@@ -9,7 +9,7 @@ import { readJson } from "../../auth/_json";
 
 /**
  * POST {race_id} (Pro) → text/event-stream: {type:"status"} while the Deep analysis runs and the PDF renders, then
- * {type:"done", url} or {type:"error", text}. Costs CREDITS.report; refunded if it fails.
+ * {type:"done", url} or {type:"error", text}. Charged as AI usage (model cost × AI_MARKUP); nothing if it fails.
  */
 export const POST: APIRoute = async ({ request, cookies, url }) => {
 	const body = await readJson(request);
@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ request, cookies, url }) => {
 				console.error("report", race.id, String(e));
 				send({ type: "error", text: "The report couldn't be finished. Your credits weren't used; please try again." });
 			} finally {
-				try { await settle(event, { tin: r.tin, tout: r.tout, cost: costUsd(model, r.tin, r.tout), ok: r.ok }); } catch { /* ledger best effort */ }
+				try { await settle(a, event, { tin: r.tin, tout: r.tout, cost: costUsd(model, r.tin, r.tout), ok: r.ok }); } catch { /* ledger best effort */ }
 				ctrl.close();
 			}
 		},

@@ -7,6 +7,8 @@ import { pct, fmtVol } from "../../lib/markets";
 import { raceName } from "../../lib/home";
 import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
+import MaybeGate from "../../components/MaybeGate.astro";
+import { viewerPlan } from "../../lib/auth";
 
 const date = Astro.params.date ?? "";
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Astro.rewrite("/404");
@@ -17,6 +19,13 @@ const long = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday
 const summary = dailySummary(rep, raceName, (x) => pct(x), fmtVol);
 const prev = isoDate(rep.start - 86400), next = isoDate(rep.start + 86400);
 const today = isoDate(Math.floor(Date.now() / 1000));
+// the last 7 days are free; older reports are the Pro archive. The headline and summary stay open; the gate's
+// blurred preview is today's report, so an archived report's details never reach a free reader's page.
+const archived = date < isoDate(Math.floor(Date.now() / 1000) - 7 * 86400);
+const plan = archived ? await viewerPlan(Astro.cookies) : null;
+const gated = !!plan && !plan.archive;
+const b = gated ? (await dailyReport(today)) ?? rep : rep;
+if (archived) Astro.response.headers.set("cache-control", "private, no-store");
 const ago = (ts: number) => new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET";
 const ld = graph(organization(origin), {
 	"@type": "Article", headline: `Election markets on ${long}`, datePublished: new Date(rep.end * 1000).toISOString(), dateModified: new Date(rep.end * 1000).toISOString(),
@@ -34,9 +43,10 @@ const ld = graph(organization(origin), {
 			<p class="updated">Kalshi and Polymarket, averaged · times in UTC days{date === today ? " · updates through the day" : ""}</p>
 		</header>
 
-		{rep.control.some((c) => c.to != null) && (
+		<MaybeGate on={gated} kind="archive" plan={plan}>
+		{b.control.some((c) => c.to != null) && (
 			<section class="grid2">
-				{rep.control.filter((c) => c.to != null).map((c) => {
+				{b.control.filter((c) => c.to != null).map((c) => {
 					const d = c.from != null ? c.to! - c.from : null;
 					return (
 						<a class="panel dr-ctl" href={c.r.path}>
@@ -51,36 +61,36 @@ const ld = graph(organization(origin), {
 
 		<section>
 			<h2>Biggest moves</h2>
-			{rep.movers.length ? (
+			{b.movers.length ? (
 				<table class="dtable">
 					<thead><tr><th>Race</th><th>Start of day</th><th>End of day</th><th>Change (D)</th></tr></thead>
-					<tbody>{rep.movers.map((m) => <tr><td><a href={m.r.path}>{raceName(m.r)}</a></td><td class="num">D {pct(m.from)}</td><td class="num">D {pct(m.to)}</td><td class={`num ${m.delta >= 0 ? "dr-up" : "dr-down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</td></tr>)}</tbody>
+					<tbody>{b.movers.map((m) => <tr><td><a href={m.r.path}>{raceName(m.r)}</a></td><td class="num">D {pct(m.from)}</td><td class="num">D {pct(m.to)}</td><td class={`num ${m.delta >= 0 ? "dr-up" : "dr-down"}`}>{m.delta >= 0 ? "▲" : "▼"} {Math.abs(m.delta * 100).toFixed(1)}</td></tr>)}</tbody>
 				</table>
 			) : <p class="sec-note">No race moved a point or more.</p>}
 		</section>
 
-		{rep.flips.length > 0 && (
+		{b.flips.length > 0 && (
 			<section>
 				<h2>Lead changes</h2>
 				<ul class="racelist" style="grid-template-columns:1fr">
-					{rep.flips.map((m) => <li><a href={m.r.path}>{raceName(m.r)}</a><span class="num">{m.to >= 0.5 ? "Democrat" : "Republican"} now favored: D {pct(m.from)} → {pct(m.to)}</span></li>)}
+					{b.flips.map((m) => <li><a href={m.r.path}>{raceName(m.r)}</a><span class="num">{m.to >= 0.5 ? "Democrat" : "Republican"} now favored: D {pct(m.from)} → {pct(m.to)}</span></li>)}
 				</ul>
 			</section>
 		)}
 
-		{rep.money && (
+		{b.money && (
 			<section>
 				<h2>Where the money went</h2>
-				<p class="sec-note"><b class="dr-money">{fmtVol(rep.money.usd)}</b> traded on {rep.cycle.meta.cycle} races across {rep.money.n.toLocaleString()} trades.</p>
+				<p class="sec-note"><b class="dr-money">{fmtVol(b.money.usd)}</b> traded on {b.cycle.meta.cycle} races across {b.money.n.toLocaleString()} trades.</p>
 				<ul class="racelist" style="grid-template-columns:1fr">
-					{rep.money.top.map((x) => <li>{x.r ? <a href={x.r.path}>{raceName(x.r)}</a> : <span>{x.id}</span>}<span class="num dr-money">{fmtVol(x.usd)}</span></li>)}
+					{b.money.top.map((x) => <li>{x.r ? <a href={x.r.path}>{raceName(x.r)}</a> : <span>{x.id}</span>}<span class="num dr-money">{fmtVol(x.usd)}</span></li>)}
 				</ul>
-				{rep.big.length > 0 && (
+				{b.big.length > 0 && (
 					<>
 						<h3 style="margin-top:16px">Biggest single trades</h3>
 						<ul class="racelist" style="grid-template-columns:1fr">
-							{rep.big.map((t) => {
-								const r = rep.cycle.races.find((x) => x.id === t.race_id);
+							{b.big.map((t) => {
+								const r = b.cycle.races.find((x) => x.id === t.race_id);
 								return <li><span>{r ? <a href={r.path}>{raceName(r)}</a> : t.race_id}: {t.src === "k" ? (t.side === "yes" ? "Yes" : "No") : t.side === "BUY" ? "Buy" : "Sell"} {t.outcome}{t.yes_price != null ? ` at ${Math.round(t.yes_price * 100)}¢` : ""}, {ago(t.ts)}</span><span class="num dr-money">{fmtVol(t.usd)}</span></li>;
 							})}
 						</ul>
@@ -89,10 +99,10 @@ const ld = graph(organization(origin), {
 			</section>
 		)}
 
-		{rep.news.length > 0 && (
+		{b.news.length > 0 && (
 			<section>
 				<h2>Headlines</h2>
-				<ul class="dr-news">{rep.news.map((n) => <li><a href={n.url} target="_blank" rel="noopener nofollow">{n.title}</a> <span>{n.source}</span></li>)}</ul>
+				<ul class="dr-news">{b.news.map((n) => <li><a href={n.url} target="_blank" rel="noopener nofollow">{n.title}</a> <span>{n.source}</span></li>)}</ul>
 			</section>
 		)}
 
@@ -101,6 +111,7 @@ const ld = graph(organization(origin), {
 			<a href="/daily/">All days</a>
 			{next <= today && <a href={`/daily/${next}/`}>{next} →</a>}
 		</nav>
+		</MaybeGate>
 	</div>
 </Base>
 

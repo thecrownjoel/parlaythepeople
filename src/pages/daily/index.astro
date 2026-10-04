@@ -17,10 +17,10 @@ const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US"
 			<p class="eyebrow">Daily market report</p>
 			<h1>What moved the election markets, day by day</h1>
 			<p class="lede">Every day: who's favored for the Senate and House, the races that moved most, lead changes, where the money went and the headlines. Money and headlines begin {fmt(DAILY_MONEY_START)}; prices go back to November 2024.</p>
-			<p class="updated"><a href="/daily/rss.xml">RSS feed</a> · one report per day</p>
+			<p class="updated"><a href="/daily/rss.xml">RSS feed</a> · one report per day · the last 7 days are free; the full archive is part of <a href="/pro/">Pro</a></p>
 		</header>
 		<ul class="racelist" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))">
-			{days.map((d, i) => <li><a href={`/daily/${d}/`}>{fmt(d)}</a><span class="num">{i === 0 ? "today" : ""}</span></li>)}
+			{days.map((d, i) => <li><a href={`/daily/${d}/`} data-lock={i >= 8 ? "archive" : undefined}>{fmt(d)}</a><span class="num">{i === 0 ? "today" : i === 8 ? "Pro archive" : ""}</span></li>)}
 		</ul>
 	</div>
 </Base>

@@ -7,7 +7,7 @@ import type { Period } from "../../lib/period";
 interface Props { d: HomeData; period: Period }
 const { d, period } = Astro.props;
 const { races, nextYear, presYear } = d;
-const [money, start, big] = await Promise.all([moneySince(period.ts), moneyStart(), biggestTrades(period.ts, 8)]);
+const [money, start, big] = await Promise.all([moneySince(period.ts), moneyStart(), biggestTrades(period.ts, FREE_TRADES + 1)]);
 const byId = new Map(races.map((r) => [r.id, r]));
 const label = (id: string) => {
 	const r = byId.get(id);
@@ -23,6 +23,9 @@ const max = top[0]?.[1].usd || 1;
 const clipped = start != null && period.ts < start;
 const startWord = start ? new Date(start * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
 const ago = (ts: number) => { const s = Date.now() / 1000 - ts; return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
+import { FREE_TRADES, homeTradeRow } from "../../lib/tradeRows";
+import { gateHtml } from "../../lib/gate";
+import { PLANS } from "../../lib/plans";
 ---
 <p class="sec-note">Every trade on both exchanges, added up {period.since}{clipped ? ` (trade records begin ${startWord})` : ""}.</p>
 {total.usd > 0 ? (
@@ -50,7 +53,7 @@ const ago = (ts: number) => { const s = Date.now() / 1000 - ts; return s < 3600 
 			</div>
 			<div class="panel">
 				<h3 style="font-size:18px">Biggest single trades</h3>
-				{big.length ? big.map((t) => {
+				{big.length ? big.slice(0, FREE_TRADES).map((t) => {
 					const l = label(t.race_id);
 					const side = t.src === "k" ? (t.side === "yes" ? "Yes" : "No") : (t.side === "BUY" ? "Buy" : "Sell");
 					return (
@@ -61,6 +64,9 @@ const ago = (ts: number) => { const s = Date.now() / 1000 - ts; return s < 3600 
 						</a>
 					);
 				}) : <p class="empty-note">No trades recorded {period.since}.</p>}
+				{big.length > FREE_TRADES && (
+					<div data-more-trades data-kind="home" data-since={period.ts} set:html={gateHtml("trades", PLANS.anon, big.slice(0, FREE_TRADES).map((t) => homeTradeRow(t, byId)).join(""), "/")} />
+				)}
 			</div>
 		</div>
 	</>

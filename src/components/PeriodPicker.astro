@@ -12,8 +12,8 @@ const shown = PRESETS.filter((p) => presets.includes(p.key));
 ---
 <div class={`pp${dark ? " pp-dark" : ""}`} data-pp={section} role="group" aria-label="Time period">
 	{withNow && <button type="button" data-p="now" aria-pressed={period.now ? "true" : "false"}>Now</button>}
-	{shown.map((p) => <button type="button" data-p={p.key} aria-pressed={period.key === p.key ? "true" : "false"} title={withNow ? `Show the markets ${p.at}` : `Show changes ${p.since}`}>{p.label}</button>)}
-	<label class="pp-cal" data-on={period.custom ? "true" : "false"} title={withNow ? "Show the markets on a date" : "Show changes since a date"}>
+	{shown.map((p) => <button type="button" data-p={p.key} data-lock={p.key === "60d" ? "60d" : undefined} aria-pressed={period.key === p.key ? "true" : "false"} title={withNow ? `Show the markets ${p.at}` : `Show changes ${p.since}`}>{p.label}</button>)}
+	<label class="pp-cal" data-lock="time" data-on={period.custom ? "true" : "false"} title={withNow ? "Show the markets on a date" : "Show changes since a date"}>
 		<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1.5 6.5h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
 		<span data-pp-label>{period.custom ? period.label : "Date"}</span>
 		<input type="date" min={min} max={max} value={period.custom ? period.key : ""} aria-label={withNow ? "Show the markets on a date" : "Show changes since a date"} />
@@ -70,7 +70,12 @@ const shown = PRESETS.filter((p) => presets.includes(p.key));
 		if (b) return void load(b.closest<HTMLElement>("[data-pp]")!, b.dataset.p!);
 		const cal = t.closest<HTMLElement>("[data-pp] .pp-cal");
 		const input = cal?.querySelector<HTMLInputElement>("input");
-		if (input) { e.preventDefault(); try { input.showPicker(); } catch { input.focus(); } }
+		if (input) {
+			e.preventDefault();
+			// without the time machine, show what it opens instead of a calendar that can't be used
+			if (cal && document.documentElement.dataset.history && document.documentElement.dataset.history !== "all") return void load(cal.closest<HTMLElement>("[data-pp]")!, "2025-11-04");
+			try { input.showPicker(); } catch { input.focus(); }
+		}
 	});
 	document.addEventListener("change", (e) => {
 		const input = (e.target as HTMLElement).closest<HTMLInputElement>("[data-pp] input[type=date]");

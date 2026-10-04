@@ -1,0 +1,9 @@
+---
+/** Renders its content inside a Gate when `on`, or as is otherwise. */
+import Gate from "./Gate.astro";
+import type { GateKind } from "../lib/gate";
+import type { Plan } from "../lib/plans";
+interface Props { on: boolean; kind: GateKind; plan: Plan | null; next?: string }
+const { on, kind, plan, next } = Astro.props;
+---
+{on && plan ? <Gate kind={kind} plan={plan} next={next}><slot /></Gate> : <slot />}

@@ -3,6 +3,7 @@
 import { env } from "cloudflare:workers";
 import Base from "../../layouts/Base.astro";
 import { PLANS, type PlanId } from "../../lib/plans";
+// paid plans record cents charged in usage_events.credits; public and free accounts record 1 per question
 import "../../styles/data.css";
 
 const role = (Astro.locals as any).user?.role ?? 0;
@@ -40,9 +41,12 @@ const paying = [...subOf.values()].map((s) => {
 	const p = PLANS[s.plan as PlanId];
 	const u = bySubject.get(s.subject) ?? { credits: 0, cost: 0, n: 0 };
 	const price = p?.price ?? 0;
-	return { ...s, name: p?.name ?? s.plan, price, used: u.credits, of: p?.credits ?? 0, cost: u.cost, margin: price ? (price - u.cost) / price : null };
+	const ai = u.credits / 100; // AI charged, dollars (included allowance plus balance)
+	const revenue = price + Math.max(0, ai - (p?.aiAllowance ?? 0) / 100);
+	return { ...s, name: p?.name ?? s.plan, price, ai, cost: u.cost, revenue, margin: revenue ? (revenue - u.cost) / revenue : null };
 }).sort((a, b) => b.cost - a.cost);
 const mrr = paying.reduce((a, s) => a + (s.price ?? 0), 0);
+const aiRevenue = paying.reduce((a, s) => a + Math.max(0, s.revenue - s.price), 0);
 const $ = (x: number, d = 2) => `$${x.toFixed(d)}`;
 const day = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10);
 ---
@@ -51,22 +55,22 @@ const day = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10);
 		<header class="dp-head">
 			<p class="eyebrow">Ops · last 30 days</p>
 			<h1>AI spend and margins</h1>
-			<p class="lede">{$(totalCost)} of model time across {rows.reduce((a, r) => a + r.n, 0).toLocaleString()} AI actions. {paying.length} paying accounts, {$(mrr, 0)} a month in plan prices. Gateway logs and caching: Cloudflare dashboard → AI → AI Gateway → "default".</p>
+			<p class="lede">{$(totalCost)} of model time across {rows.reduce((a, r) => a + r.n, 0).toLocaleString()} AI actions. {paying.length} paying accounts: {$(mrr, 0)} a month in memberships and {$(aiRevenue)} of AI usage beyond the included allowance (30 days). Gateway logs and caching: Cloudflare dashboard → AI → AI Gateway → "default".</p>
 		</header>
 
 		<section class="panel">
 			<h2>By plan and feature</h2>
 			<div class="tbl-wrap"><table class="tbl">
-				<thead><tr><th>Plan</th><th>Feature</th><th class="r">Actions</th><th class="r">Succeeded</th><th class="r">Credits</th><th class="r">Tokens in / out</th><th class="r">Model cost</th><th class="r">Per action</th></tr></thead>
-				<tbody>{rows.map((r) => <tr><td>{PLANS[r.plan as PlanId]?.name ?? r.plan}</td><td>{r.action}</td><td class="r num">{r.n}</td><td class="r num">{r.n ? Math.round((r.ok / r.n) * 100) : 0}%</td><td class="r num">{r.credits}</td><td class="r num">{Math.round(r.tin / 1000)}k / {Math.round(r.tout / 1000)}k</td><td class="r num">{$(r.cost)}</td><td class="r num">{$(r.n ? r.cost / r.n : 0, 4)}</td></tr>)}</tbody>
+				<thead><tr><th>Plan</th><th>Feature</th><th class="r">Actions</th><th class="r">Succeeded</th><th class="r">Charged</th><th class="r">Tokens in / out</th><th class="r">Model cost</th><th class="r">Per action</th></tr></thead>
+				<tbody>{rows.map((r) => <tr><td>{PLANS[r.plan as PlanId]?.name ?? r.plan}</td><td>{r.action}</td><td class="r num">{r.n}</td><td class="r num">{r.n ? Math.round((r.ok / r.n) * 100) : 0}%</td><td class="r num">{PLANS[r.plan as PlanId]?.aiAllowance != null ? $(r.credits / 100) : "free"}</td><td class="r num">{Math.round(r.tin / 1000)}k / {Math.round(r.tout / 1000)}k</td><td class="r num">{$(r.cost)}</td><td class="r num">{$(r.n ? r.cost / r.n : 0, 4)}</td></tr>)}</tbody>
 			</table></div>
 		</section>
 
 		<section class="panel">
 			<h2>Paying accounts</h2>
 			{paying.length ? <div class="tbl-wrap"><table class="tbl">
-				<thead><tr><th>Account</th><th>Plan</th><th class="r">Credits used</th><th class="r">Model cost (30d)</th><th class="r">Price</th><th class="r">Margin</th><th>Note</th></tr></thead>
-				<tbody>{paying.map((s) => <tr><td>{s.email ?? s.subject}</td><td>{s.name}</td><td class="r num">{s.used} / {s.of}</td><td class="r num">{$(s.cost)}</td><td class="r num">{s.price ? $(s.price, 0) : "custom"}</td><td class="r num">{s.margin == null ? "—" : `${Math.round(s.margin * 100)}%`}</td><td>{s.note ?? ""}</td></tr>)}</tbody>
+				<thead><tr><th>Account</th><th>Plan</th><th class="r">AI charged</th><th class="r">Model cost (30d)</th><th class="r">Membership</th><th class="r">Margin</th><th>Note</th></tr></thead>
+				<tbody>{paying.map((s) => <tr><td>{s.email ?? s.subject}</td><td>{s.name}</td><td class="r num">{$(s.ai)}</td><td class="r num">{$(s.cost)}</td><td class="r num">{s.price ? $(s.price, 0) : "custom"}</td><td class="r num">{s.margin == null ? "—" : `${Math.round(s.margin * 100)}%`}</td><td>{s.note ?? ""}</td></tr>)}</tbody>
 			</table></div> : <p class="sec-note">No paying accounts yet.</p>}
 		</section>
 

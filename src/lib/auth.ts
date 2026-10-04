@@ -6,7 +6,7 @@
 import type { AstroCookies } from "astro";
 import { env } from "cloudflare:workers";
 import { sendMail } from "./mail";
-import { PLANS, CREDITS, type Plan, type PlanId, type Metered } from "./plans";
+import { PLANS, TYPICAL_CENTS, chargeCents, type Plan, type PlanId, type Metered } from "./plans";
 
 const DAY = 86400;
 const SESSION_DAYS = 30;
@@ -19,10 +19,14 @@ export interface Account {
 	plan: Plan;
 	/** who is billed: 'u:<id>', 'o:<org id>' or 'a:<hashed ip>' */
 	subject: string;
-	/** paid plans: credits left this period (plan credits + extra); daily plans: questions left today */
+	/** paid plans: AI cents left (monthly allowance left + AI balance); daily plans: questions left today */
 	left: number;
-	/** paid plans: when the credit period resets (unix seconds) */
+	/** paid plans: when the monthly AI allowance resets; daily plans: midnight UTC */
 	resets: number | null;
+	/** paid plans: the current period's start, the allowance left and the AI balance, all in cents */
+	periodStart?: number;
+	allowanceLeft?: number;
+	balance?: number;
 }
 
 const db = () => env.ACCOUNTS;
@@ -145,13 +149,15 @@ async function accountOf(user: User): Promise<Account> {
 	const subject = user.org_id ? `o:${user.org_id}` : `u:${user.id}`;
 	const sub = await db().prepare("SELECT plan, status, period_start, period_end, extra_credits FROM subscriptions WHERE subject = ?").bind(subject).first<Sub>();
 	const plan = sub && (sub.status === "active" || sub.status === "trialing") && PLANS[sub.plan] ? PLANS[sub.plan] : PLANS.free;
-	if (!plan.credits) {
+	if (plan.aiAllowance == null) {
 		const used = await usedSince(subject, today);
 		return { user, plan, subject, left: Math.max(0, plan.daily! - used.n), resets: today + DAY };
 	}
 	const p = period(sub!);
 	const used = await usedSince(subject, p.start);
-	return { user, plan, subject, left: Math.max(0, plan.credits + (sub!.extra_credits ?? 0) - used.credits), resets: p.end };
+	const allowanceLeft = Math.max(0, plan.aiAllowance - used.credits);
+	const balance = Math.max(0, sub!.extra_credits ?? 0);
+	return { user, plan, subject, left: allowanceLeft + balance, resets: p.end, periodStart: p.start, allowanceLeft, balance };
 }
 
 async function usedSince(subject: string, since: number) {
@@ -159,18 +165,46 @@ async function usedSince(subject: string, since: number) {
 	return { n: r?.n ?? 0, credits: r?.credits ?? 0 };
 }
 
-/** What one action costs this account: questions on daily plans, credits on paid plans. */
-export const price = (a: Account, action: Metered) => (a.plan.credits ? CREDITS[action] : 1);
+const paid = (a: Account) => a.plan.aiAllowance != null;
 
-/** Record an action before running it, so a burst of parallel requests can't overspend. Returns the event's rowid. */
+/** What an action needs to start: one question on daily plans; its typical price in cents on paid plans. */
+export const price = (a: Account, action: Metered) => (paid(a) ? TYPICAL_CENTS[action] : 1);
+
+/** Record an action before running it (holding its typical price, so a burst of parallel requests can't overspend). */
 export async function charge(a: Account, action: Metered, model: string) {
 	const r = await db().prepare("INSERT INTO usage_events (ts, subject, user_id, action, credits, model, ok) VALUES (?, ?, ?, ?, ?, ?, NULL)")
 		.bind(now(), a.subject, a.user?.id ?? null, action, price(a, action), model).run();
 	return r.meta.last_row_id;
 }
 
-/** Fill in what the action actually cost once it's done; a failed answer is refunded (credits set to 0). */
-export async function settle(rowid: number, o: { tin: number; tout: number; cost: number; ok: boolean }) {
-	await db().prepare(`UPDATE usage_events SET input_tokens = ?, output_tokens = ?, cost_usd = ?, ok = ?${o.ok ? "" : ", credits = 0"} WHERE rowid = ?`)
-		.bind(o.tin, o.tout, Math.round(o.cost * 1e6) / 1e6, o.ok ? 1 : 0, rowid).run();
+/**
+ * Settle an action once it's done. Daily plans: the question counts unless it failed. Paid plans: charge the real
+ * model cost × markup in cents (nothing if it failed), from the monthly allowance first and then the AI balance.
+ */
+export async function settle(a: Account, rowid: number, o: { tin: number; tout: number; cost: number; ok: boolean }): Promise<number> {
+	const cents = paid(a) ? (o.ok ? chargeCents(o.cost) : 0) : o.ok ? 1 : 0;
+	await db().prepare("UPDATE usage_events SET input_tokens = ?, output_tokens = ?, cost_usd = ?, ok = ?, credits = ? WHERE rowid = ?")
+		.bind(o.tin, o.tout, Math.round(o.cost * 1e6) / 1e6, o.ok ? 1 : 0, cents, rowid).run();
+	if (!paid(a) || !cents) return cents;
+	// how much of this charge the monthly allowance didn't cover comes off the balance
+	const before = await db().prepare("SELECT COALESCE(SUM(credits), 0) AS c FROM usage_events WHERE subject = ? AND ts >= ? AND rowid != ? AND (ok IS NULL OR ok = 1)")
+		.bind(a.subject, a.periodStart ?? 0, rowid).first<{ c: number }>();
+	const allowance = a.plan.aiAllowance ?? 0, used = before?.c ?? 0;
+	const overflow = Math.max(0, used + cents - allowance) - Math.max(0, used - allowance);
+	if (overflow > 0) await db().prepare("UPDATE subscriptions SET extra_credits = MAX(0, extra_credits - ?), updated = ? WHERE subject = ?").bind(overflow, now(), a.subject).run();
+	return cents;
+}
+
+/** The viewer's plan only (no usage queries): for gating history, the archive and downloads. */
+export async function viewerPlan(cookies: AstroCookies): Promise<Plan> {
+	if (!cookies.get(SESSION_COOKIE)) return PLANS.anon;
+	const user = await currentUser(cookies);
+	if (!user) return PLANS.anon;
+	const subject = user.org_id ? `o:${user.org_id}` : `u:${user.id}`;
+	try {
+		const sub = await db().prepare("SELECT plan, status FROM subscriptions WHERE subject = ?").bind(subject).first<{ plan: PlanId; status: string }>();
+		return sub && (sub.status === "active" || sub.status === "trialing") && PLANS[sub.plan] ? PLANS[sub.plan] : PLANS.free;
+	} catch {
+		return PLANS.free;
+	}
 }

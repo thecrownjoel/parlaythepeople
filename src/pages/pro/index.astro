@@ -1,8 +1,8 @@
 ---
-/** Pricing: the public site, a free account, Pro, Team and Organization. Billing isn't connected yet: paid plans are requested and granted by hand. */
+/** Pricing: the public site, a free account, Pro, Team and Organization, and pay-as-you-go AI. Billing isn't connected yet: paid plans are requested and granted by hand. */
 import Base from "../../layouts/Base.astro";
 import { account } from "../../lib/auth";
-import { PLANS, CREDITS, CREDIT_PACK } from "../../lib/plans";
+import { PLANS, TYPICAL_CENTS, AI_MARKUP, TOP_UPS, dollars } from "../../lib/plans";
 import { SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
 
@@ -10,41 +10,89 @@ Astro.response.headers.set("cache-control", "no-store");
 const a = await account(Astro.cookies, Astro.request);
 const tiers = [PLANS.free, PLANS.pro, PLANS.team, PLANS.enterprise];
 const current = a.plan.id === "anon" ? null : a.plan.id;
+const cents = (c: number) => `about ${c}¢`;
+const included = PLANS.pro.aiAllowance ?? 0;
+const aiPrices: [string, string, string][] = [
+	["A question to the analyst", cents(TYPICAL_CENTS.ask), "Odds, polls, money and news, with links"],
+	["A Deep analysis", cents(TYPICAL_CENTS.deep), "Many lookups, trade flow, race analogs, a structured brief"],
+	["A PDF race report", cents(TYPICAL_CENTS.report), "A Deep analysis with charts and odds, ready to send"],
+	["A morning briefing", cents(TYPICAL_CENTS.briefing), "Your races, emailed at 7am Eastern"],
+];
+// what each tier opens, compared side by side
+const Y = "✓", N = "";
+const compare: [string, string, string, string][] = [
+	["Live odds, polls and charts for every race", Y, Y, Y],
+	["24-hour, 1-week and 30-day views", Y, Y, Y],
+	["The 60-day view", N, Y, Y],
+	["Time machine: any date since Nov 2024, 1-year and full-history charts", N, N, Y],
+	["Daily reports", "Last 7 days", "Last 7 days", "Full archive"],
+	["Big trades and Polymarket wallets", "Top 3", "Top 3", "All of them"],
+	["Price history downloads", "90 days", "90 days", "Full history"],
+	["AI analyst", "10 a day", "25 a day", "Pay as you go"],
+	["Deep analyses, PDF reports, briefings", N, N, Y],
+	["Move and big-bet alerts", N, N, Y],
+	["Followed races on every device", N, Y, Y],
+];
 const faqs: [string, string][] = [
-	["What is a credit?", `One question to the analyst uses ${CREDITS.ask} credit. A Deep analysis, which runs many more lookups, reads more sources and writes a structured brief, uses ${CREDITS.deep}. Credits reset each month; extra credits come in packs of ${CREDIT_PACK.credits} for $${CREDIT_PACK.price} and don't expire.`],
-	["What stays free?", "Everything public today: every race page, chart, map, date picker, daily report and headline, the data downloads, and the analyst's daily free questions. Pro adds depth on top; nothing public moves behind it."],
+	["How does pay-as-you-go AI work?", `Each answer costs what the AI actually used, times ${AI_MARKUP}, usually ${TYPICAL_CENTS.ask}¢ for a question and ${TYPICAL_CENTS.deep}¢ for a Deep analysis. Pro includes ${dollars(included)} of AI each month (about ${Math.floor(included / TYPICAL_CENTS.ask)} questions); after that it comes from your AI balance, topped up in $${TOP_UPS.join(", $")} amounts that never expire. Your account page shows every charge.`],
+	["What stays free?", "Live odds, polls and charts for every race, the 24-hour, 1-week and 30-day views, the last week of daily reports, and the analyst's daily free questions. A free account adds the 60-day view and more questions."],
 	["Where does the trade data come from?", "Every individual trade on both exchanges since September 30, 2026. Kalshi trades are anonymous. Polymarket trades carry public wallet pseudonyms, which Pro reports as they are; we never guess who is behind one."],
+	["Where do the polls come from?", "Every published poll listed on Wikipedia's race pages, each citing its pollster. Our average is our own, and its method is on every race page."],
 	["Is this betting advice?", "No. Parlay the People is election research. The analyst explains what the markets say and why they move; it never tells anyone what to buy or sell."],
 	["How do I pay?", "Billing opens soon. Until then, request a plan below and we'll set up your account by hand."],
 ];
 ---
-<Base title={`Pro: deeper election market analysis | ${SITE_NAME}`} description="Pro adds trade flow, whale watch, exchange divergence and Deep analyses to Parlay the People's AI analyst, for campaigns, consultants, reporters and traders." canonical={`${Astro.url.origin}/pro/`}>
+<Base title={`Pro: the time machine and the money trail | ${SITE_NAME}`} description={`Pro is $${PLANS.pro.price} a month: every date since Nov 2024, the full daily archive, every big trade, and AI that pays as you go. Start with a free account.`} canonical={`${Astro.url.origin}/pro/`}>
 	<div class="dp pro" data-signed-in={a.user ? "1" : "0"}>
-		<header class="dp-head">
+		<header class="dp-head pro-hero">
 			<p class="eyebrow">Parlay the People Pro</p>
-			<h1>See who is moving the market</h1>
-			<p class="lede">The public site shows what the markets say. Pro shows who is buying which side, where Kalshi and Polymarket disagree, and why a race is moving, in Deep analyses written for campaigns, consultants, reporters and traders.</p>
+			<h1>The time machine and the money trail</h1>
+			<p class="lede">Go back to any day since November 2024, follow every big bet, and get AI analysis when you want it, paying only for what you use. Pro is ${PLANS.pro.price} a month.</p>
+			{!a.user && (
+				<div class="pro-start">
+					<a class="pro-btn" href="/account/?next=/pro/">Start free</a>
+					<span class="pro-quiet">A free account opens the 60-day view and 25 AI questions a day. No password, no card.</span>
+				</div>
+			)}
 		</header>
 
 		<section class="pro-grid" aria-label="Plans">
 			{tiers.map((p) => (
 				<article class={`pro-card${p.id === "pro" ? " pro-main" : ""}`}>
+					{p.id === "pro" && <p class="pro-badge">Most popular</p>}
 					<h2>{p.name}</h2>
 					<p class="pro-price">
 						{p.price === null ? <span class="pro-num">Custom</span> : p.price === 0 ? <span class="pro-num">$0</span> : <><span class="pro-num">${p.price}</span><span class="pro-per">/month</span></>}
 					</p>
-					{p.priceYear ? <p class="pro-quiet">or ${p.priceYear.toLocaleString("en-US")} a year (two months free)</p> : <p class="pro-quiet">{p.price === null ? "Annual contract" : "No card needed"}</p>}
+					{p.priceYear ? <p class="pro-quiet">or ${p.priceYear.toLocaleString("en-US")} a year (two months free)</p> : <p class="pro-quiet">{p.price === null ? "Annual contract" : "Free forever"}</p>}
 					<p class="pro-blurb">{p.blurb}</p>
 					<ul>{p.features.map((f) => <li>{f}</li>)}</ul>
 					{current === p.id
 						? <p class="pro-current">Your plan</p>
 						: p.id === "free"
-							? (a.user ? <p class="pro-current">Included</p> : <a class="pro-btn pro-ghost" href="/account/?next=/pro/">Sign in free</a>)
+							? (a.user ? <p class="pro-current">Included</p> : <a class="pro-btn" href="/account/?next=/pro/">Sign up free</a>)
 							: (a.user
-								? <button type="button" class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} data-request={p.id}>{p.id === "enterprise" ? "Talk to us" : `Request ${p.name}`}</button>
-								: <a class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} href="/account/?next=/pro/">Sign in to request</a>)}
+								? <button type="button" class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} data-request={p.id}>{p.id === "enterprise" ? "Talk to us" : `Get ${p.name}`}</button>
+								: <a class={`pro-btn${p.id === "pro" ? "" : " pro-ghost"}`} href="/account/?next=/pro/">{p.id === "enterprise" ? "Sign up to talk to us" : `Sign up to get ${p.name}`}</a>)}
 				</article>
 			))}
+		</section>
+
+		<section class="panel" aria-labelledby="ai-h">
+			<h2 id="ai-h">AI, pay as you go</h2>
+			<p class="sec-note">You pay for the AI you use: what it costs us, times {AI_MARKUP}. Pro includes {dollars(included)} of AI every month; after that it comes from your AI balance.</p>
+			<div class="tbl-wrap"><table class="tbl">
+				<thead><tr><th>What you ask for</th><th class="r">Typical price</th><th>What you get</th></tr></thead>
+				<tbody>{aiPrices.map(([what, price, get]) => <tr><td>{what}</td><td class="r num">{price}</td><td>{get}</td></tr>)}</tbody>
+			</table></div>
+		</section>
+
+		<section aria-labelledby="cmp-h">
+			<h2 id="cmp-h">What each plan opens</h2>
+			<div class="tbl-wrap"><table class="tbl pro-cmp">
+				<thead><tr><th></th><th>Public</th><th>Free account</th><th>Pro</th></tr></thead>
+				<tbody>{compare.map(([f, pub, free, pro]) => <tr><td>{f}</td><td>{pub}</td><td>{free}</td><td class="pro-col">{pro}</td></tr>)}</tbody>
+			</table></div>
 		</section>
 
 		<dialog class="pro-dialog" data-dialog>
@@ -97,11 +145,16 @@ const faqs: [string, string][] = [
 	.pro-per { color: var(--color-text-secondary); }
 	.pro-quiet { color: var(--color-muted); font-size: 13px; margin: 0; }
 	.pro-blurb { margin: 0; color: var(--color-text-secondary); font-size: 15px; }
-	.pro-card ul { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; flex: 1; }
+	.pro-card ul { align-content: start; margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; flex: 1; }
 	.pro-btn { all: unset; cursor: pointer; text-align: center; padding: 11px 16px; border-radius: 10px; background: #a3262a; color: #fff; font-weight: 700; }
 	.pro-ghost { background: none; border: 1px solid var(--color-border); color: var(--color-text); }
 	.pro-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
 	.pro-current { margin: 0; text-align: center; padding: 11px; color: var(--color-text-secondary); font-weight: 600; }
+	.pro-hero { gap: 14px; }
+	.pro-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+	.pro-badge { margin: 0 0 -4px; align-self: flex-start; font: 700 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: #f08a7e; background: rgb(163 38 42 / .16); padding: 3px 8px; border-radius: 999px; }
+	.pro-cmp td:not(:first-child), .pro-cmp th:not(:first-child) { text-align: center; white-space: nowrap; }
+	.pro-cmp .pro-col { color: var(--color-text); font-weight: 600; }
 	.pro-dialog { max-width: min(480px, calc(100vw - 32px)); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); color: var(--color-text); padding: 22px; }
 	.pro-dialog::backdrop { background: rgb(0 0 0 / .6); }
 	.pro-dialog form { display: flex; flex-direction: column; gap: 12px; }

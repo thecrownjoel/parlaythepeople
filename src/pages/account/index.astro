@@ -5,6 +5,7 @@ import { account, safeNext } from "../../lib/auth";
 import { listPasskeys } from "../../lib/passkeys";
 import { prefsFor, watchlistFor } from "../../lib/briefing";
 import { mdToHtml } from "../../lib/md";
+import { dollars, TYPICAL_CENTS, TOP_UPS } from "../../lib/plans";
 import { env } from "cloudflare:workers";
 import { SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
@@ -21,7 +22,9 @@ const reports = user && paid ? ((await env.ACCOUNTS.prepare("SELECT id, race_id,
 const next = safeNext(Astro.url.searchParams.get("next"));
 const error = Astro.url.searchParams.get("error");
 const day = (ts: number | null) => (ts ? new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
-const unit = a.plan.credits ? "credits" : "questions";
+const metered = a.plan.aiAllowance != null;
+const charges = user && metered ? ((await env.ACCOUNTS.prepare("SELECT ts, action, credits FROM usage_events WHERE subject = ? AND ok = 1 ORDER BY ts DESC LIMIT 12").bind(a.subject).all<{ ts: number; action: string; credits: number }>()).results ?? []) : [];
+const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis", report: "PDF report", briefing: "Morning briefing" };
 ---
 <Base title={`Your account | ${SITE_NAME}`} description="Sign in to Parlay the People with an email link or a passkey." canonical={`${Astro.url.origin}/account/`} robots="noindex, nofollow">
 	<div class="dp acct" style="max-width:720px" data-next={next}>
@@ -52,8 +55,15 @@ const unit = a.plan.credits ? "credits" : "questions";
 				<section class="panel acct-panel">
 					<dl class="acct-facts">
 						<div><dt>Signed in as</dt><dd>{user.email}</dd></div>
-						<div><dt>Plan</dt><dd><strong>{a.plan.name}</strong>{!a.plan.credits && <> · <a href="/pro/">See Pro</a></>}</dd></div>
-						<div><dt>{a.plan.credits ? "Credits left" : "Questions left today"}</dt><dd class="num">{a.left.toLocaleString("en-US")} {unit}{a.resets && <span class="acct-quiet"> · resets {day(a.resets)}</span>}</dd></div>
+						<div><dt>Plan</dt><dd><strong>{a.plan.name}</strong>{!metered && <> · <a href="/pro/">See Pro</a></>}</dd></div>
+						{metered ? (
+							<>
+								<div><dt>AI included this month</dt><dd class="num">{dollars(a.allowanceLeft ?? 0)} of {dollars(a.plan.aiAllowance!)} left<span class="acct-quiet"> · resets {day(a.resets)}</span></dd></div>
+								<div><dt>AI balance</dt><dd class="num">{dollars(a.balance ?? 0)}<span class="acct-quiet"> · top-ups of ${TOP_UPS.join(", $")} open with billing</span></dd></div>
+							</>
+						) : (
+							<div><dt>AI questions left today</dt><dd class="num">{a.left.toLocaleString("en-US")}<span class="acct-quiet"> · resets {day(a.resets)}</span></dd></div>
+						)}
 					</dl>
 					<p class="acct-links"><a href="/ai/">Ask the analyst</a><button type="button" class="acct-link" data-logout>Sign out</button></p>
 				</section>
@@ -64,7 +74,7 @@ const unit = a.plan.credits ? "credits" : "questions";
 						: <p class="acct-quiet">You aren't following any races yet. Tap "Follow this race" on any race page.</p>}
 					{paid && prefs && (
 						<form class="acct-prefs" data-prefs>
-							<label class="acct-check"><input type="checkbox" name="briefing" checked={!!prefs.briefing} /> Morning briefing on these races, 7am Eastern ({`2 credits`} each)</label>
+							<label class="acct-check"><input type="checkbox" name="briefing" checked={!!prefs.briefing} /> Morning briefing on these races, 7am Eastern (about {TYPICAL_CENTS.briefing}¢ each)</label>
 							<label class="acct-check"><input type="checkbox" name="alerts" checked={!!prefs.alerts} /> Alerts when one moves or a big bet lands (free)</label>
 							<div class="acct-row">
 								<label>Move of <input type="number" name="move_pts" min="1" max="50" step="1" value={prefs.move_pts} /> points in 24 hours</label>
@@ -76,6 +86,13 @@ const unit = a.plan.credits ? "credits" : "questions";
 					)}
 					{!paid && <p class="acct-quiet"><a href="/pro/">Pro</a> adds a morning briefing and alerts on the races you follow.</p>}
 				</section>
+				{charges.length > 0 && (
+					<section class="panel acct-panel">
+						<h2>Recent AI charges</h2>
+						<p class="acct-quiet">What the AI actually used, times 3. Included AI is used first, then your balance.</p>
+						<ul class="acct-keys">{charges.map((c) => <li><span>{ACTION[c.action] ?? c.action}</span><span class="acct-quiet">{new Date(c.ts * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}</span><span class="num">{c.credits}¢</span></li>)}</ul>
+					</section>
+				)}
 				{briefs.length > 0 && (
 					<section class="panel acct-panel">
 						<h2>Recent briefings</h2>
@@ -107,6 +124,8 @@ const unit = a.plan.credits ? "credits" : "questions";
 <script>
 	import { startAuthentication, startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 	const root = document.querySelector<HTMLElement>(".acct")!;
+	// the plan may have changed (signed in, out or upgraded): drop the cached copy the layout keeps
+	try { sessionStorage.removeItem("ptp:me"); } catch { /* storage blocked */ }
 	const next = root.dataset.next || "/account/";
 	const post = (url: string, body: object = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 	const say = (el: Element | null, text: string, bad = false) => { if (el) { el.textContent = text; el.classList.toggle("acct-err", bad); } };

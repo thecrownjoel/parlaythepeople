@@ -1,0 +1,17 @@
+---
+/** The Pro / sign-up gate around real content (shown blurred). Same markup as gateHtml() in lib/gate.ts. */
+import { COPY, actions, LOCK, type GateKind } from "../lib/gate";
+import type { Plan } from "../lib/plans";
+interface Props { kind: GateKind; plan: Plan; next?: string }
+const { kind, plan, next = Astro.url.pathname } = Astro.props;
+const c = COPY[kind];
+---
+<div class="gate" data-gate={kind}>
+	<div class="gate-preview" aria-hidden="true" inert><slot /></div>
+	<div class="gate-card" role="note">
+		<p class="gate-eyebrow"><Fragment set:html={LOCK} /><span>{c.eyebrow}</span></p>
+		<p class="gate-title">{c.title}</p>
+		<p class="gate-body">{c.body}</p>
+		<div class="gate-actions" set:html={actions(kind, plan, next)} />
+	</div>
+</div>

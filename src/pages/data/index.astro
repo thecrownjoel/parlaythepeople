@@ -13,7 +13,7 @@ const feeds: [string, string, string][] = [
 	["Cycles index", "/api/v1/index.json", "Which election years exist, the next one, and links to each cycle's feeds."],
 	["One cycle (JSON)", `/api/v1/${ex}.json`, "Every race with each exchange's outcomes and prices, plus balance of power, seat counts, popular vote, presidency and ballot measures."],
 	["One cycle (CSV)", `/api/v1/${ex}/races.csv`, "One row per race: consensus odds, each exchange's odds, rating and page link."],
-	["Race history (JSON)", `/api/v1/history/${ex}-senate-control.json`, "Every recorded price point for one race. Race ids look like 2026-senate-maine or 2026-house-ca-22."],
+	["Race history (JSON)", `/api/v1/history/${ex}-senate-control.json`, "Every recorded price point for one race over the last 90 days (full history back to Nov 2024 with Pro). Race ids look like 2026-senate-maine or 2026-house-ca-22."],
 	["Parlay estimates (JSON)", `/api/v1/estimates/${ex}.json`, "Our model's probability for every race beside the market odds, with the model's held-out test scores."],
 	["Money traded (JSON)", "/api/v1/money.json?days=7", "Dollars traded over the last 1 to 90 days: totals, the races drawing the most money, and the biggest single trades. Trade records begin Sep 30, 2026."],
 	["For AI assistants", "/llms.txt", "A plain-text guide to the site and the current headline numbers."],

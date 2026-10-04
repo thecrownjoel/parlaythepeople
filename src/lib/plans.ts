@@ -1,32 +1,41 @@
 /**
- * Plans, credits and model costs: the one place that says what each tier gets and what the AI costs us.
- * Credits are the unit readers see; each action's credit price is set from its measured model cost
- * (see the "Unit costs" section of the Pro design doc), so every plan keeps its margin at heavy use.
+ * Plans, AI pricing and model costs: the one place that says what each tier gets and what the AI costs.
+ *
+ * Membership is a low monthly fee for the research features (the time machine, the full daily archive,
+ * complete trade lists, full-history downloads, Pro analyst tools, alerts). AI is pay for what you use: each
+ * answer, Deep analysis, briefing or report costs its measured Workers AI cost times AI_MARKUP, taken from the
+ * plan's monthly AI allowance first and then from the account's AI balance (topped up; granted by hand until
+ * billing is connected). Public visitors and free accounts get a daily number of standard questions instead.
  */
 
 export type PlanId = "anon" | "free" | "pro" | "team" | "enterprise";
 export type Action = "ask" | "deep";
-/** Everything that costs credits: analyst questions, plus briefings and PDF reports. */
+/** Everything metered: analyst questions, plus briefings and PDF reports. */
 export type Metered = Action | "briefing" | "report";
 
 export interface Plan {
 	id: PlanId;
 	name: string;
-	/** USD per month (annual billing gives two months free); null = not sold / custom. */
+	/** Membership, USD per month (annual billing gives two months free); null = custom. */
 	price: number | null;
 	priceYear: number | null;
-	/** Questions per UTC day (anon and free) or credits per billing month (paid). */
+	/** Standard questions per UTC day (public and free accounts only). */
 	daily?: number;
-	credits?: number;
+	/** AI included each month, in cents (paid plans); usage beyond it comes from the AI balance. */
+	aiAllowance?: number;
 	seats: number;
 	/** Analyst model per mode. Workers AI model ids. */
 	model: Record<Action, string>;
 	/** Tool-call rounds the analyst may take per question. */
 	rounds: Record<Action, number>;
 	maxTokens: Record<Action, number>;
-	/** Pro tools: trade flow, whale watch, exchange divergence, reranked deep research. */
+	/** Pro analyst tools: trade flow, whale watch, exchange divergence, race analogs, reranked deep research. */
 	proTools: boolean;
 	deep: boolean;
+	/** History beyond the last 30 days: the 60-day view (free accounts too), then any date, 1Y and All (paid). */
+	history: "30d" | "60d" | "all";
+	/** Full daily archive, complete trade lists and full-history downloads. */
+	archive: boolean;
 	blurb: string;
 	features: string[];
 }
@@ -39,50 +48,73 @@ export const MODEL_PRICE: Record<string, { in: number; out: number }> = {
 };
 export const STANDARD_MODEL = "@cf/zai-org/glm-5.3";
 
-/** Credits charged per action (paid plans). An "ask" is one question; "deep" runs more rounds, more sources and a
- *  reranker; a briefing is one morning email on followed races; a report is a Deep analysis rendered as a PDF. */
-export const CREDITS: Record<Metered, number> = { ask: 1, deep: 5, briefing: 2, report: 6 };
+/** What readers pay for AI: the measured model cost times this. Covers card fees, AI Search, retries and margin. */
+export const AI_MARKUP = 3;
+/** Typical price of each action in cents (measured cost × markup, rounded), shown before it runs and required in
+ *  the balance to start it. The actual charge is the real cost × markup, at least 1 cent. */
+export const TYPICAL_CENTS: Record<Metered, number> = { ask: 4, deep: 20, report: 15, briefing: 4 };
+
+/** Cents charged for an action that cost `usd` of model time. */
+export const chargeCents = (usd: number) => Math.max(1, Math.ceil(usd * AI_MARKUP * 100));
+export const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 const std = { ask: STANDARD_MODEL, deep: STANDARD_MODEL };
 
 export const PLANS: Record<PlanId, Plan> = {
 	anon: {
 		id: "anon", name: "Public", price: 0, priceYear: 0, daily: 10, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false,
-		blurb: "Every race, chart and daily report, no account needed.",
-		features: ["All race pages, charts and maps", "Daily market reports and headlines", "AI analyst: 10 questions a day"],
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "30d", archive: false,
+		blurb: "Every race, chart and poll, no account needed.",
+		features: ["Live odds, polls and charts for every race", "24-hour, 1-week and 30-day views", "AI analyst: 10 questions a day"],
 	},
 	free: {
 		id: "free", name: "Free account", price: 0, priceYear: 0, daily: 25, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false,
-		blurb: "Sign in with your email for a higher daily limit.",
-		features: ["Everything public", "AI analyst: 25 questions a day", "Sign in with an email link or a passkey"],
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "60d", archive: false,
+		blurb: "Sign up with your email. No card, no password.",
+		features: ["Everything public", "The 60-day view on every section", "AI analyst: 25 questions a day", "Followed races on every device"],
 	},
 	pro: {
-		id: "pro", name: "Pro", price: 49, priceYear: 490, credits: 600, seats: 1, model: std,
-		rounds: { ask: 8, deep: 14 }, maxTokens: { ask: 2500, deep: 5000 }, proTools: true, deep: true,
-		blurb: "For consultants, reporters and traders who follow the money.",
-		features: ["600 analyst credits a month (a question is 1, a Deep analysis 5)", "Deep mode: longer, multi-source analysis", "Trade flow: net buying by side and trade size", "Whale watch: the biggest trades and repeat Polymarket wallets", "Exchange divergence: where Kalshi and Polymarket disagree", "Full-resolution price history in answers"],
+		id: "pro", name: "Pro", price: 9, priceYear: 90, aiAllowance: 300, seats: 1, model: std,
+		rounds: { ask: 8, deep: 14 }, maxTokens: { ask: 2500, deep: 5000 }, proTools: true, deep: true, history: "all", archive: true,
+		blurb: "The time machine and the money trail, for anyone who follows races closely.",
+		features: [
+			"Time machine: any date since Nov 2024, plus 1-year and full-history charts",
+			"The full daily report archive",
+			"Every big trade and Polymarket wallet, not just the top 3",
+			"Full-history data downloads",
+			"Move and big-bet alerts on your races",
+			"AI that pays as you go, with $3 included each month",
+		],
 	},
 	team: {
-		id: "team", name: "Team", price: 249, priceYear: 2490, credits: 4000, seats: 5, model: std,
-		rounds: { ask: 8, deep: 14 }, maxTokens: { ask: 2500, deep: 5000 }, proTools: true, deep: true,
+		id: "team", name: "Team", price: 49, priceYear: 490, aiAllowance: 1500, seats: 5, model: std,
+		rounds: { ask: 8, deep: 14 }, maxTokens: { ask: 2500, deep: 5000 }, proTools: true, deep: true, history: "all", archive: true,
 		blurb: "For campaigns, PACs and firms working a slate of races.",
-		features: ["Everything in Pro", "5 seats sharing 4,000 credits a month", "Shared watchlists (coming)", "Daily briefings and alerts (coming)", "Data API keys (coming)"],
+		features: ["Everything in Pro for 5 people", "$15 of AI included each month, shared", "One AI balance for the team", "Data API keys (coming)"],
 	},
 	enterprise: {
-		id: "enterprise", name: "Organization", price: null, priceYear: null, credits: 20000, seats: 25, model: std,
-		rounds: { ask: 10, deep: 16 }, maxTokens: { ask: 3000, deep: 6000 }, proTools: true, deep: true,
+		id: "enterprise", name: "Organization", price: null, priceYear: null, aiAllowance: 10000, seats: 25, model: std,
+		rounds: { ask: 10, deep: 16 }, maxTokens: { ask: 3000, deep: 6000 }, proTools: true, deep: true, history: "all", archive: true,
 		blurb: "For party committees, large firms and newsrooms.",
-		features: ["Everything in Team", "From 20,000 credits and 25 seats", "Private research library: your own memos in the analyst (coming)", "Single sign-on and invoicing"],
+		features: ["Everything in Team for 25+ people", "AI at a volume rate", "Private research library: your own memos in the analyst (coming)", "Single sign-on and invoicing"],
 	},
 };
 
-/** Extra credits sold on top of a plan (kept until used). */
-export const CREDIT_PACK = { credits: 250, price: 20 };
+/** AI balance top-ups (kept until used). */
+export const TOP_UPS = [10, 25, 100];
 
 /** Estimated model cost of one call, USD. */
 export function costUsd(model: string, tin: number, tout: number) {
 	const p = MODEL_PRICE[model] ?? MODEL_PRICE[STANDARD_MODEL];
 	return (tin * p.in + tout * p.out) / 1e6;
+}
+
+/** Chart ranges and homepage periods each plan may open (see lib/chart.ts RANGES and lib/period.ts PRESETS). */
+export function canSeePeriod(plan: Plan, key: string) {
+	if (["now", "24h", "7d", "30d"].includes(key)) return true;
+	if (key === "60d") return plan.history !== "30d";
+	return plan.history === "all"; // calendar dates
+}
+export function canSeeRange(plan: Plan, key: string) {
+	return ["1d", "1w", "1m", "3m"].includes(key) || plan.history === "all";
 }

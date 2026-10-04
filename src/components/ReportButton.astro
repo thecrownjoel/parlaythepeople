@@ -13,7 +13,7 @@ const { id } = Astro.props;
 		const go = box.querySelector<HTMLButtonElement>("[data-rpt-go]")!;
 		const status = box.querySelector<HTMLElement>("[data-rpt-status]")!;
 		fetch("/api/v1/ai/chat").then((r) => r.json() as Promise<{ deep?: boolean; unit?: string }>).then((j) => {
-			if (j.deep) { go.hidden = false; go.title = "Uses 6 credits: a Deep analysis with charts, as a PDF"; }
+			if (j.deep) { go.hidden = false; go.title = "About 15¢ of AI: a Deep analysis with charts, as a PDF"; }
 			else box.querySelector<HTMLElement>("[data-rpt-pro]")!.hidden = false;
 		}).catch(() => {});
 		go.addEventListener("click", async () => {
@@ -21,7 +21,7 @@ const { id } = Astro.props;
 			status.textContent = "Starting the analysis… this takes two or three minutes.";
 			try {
 				const r = await fetch("/api/pro/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ race_id: box.dataset.report }) });
-				if (!r.ok || !r.body) throw new Error(r.status === 429 ? "You're out of credits this month." : "The report couldn't start. Please try again.");
+				if (!r.ok || !r.body) throw new Error(r.status === 429 ? "Your AI balance is used up. Top it up on your account page." : "The report couldn't start. Please try again.");
 				const reader = r.body.getReader();
 				const dec = new TextDecoder();
 				let buf = "";

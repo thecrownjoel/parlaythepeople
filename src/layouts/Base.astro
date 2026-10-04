@@ -14,6 +14,7 @@ import { Font } from "astro:assets";
 import { resolveBlogSiteIdentity } from "../utils/site-identity";
 import "../styles/tokens.css";
 import "../styles/theme.css";
+import "../styles/gate.css";
 
 interface Props {
 	title: string;
@@ -872,10 +873,38 @@ const isLoggedIn = !!Astro.locals.user;
 		</script>
 		<ExchangeBrands />
 		<script>
+			// What this viewer's plan opens (marks locked controls with a lock; the server enforces every gate).
+			(async () => {
+				// Pro: replace each "more trades" gate with the real rows (the server checks the plan again)
+				const fill = () => {
+					if (document.documentElement.dataset.archive !== "1") return;
+					for (const el of document.querySelectorAll<HTMLElement>("[data-more-trades]:not([data-filled])")) {
+						el.dataset.filled = "1";
+						const q = el.dataset.race ? `race=${encodeURIComponent(el.dataset.race)}` : `since=${el.dataset.since}`;
+						fetch(`/api/pro/trades?${q}`).then((r) => (r.ok ? r.text() : null)).then((html) => {
+							if (html == null) return;
+							el.innerHTML = el.dataset.kind === "race" ? `<ol>${html}</ol>` : html;
+						}).catch(() => {});
+					}
+				};
+				new MutationObserver(fill).observe(document.body, { childList: true, subtree: true });
+				const set = (j: { history: string; archive: boolean }) => { document.documentElement.dataset.history = j.history; document.documentElement.dataset.archive = j.archive ? "1" : "0"; fill(); };
+				try {
+					const hit = JSON.parse(sessionStorage.getItem("ptp:me") || "null");
+					if (hit && Date.now() - hit.t < 5 * 60_000) return set(hit.v);
+				} catch { /* storage blocked */ }
+				try {
+					const v = (await (await fetch("/api/me")).json()) as { history: string; archive: boolean };
+					set(v);
+					try { sessionStorage.setItem("ptp:me", JSON.stringify({ t: Date.now(), v })); } catch { /* storage blocked */ }
+				} catch { /* offline */ }
+			})();
+		</script>
+		<script>
 			// Every dollar amount on the page is green: wrap "$9.5M", "$1,240", "$0.41" in .usd, now and in anything
 			// added later (date-picker sections, live trades, analyst answers).
 			const MONEY = /[−-]?\$\d[\d,]*(?:\.\d+)?(?:\s?(?:[KMBT]\b|k\b|million|billion))?/g;
-			const SKIP = "script,style,textarea,input,select,option,noscript,title,svg,code,pre,.usd";
+			const SKIP = "script,style,textarea,input,select,option,noscript,title,svg,code,pre,.usd,button,.gate-btn,.pro-btn";
 			function greenMoney(root: Node) {
 				const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
 					acceptNode: (n) => (n.nodeValue?.includes("$") && !(n.parentElement?.closest(SKIP)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
