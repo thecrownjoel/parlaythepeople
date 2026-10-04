@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getCycle, latestPoint } from "../../../../lib/markets";
-import { getSeries, rangeOf, renderChart, describeMove } from "../../../../lib/chart";
+import { getSeries, rangeOf, renderChart, describeMove, DEFAULT_RANGE } from "../../../../lib/chart";
 import { viewerPlan } from "../../../../lib/auth";
 import { rangeGate, gateHtml } from "../../../../lib/gate";
 import { PLANS } from "../../../../lib/plans";
@@ -21,10 +21,10 @@ export const GET: APIRoute = async ({ params, url, cookies }) => {
 		const opts = { party, label, range: r, electionDay: data.meta.election_day } as const;
 		return `<p class="hc-move">${describeMove(points, opts)}</p>${renderChart(points, opts)}`;
 	};
-	// 1Y, All and calendar dates are the Pro time machine; the preview is the 3-month chart, blurred
-	const open = rangeGate(PLANS.anon, range.key) === null;
+	// only the default range (3M) is free; other ranges and dates are Pro. The preview is the default chart, blurred
+	const open = rangeGate(PLANS.anon, range.key, DEFAULT_RANGE) === null;
 	const plan = open ? null : await viewerPlan(cookies);
-	const gate = plan ? rangeGate(plan, range.key) : null;
-	const html = gate ? gateHtml(gate, plan!, await chart(rangeOf("3m")), url.searchParams.get("from") || "/") : await chart(range);
+	const gate = plan ? rangeGate(plan, range.key, DEFAULT_RANGE) : null;
+	const html = gate ? gateHtml(gate, plan!, await chart(rangeOf(DEFAULT_RANGE)), url.searchParams.get("from") || "/") : await chart(range);
 	return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": open ? "public, max-age=300" : "private, no-store" } });
 };

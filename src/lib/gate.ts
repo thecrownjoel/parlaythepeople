@@ -65,7 +65,8 @@ export function periodGate(plan: Plan, key: string, def: string): GateKind | nul
 	return key === def || plan.history === "all" ? null : "time";
 }
 
-/** Which gate a chart range needs for this plan (null = open). */
-export function rangeGate(plan: Plan, key: string): GateKind | null {
-	return ["1d", "1w", "1m", "3m"].includes(key) || plan.history === "all" ? null : "time";
+/** Which gate a chart range needs for this plan (null = open): the chart's default range is free; every other
+ *  range (24H, 1W, 1M, 1Y, All) and any date is Pro. */
+export function rangeGate(plan: Plan, key: string, def: string): GateKind | null {
+	return key === def || plan.history === "all" ? null : "time";
 }

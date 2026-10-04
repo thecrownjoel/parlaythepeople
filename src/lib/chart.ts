@@ -15,6 +15,8 @@ export const RANGES: Range[] = [
 	{ key: "all", label: "All", words: "all recorded history", secs: null, bucket: 86400 },
 ];
 export const DEFAULT_RANGE = "3m";
+/** Multi-line charts (presidential candidates, nominations) open on a year. */
+export const MULTI_DEFAULT_RANGE = "1y";
 /** A preset range by key, or a calendar date ("2026-06-01") meaning "from that day to now". */
 export function rangeOf(key?: string | null): Range {
 	const pre = RANGES.find((r) => r.key === key);

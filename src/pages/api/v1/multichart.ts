@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { rangeOf, validSpecs, getSpecSeries, renderMulti } from "../../../lib/chart";
+import { rangeOf, validSpecs, getSpecSeries, renderMulti, MULTI_DEFAULT_RANGE } from "../../../lib/chart";
 import { viewerPlan } from "../../../lib/auth";
 import { rangeGate, gateHtml } from "../../../lib/gate";
 import { PLANS } from "../../../lib/plans";
@@ -13,9 +13,9 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 	const ed = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("ed") ?? "") ? url.searchParams.get("ed")! : undefined;
 	const title = (url.searchParams.get("t") ?? "Odds over time").slice(0, 80);
 	const draw = async (r: typeof range) => renderMulti(await Promise.all(specs.map(async (spec) => ({ spec, points: await getSpecSeries(spec, r) }))), { range: r, electionDay: ed, title });
-	const open = rangeGate(PLANS.anon, range.key) === null;
+	const open = rangeGate(PLANS.anon, range.key, MULTI_DEFAULT_RANGE) === null;
 	const plan = open ? null : await viewerPlan(cookies);
-	const gate = plan ? rangeGate(plan, range.key) : null;
-	const html = gate ? gateHtml(gate, plan!, await draw(rangeOf("3m")), url.searchParams.get("from") || "/") : await draw(range);
+	const gate = plan ? rangeGate(plan, range.key, MULTI_DEFAULT_RANGE) : null;
+	const html = gate ? gateHtml(gate, plan!, await draw(rangeOf(MULTI_DEFAULT_RANGE)), url.searchParams.get("from") || "/") : await draw(range);
 	return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": open ? "public, max-age=300" : "private, no-store" } });
 };

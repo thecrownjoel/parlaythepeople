@@ -1,16 +1,16 @@
 ---
 /** Multi-line history chart with range buttons (24H … All). Default range rendered on the server. */
-import { RANGES, rangeOf, getSpecSeries, renderMulti, type SeriesSpec } from "../lib/chart";
+import { RANGES, rangeOf, getSpecSeries, renderMulti, MULTI_DEFAULT_RANGE, type SeriesSpec } from "../lib/chart";
 import "../styles/charts.css";
 interface Props { specs: SeriesSpec[]; title: string; electionDay?: string; defaultRange?: string }
-const { specs, title, electionDay, defaultRange = "1y" } = Astro.props;
+const { specs, title, electionDay, defaultRange = MULTI_DEFAULT_RANGE } = Astro.props;
 const range = rangeOf(defaultRange);
 const series = await Promise.all(specs.map(async (spec) => ({ spec, points: await getSpecSeries(spec, range) })));
 const body = renderMulti(series, { range, electionDay, title });
 ---
 <div class="hc-wrap" data-multichart={JSON.stringify(specs)} data-ed={electionDay ?? ""} data-title={title}>
 	<div class="hc-ranges" role="group" aria-label={`${title}: time range`}>
-		{RANGES.map((r) => <button type="button" data-range={r.key} data-lock={r.key === "1y" || r.key === "all" ? "time" : undefined} aria-pressed={r.key === range.key ? "true" : "false"} title={`Show ${r.words}`}>{r.label}</button>)}
+		{RANGES.map((r) => <button type="button" data-range={r.key} data-lock={r.key === range.key ? undefined : "time"} aria-pressed={r.key === range.key ? "true" : "false"} title={`Show ${r.words}`}>{r.label}</button>)}
 			<label class="hc-cal" data-lock="time" title="Show the time since a date"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1.5 6.5h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg><span data-cal-label>Date</span><input type="date" min="2024-11-06" max={new Date().toISOString().slice(0, 10)} aria-label="Show the time since a date" /></label>
 	</div>
 	<div class="hc-body" data-chart-body aria-live="polite" set:html={body} />
