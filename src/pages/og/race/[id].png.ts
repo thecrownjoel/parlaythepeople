@@ -39,7 +39,7 @@ h1{font:800 60px/1.05 Montserrat;margin-top:10px;position:relative;max-width:108
 .duel{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;position:relative}
 .side b{display:block;font:800 96px/1 Montserrat}.side span{font-size:28px;font-weight:600}.d b{color:#5e92ee}.r{text-align:right}.r b{color:#e85a4c}
 .bar{display:flex;height:18px;border-radius:9px;overflow:hidden;gap:3px;margin-top:22px;position:relative}.bar i{display:block}
-.foot{display:flex;justify-content:space-between;margin-top:22px;font-size:22px;color:#a9b0bc;position:relative}.foot b{color:#e0b44f}
+.foot{display:flex;justify-content:space-between;margin-top:22px;font-size:22px;color:#a9b0bc;position:relative}.foot b{color:#4cc38a}
 </style></head><body>
 <div class="top"><img src="${url.origin}/brand/mark.png"><div class="brand">PARLAY<small>THE PEOPLE</small></div></div>
 <div class="eyebrow">${r.cycle} · ${esc(RATING_LABEL[c.rating])}${est != null && Math.abs(est - c.D / (c.D + c.R || 1)) >= 0.005 ? ` · Parlay estimate ${est >= 0.5 ? "D" : "R"} ${pct(Math.max(est, 1 - est))}` : ""}</div>

@@ -9,7 +9,7 @@ body:before{content:"";position:absolute;inset:-30% -10% auto auto;width:70%;hei
 .top{display:flex;align-items:center;gap:16px;position:relative}.top img{width:56px;height:56px}.brand{font:800 26px Montserrat;letter-spacing:.02em;line-height:1}.brand small{display:block;font-size:17px;letter-spacing:.08em}
 .eyebrow{font:700 20px Montserrat;letter-spacing:.14em;text-transform:uppercase;color:#a9b0bc;position:relative}
 h1{font:800 56px/1.05 Montserrat;position:relative}
-.foot{display:flex;justify-content:space-between;font-size:22px;color:#a9b0bc;position:relative}.foot b{color:#e0b44f}`;
+.foot{display:flex;justify-content:space-between;font-size:22px;color:#a9b0bc;position:relative}.foot b{color:#4cc38a}`;
 
 export function cardHtml(origin: string, body: string, css = "") {
 	return `<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=IBM+Plex+Sans:wght@500;600&display=block" rel="stylesheet"><style>${CARD_CSS}${css}</style></head><body><div class="top"><img src="${origin}/brand/mark.png"><div class="brand">PARLAY<small>THE PEOPLE</small></div></div>${body}</body></html>`;

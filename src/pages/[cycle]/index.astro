@@ -99,7 +99,7 @@ const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "")
 			<p class="eyebrow">{midterm ? "Midterm elections" : hasPres ? "Presidential election year" : "Elections"} · {days > 0 ? `${days} days to Election Day` : `Election Day was ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}`}</p>
 			<h1>{h1}</h1>
 			<p class="lede">{lede}</p>
-			<p class="updated"><span style="color:#e0b44f;font-weight:600">{fmtVol(races.reduce((a, r) => a + (r.k?.v ?? 0) + (r.p?.v ?? 0), 0))} traded on {year} races</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time></p>
+			<p class="updated"><span style="color:var(--money);font-weight:600">{fmtVol(races.reduce((a, r) => a + (r.k?.v ?? 0) + (r.p?.v ?? 0), 0))} traded on {year} races</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time></p>
 		</header>
 
 		{hasPres && (

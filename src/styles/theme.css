@@ -47,6 +47,8 @@
 	--bt-oth: light-dark(#9aa1ad, #6c7482);
 	--bt-toss: light-dark(#c9cdd5, #3a424e);
 	--bt-pos: light-dark(#1f7a4d, #4cc38a);
+	/* Money: every dollar amount on the site (wrapped in .usd by the script in Base.astro) */
+	--money: light-dark(#1f7a4d, #4cc38a);
 	--bt-chip: light-dark(#eceef2, #212833);
 	--bt-hover: light-dark(#eff1f5, #1c222b);
 }
@@ -110,3 +112,6 @@ html body .site-header.site-header .nav-links.nav-links a:hover { color: #ffffff
 .partners-note a { color: #c3c9d3; }
 .pt img { height: 28px; }
 @media (max-width: 640px) { .partners-inner { padding: 18px var(--spacing-4); gap: 12px 22px; } .partners-note { margin-left: 0; flex-basis: 100%; } .pt { font-size: 18px; } .pt img { height: 20px; } }
+
+/* Dollar amounts anywhere on the site */
+.usd { color: var(--money); font-weight: 600; }

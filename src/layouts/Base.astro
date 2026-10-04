@@ -872,6 +872,51 @@ const isLoggedIn = !!Astro.locals.user;
 		</script>
 		<ExchangeBrands />
 		<script>
+			// Every dollar amount on the page is green: wrap "$9.5M", "$1,240", "$0.41" in .usd, now and in anything
+			// added later (date-picker sections, live trades, analyst answers).
+			const MONEY = /[−-]?\$\d[\d,]*(?:\.\d+)?(?:\s?(?:[KMBT]\b|k\b|million|billion))?/g;
+			const SKIP = "script,style,textarea,input,select,option,noscript,title,svg,code,pre,.usd";
+			function greenMoney(root: Node) {
+				const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+					acceptNode: (n) => (n.nodeValue?.includes("$") && !(n.parentElement?.closest(SKIP)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+				});
+				const hits: Text[] = [];
+				while (walker.nextNode()) hits.push(walker.currentNode as Text);
+				for (const t of hits) {
+					const s = t.nodeValue!;
+					MONEY.lastIndex = 0;
+					if (!MONEY.test(s)) continue;
+					MONEY.lastIndex = 0;
+					const frag = document.createDocumentFragment();
+					let at = 0;
+					for (const m of s.matchAll(MONEY)) {
+						if (m.index! > at) frag.append(s.slice(at, m.index));
+						const span = document.createElement("span");
+						span.className = "usd";
+						span.textContent = m[0];
+						frag.append(span);
+						at = m.index! + m[0].length;
+					}
+					frag.append(s.slice(at));
+					t.replaceWith(frag);
+				}
+			}
+			greenMoney(document.body);
+			// batch what was added each frame; wrapping only adds nodes inside .usd, which greenMoney skips
+			const pending = new Set<Node>();
+			let queued = false;
+			new MutationObserver((records) => {
+				for (const r of records) for (const n of r.addedNodes) if (n.nodeType === 1 || n.nodeType === 3) pending.add(n.nodeType === 3 ? n.parentNode ?? n : n);
+				if (queued || !pending.size) return;
+				queued = true;
+				requestAnimationFrame(() => {
+					queued = false;
+					for (const n of pending) if (n.isConnected) greenMoney(n);
+					pending.clear();
+				});
+			}).observe(document.body, { childList: true, subtree: true });
+		</script>
+		<script>
 			// Followed races: once per browser session, merge this browser's list with the signed-in account's, both ways.
 			(async () => {
 				try {

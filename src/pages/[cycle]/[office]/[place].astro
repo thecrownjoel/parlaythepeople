@@ -213,7 +213,7 @@ import { parlayD } from "../../../lib/model";
 			<h1>{race.kind === "control" ? `Who will control the ${officeName} after ${race.cycle}?` : race.kind === "house" ? `${race.label} House race odds` : `${race.state} ${officeName.toLowerCase() === "governor" ? "governor" : "Senate"} race odds`}</h1>
 			<p class="lede">{lede}</p>
 			<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><FollowButton id={race.id} name={officeTitle(race)} D={c.D} />{race.kind !== "control" && <ReportButton id={race.id} />}</div>
-			<p class="updated"><span style="color:#e0b44f;font-weight:600">{fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))} traded</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time> · prices refresh every 10 minutes</p>
+			<p class="updated"><span style="color:var(--money);font-weight:600">{fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))} traded</span> · updated <time datetime={data.meta.generated}>{fmtDate(data.meta.generated)}</time> · prices refresh every 10 minutes</p>
 		</header>
 
 		<section class="panel duel" aria-label="Current odds">
@@ -241,7 +241,7 @@ import { parlayD } from "../../../lib/model";
 				<div><dt>Market rating</dt><dd><span class={`chip ${c.lead}`}>{RATING_LABEL[c.rating]}</span></dd></div>
 				<div><dt>Kalshi (D / R)</dt><dd class="num">{ks ? `${pct(ks.D, 1)} / ${pct(ks.R, 1)}` : "Not listed"}</dd></div>
 				<div><dt>Polymarket (D / R)</dt><dd class="num">{ps ? `${pct(ps.D, 1)} / ${pct(ps.R, 1)}` : "Not listed"}</dd></div>
-				<div><dt>Total traded</dt><dd class="num" style="color:#e0b44f;font-weight:600">{fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))}</dd></div>
+				<div><dt>Total traded</dt><dd class="num" style="color:var(--money);font-weight:600">{fmtVol((race.k?.v ?? 0) + (race.p?.v ?? 0))}</dd></div>
 				<div><dt>Gap between exchanges</dt><dd class="num">{gap != null ? `${(gap * 100).toFixed(1)} pts` : "—"}</dd></div>
 				<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}{days > 0 && ` (${days} days)`}</dd></div>
 			</dl>
