@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getIndex, getCycle, consensus, pct, fmtDate, PARTY_PLURAL } from "../lib/markets";
 import { SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
+import { TOPIC_SLUG } from "../lib/politics";
 
 /** llms.txt: a plain-text map of the site for AI assistants, with the current headline numbers. */
 export const GET: APIRoute = async ({ url }) => {
@@ -28,7 +29,9 @@ export const GET: APIRoute = async ({ url }) => {
 		`- [Guide](${o}/guide/): every feature explained, including date selectors and The Pulse (LunarCrush social data)`,
 		`- [Data & API](${o}/data/): free JSON and CSV feeds`,
 		`- [Analysis](${o}/posts): articles about the markets`,
-		`- [Full race list as text](${o}/llms-full.txt)`, "",
+		`- [Politics markets](${o}/politics/): every other politics market on Kalshi and Polymarket, by topic: ${Object.values(TOPIC_SLUG).map((s) => `${o}/politics/${s}/`).join(", ")}`,
+		`- Polls: every race page lists the public polls and our polling average next to the market odds`,
+		`- [Full race list as text](${o}/llms-full.txt): every race, its poll average and every politics market`, "",
 		"## Data feeds", "",
 		`- ${o}/api/v1/index.json: cycles and links`,
 		`- ${o}/api/v1/{year}.json: every race in a cycle with each exchange's prices`,

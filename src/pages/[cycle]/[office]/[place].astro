@@ -107,6 +107,7 @@ const faqs: [string, string][] = [
 	[`Who is favored to win ${raceWord}?`, lede],
 	["What do Kalshi and Polymarket say?", srcSentence],
 	["How have the odds moved this week?", moveText],
+	...(polls ? [[`What do the polls say in ${raceWord}?`, `Our average of ${polls.used} recent public ${polls.used === 1 ? "poll" : "polls"} (newest ended ${pollDate(polls.latest)}) has ${marginText(polls) === "Tied" ? "the race tied" : marginText(polls).replace(" +", " ahead by ") + " points"}: ${polls.d_name} ${pollPct(polls.d)}, ${polls.r_name} ${pollPct(polls.r)}. Prediction markets give ${c.D >= c.R ? candidate(race, "D") ?? "the Democrat" : candidate(race, "R") ?? "the Republican"} a ${pct(Math.max(c.D, c.R))} chance to win.`] as [string, string]] : []),
 	...(est != null ? [[`What is the Parlay estimate for ${raceWord}?`, Math.abs(est - c.D / (c.D + c.R || 1)) < 0.005
 		? `The Parlay estimate matches the market: ${est >= 0.5 ? "Democrats" : "Republicans"} ${pct(Math.max(est, 1 - est))}. Our model leaves competitive races, where the favorite is under 70%, at the market's odds.`
 		: `The Parlay estimate gives ${est >= 0.5 ? "Democrats" : "Republicans"} ${pct(Math.max(est, 1 - est))}, against ${pct(Math.max(c.D, c.R) / (c.D + c.R || 1))} in the markets. Our model, trained on decided races, finds that clear favorites win more often than their prices imply.`] as [string, string]] : []),

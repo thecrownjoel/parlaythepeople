@@ -1,0 +1,26 @@
+---
+/** One politics topic (e.g. /politics/courts/): every Kalshi and Polymarket market on it, with its own title and structured data. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import PoliticsBoard from "../../components/PoliticsBoard.astro";
+import { getPolitics, politicsLd, topicFromSlug, TOPIC_SEO } from "../../lib/politics";
+import { SITE_NAME } from "../../lib/site";
+
+const topic = topicFromSlug(Astro.params.topic ?? "");
+if (!topic) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const board = await getPolitics();
+const info = board?.topics.find((t) => t.key === topic);
+if (board && !info) return Astro.rewrite("/404");
+const events = (board?.events ?? []).filter((e) => e.topic === topic);
+const seo = TOPIC_SEO[topic];
+const origin = Astro.url.origin;
+const path = `/politics/${Astro.params.topic}/`;
+const title = `${seo.title} on Kalshi and Polymarket`;
+const description = `${events.length} live prediction markets on ${seo.about}, with odds, 24-hour moves and money traded on Kalshi and Polymarket. Updated every 10 minutes.`;
+const ld = board ? politicsLd(origin, path, title, description, events, board.generated, [["Politics", "/politics/"], [info!.name, path]]) : null;
+---
+<Base title={`${title} | ${SITE_NAME}`} description={description} canonical={`${origin}${path}`} modifiedTime={board?.generated}>
+	{ld && <JsonLd slot="head" data={ld} />}
+	<PoliticsBoard board={board} topic={topic} />
+</Base>

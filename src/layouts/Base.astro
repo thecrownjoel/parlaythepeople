@@ -12,6 +12,7 @@ import SearchOverlay from "../components/SearchOverlay.astro";
 import ExchangeBrands from "../components/ExchangeBrands.astro";
 import { Font } from "astro:assets";
 import { resolveBlogSiteIdentity } from "../utils/site-identity";
+import { getIndex } from "../lib/markets";
 import "../styles/tokens.css";
 import "../styles/theme.css";
 import "../styles/gate.css";
@@ -63,6 +64,19 @@ const titleIncludesSiteName =
 const fullTitle = titleIncludesSiteName ? title : `${title} — ${siteTitle}`;
 
 const menu = menuResult.data;
+// Header navigation is built here (not from the CMS menu): a "USA Elections" menu listing every cycle the
+// exchanges have listed, from the live market index (so after an election it moves on by itself), then Politics.
+const marketIndex = await getIndex().catch(() => null);
+const electionLinks = (marketIndex?.cycles ?? [])
+	.filter((c) => c.races > 0 || c.offices.includes("president"))
+	.flatMap((c) => {
+		const kind = c.year % 4 === 2 ? "Midterms" : c.year % 4 === 0 ? "Elections" : "Elections";
+		const out: { href: string; label: string; note: string }[] = [];
+		if (c.races > 0) out.push({ href: `/${c.year}/`, label: `${c.year} ${kind}`, note: `${c.races} ${c.races === 1 ? "race" : "races"} with live odds` });
+		if (c.offices.includes("president")) out.push({ href: `/${c.year}/president/`, label: `${c.year} President`, note: "Who wins, and both nominations" });
+		return out;
+	});
+void menu; // the CMS "primary" menu is no longer rendered; navigation is built here
 
 // Build public page context for plugin contributions
 // SEO data is passed here and rendered securely by EmDashHead
@@ -136,20 +150,16 @@ const isLoggedIn = !!Astro.locals.user;
 				</a>
 				<div class="nav-right">
 					<div class="nav-links">
-						{
-							menu?.items.map((item) => (
-								<a
-									href={item.url}
-									target={item.target}
-									rel={
-										item.target === "_blank" ? "noopener noreferrer" : undefined
-									}
-								>
-									{item.label}
-								</a>
-							))
-						}
-						<a href="/politics/">All politics</a>
+						<div class="nav-dd" data-dd>
+							<button type="button" class="nav-dd-btn" aria-expanded="false" aria-controls="nav-elections">USA Elections<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+							<div class="nav-dd-menu" id="nav-elections">
+								{electionLinks.map((l) => <a href={l.href}><b>{l.label}</b><span>{l.note}</span></a>)}
+								<a href="/elections/"><b>All elections</b><span>Every cycle, office and race</span></a>
+								<a href="/daily/"><b>Daily market report</b><span>What moved the election markets today</span></a>
+							</div>
+						</div>
+						<a href="/politics/">Politics</a>
+						<a href="/posts">Analysis</a>
 					</div>
 				</div>
 				<div class="nav-end">
@@ -200,23 +210,10 @@ const isLoggedIn = !!Astro.locals.user;
 					<div class="footer-nav">
 						<h2 class="footer-heading">Navigate</h2>
 						<ul class="footer-links">
-							{
-								menu?.items.map((item) => (
-									<li>
-										<a
-											href={item.url}
-											target={item.target}
-											rel={
-												item.target === "_blank"
-													? "noopener noreferrer"
-													: undefined
-											}
-										>
-											{item.label}
-										</a>
-									</li>
-								))
-							}
+							{electionLinks.map((l) => <li><a href={l.href}>{l.label}</a></li>)}
+							<li><a href="/elections/">All elections</a></li>
+							<li><a href="/politics/">Politics</a></li>
+							<li><a href="/posts">Analysis</a></li>
 						</ul>
 					</div>
 					<div class="footer-nav">
@@ -228,7 +225,6 @@ const isLoggedIn = !!Astro.locals.user;
 							<li><a href="/model/">Our model</a></li>
 							<li><a href="/guide/">Guide</a></li>
 							<li><a href="/methodology/">Methodology</a></li>
-							<li><a href="/politics/">All politics markets</a></li>
 							<li><a href="/pro/">Pro</a></li>
 							<li><a href="/account/">Account</a></li>
 						</ul>
@@ -477,6 +473,23 @@ const isLoggedIn = !!Astro.locals.user;
 			.nav-links a:hover {
 				color: var(--color-brand);
 			}
+
+			/* USA Elections menu: opens on hover, keyboard focus or tap */
+			.nav-dd { position: relative; }
+			.nav-dd-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: var(--color-text); font-size: var(--font-size-sm); }
+			.nav-dd-btn:hover { color: var(--color-brand); }
+			.nav-dd-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 3px; border-radius: 4px; }
+			.nav-dd-btn svg { transition: transform .2s; }
+			.nav-dd-menu { position: absolute; top: calc(100% + 10px); left: -14px; z-index: 50; display: none; min-width: 290px; padding: 8px; border-radius: 12px;
+				background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 18px 40px rgb(0 0 0 / .45); }
+			.nav-dd-menu::before { content: ""; position: absolute; inset: -12px 0 auto; height: 12px; }
+			.nav-dd:hover .nav-dd-menu, .nav-dd:focus-within .nav-dd-menu, .nav-dd[data-open] .nav-dd-menu { display: grid; gap: 2px; }
+			.nav-dd:hover .nav-dd-btn svg, .nav-dd[data-open] .nav-dd-btn svg { transform: rotate(180deg); }
+			.nav-dd-menu a { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; }
+			.nav-dd-menu a:hover { background: rgb(255 255 255 / .05); color: var(--color-text); }
+			.nav-dd-menu b { font-weight: 600; font-size: 14px; }
+			.nav-dd-menu span { font-size: 12px; color: var(--color-muted); }
+			@media (max-width: 760px) { .nav-dd-menu { left: 0; min-width: min(290px, calc(100vw - 32px)); } }
 
 			.nav-admin {
 				font-size: var(--font-size-sm);
@@ -874,6 +887,16 @@ const isLoggedIn = !!Astro.locals.user;
 			});
 		</script>
 		<ExchangeBrands />
+		<script>
+			// USA Elections menu: tap to open on touch screens; Escape or a tap elsewhere closes it
+			for (const dd of document.querySelectorAll<HTMLElement>("[data-dd]")) {
+				const btn = dd.querySelector<HTMLButtonElement>(".nav-dd-btn")!;
+				const set = (open: boolean) => { open ? dd.setAttribute("data-open", "") : dd.removeAttribute("data-open"); btn.setAttribute("aria-expanded", String(open)); };
+				btn.addEventListener("click", () => set(!dd.hasAttribute("data-open")));
+				document.addEventListener("click", (e) => { if (!dd.contains(e.target as Node)) set(false); });
+				dd.addEventListener("keydown", (e) => { if (e.key === "Escape") { set(false); btn.focus(); } });
+			}
+		</script>
 		<script>
 			// What this viewer's plan opens (marks locked controls with a lock; the server enforces every gate).
 			(async () => {

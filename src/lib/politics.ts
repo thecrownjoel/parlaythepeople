@@ -62,3 +62,53 @@ export function sparkPath(vals: number[], w = 120, h = 32) {
 }
 
 export const money = (x: number) => (x >= 1e9 ? `$${(x / 1e9).toFixed(1)}B` : x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}K` : `$${Math.round(x)}`);
+
+/** URL slug per topic (/politics/<slug>/), and search copy for each topic page. */
+export const TOPIC_SLUG: Record<string, string> = {
+	world: "world", trump: "white-house", courts: "courts", congress: "congress", cabinet: "cabinet",
+	policy: "policy", parties: "parties-2028", elections: "other-elections", more: "more",
+};
+export const TOPIC_SEO: Record<string, { title: string; about: string }> = {
+	world: { title: "World politics odds: elections and leaders abroad", about: "elections, leaders, wars and ceasefires around the world" },
+	trump: { title: "Trump and White House odds", about: "President Trump, the White House, executive actions and approval ratings" },
+	courts: { title: "Supreme Court and legal odds", about: "the Supreme Court, justices, trials, indictments and rulings" },
+	congress: { title: "Congress odds: bills, shutdowns and votes", about: "bills, shutdowns, leadership fights and votes in Congress" },
+	cabinet: { title: "Cabinet and appointment odds", about: "cabinet secretaries, nominees, confirmations and appointments" },
+	policy: { title: "Policy odds: tariffs, taxes, immigration and the economy", about: "tariffs, taxes, immigration, spending and the economy" },
+	parties: { title: "Party and 2028 odds", about: "party leadership, 2028 hopefuls and primaries" },
+	elections: { title: "Mayor, governor and other election odds", about: "mayoral races, state offices, runoffs and referendums" },
+	more: { title: "More politics odds", about: "everything else in politics" },
+};
+export const topicFromSlug = (slug: string) => Object.entries(TOPIC_SLUG).find(([, s]) => s === slug)?.[0] ?? null;
+
+const pctWord = (p: number) => (p >= 0.995 ? "more than 99%" : p < 0.005 ? "less than 1%" : `${Math.round(p * 100)}%`);
+const exName = (e: PolEvent) => (e.src === "k" ? "Kalshi" : "Polymarket");
+
+/** One plain-language sentence per market, for answers and structured data. */
+export function marketAnswer(e: PolEvent, asOf: string) {
+	const lead = e.o[0];
+	const odds = e.multi
+		? `traders on ${exName(e)} favor ${lead.n} at ${pctWord(lead.p)}${e.o[1] ? `, ahead of ${e.o[1].n} at ${pctWord(e.o[1].p)}` : ""}`
+		: `traders on ${exName(e)} give it a ${pctWord(lead.p)} chance`;
+	return `As of ${asOf}, ${odds}. ${money(e.vol24)} traded in the last 24 hours, ${money(e.vol)} in all.`;
+}
+
+/** JSON-LD for a politics page: the page, its breadcrumb, the markets as a list, the dataset and Q&A. */
+export function politicsLd(origin: string, path: string, name: string, description: string, events: PolEvent[], generated: string, crumbs: [string, string][]) {
+	const asOf = new Date(generated).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+	const top = [...events].sort((a, b) => b.vol24 - a.vol24);
+	const q = (e: PolEvent) => (e.title.trim().endsWith("?") ? e.title.trim() : `What are the odds for "${e.title.trim()}"?`);
+	return {
+		"@context": "https://schema.org",
+		"@graph": [
+			{ "@type": "CollectionPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name, description, dateModified: generated, isPartOf: { "@id": `${origin}/#website` }, about: { "@type": "Thing", name: "Political prediction markets" } },
+			{ "@type": "BreadcrumbList", itemListElement: crumbs.map(([n, p], i) => ({ "@type": "ListItem", position: i + 1, name: n, item: `${origin}${p}` })) },
+			{ "@type": "ItemList", name, numberOfItems: events.length, itemListElement: top.slice(0, 50).map((e, i) => ({ "@type": "ListItem", position: i + 1, name: e.title, url: e.url, description: marketAnswer(e, asOf) })) },
+			{ "@type": "Dataset", name: `${name} (Kalshi and Polymarket)`, description, url: `${origin}${path}`, dateModified: generated, license: "https://parlaythepeople.com/data/", isAccessibleForFree: true,
+				creator: { "@type": "Organization", name: "Parlay the People", url: origin },
+				distribution: [{ "@type": "DataDownload", encodingFormat: "application/json", contentUrl: `${origin}/api/v1/politics.json` }],
+				keywords: ["prediction markets", "politics odds", "Kalshi", "Polymarket", ...new Set(top.slice(0, 8).map((e) => e.title))] },
+			{ "@type": "FAQPage", mainEntity: top.slice(0, 10).map((e) => ({ "@type": "Question", name: q(e), acceptedAnswer: { "@type": "Answer", text: marketAnswer(e, asOf) } })) },
+		],
+	};
+}
