@@ -89,6 +89,8 @@ export async function writeBriefing(items: unknown[]) {
 	}, { feature: "briefing" });
 	const choice = res?.choices?.[0];
 	const text = String(choice?.message?.content ?? res?.response ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+	// a briefing cut off at the token limit is not sent; the workflow retries it
+	if (choice?.finish_reason === "length") return { text: "", tin: res?.usage?.prompt_tokens ?? 0, tout: res?.usage?.completion_tokens ?? 0 };
 	if (!text) console.error("empty briefing", JSON.stringify({ finish: choice?.finish_reason, keys: Object.keys(choice?.message ?? res ?? {}), usage: res?.usage }));
 	return { text, tin: res?.usage?.prompt_tokens ?? 0, tout: res?.usage?.completion_tokens ?? 0 };
 }
