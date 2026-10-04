@@ -18,6 +18,7 @@ $WR d1 execute ballottape-markets --remote --file ingest/out/d1.sql >/dev/null
 # a full snapshot of every contract each run and the raw exchange pulls hourly. A failure here
 # never blocks the site update above.
 [ -s ingest/out/results.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/results.sql >/dev/null || echo "results upload failed"; }
+[ -s ingest/out/polls.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/polls.sql >/dev/null && rm ingest/out/polls.sql || echo "polls upload failed"; }
 [ -s ingest/out/forecast.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/forecast.sql >/dev/null || echo "forecast upload failed"; }
 [ -s ingest/out/archive.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/archive.sql >/dev/null || echo "archive history upload failed"; }
 $WR d1 execute ballottape-trades --remote --file ingest/trades_schema.sql >/dev/null || echo "trades schema failed"

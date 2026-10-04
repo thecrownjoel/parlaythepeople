@@ -22,6 +22,7 @@ export const STATUS: Record<string, (i: any) => string> = {
 	exchange_divergence: () => "Comparing Kalshi and Polymarket",
 	deep_research: (i) => `Reading deeper on “${i.query}”`,
 	race_analogs: () => "Finding races that moved like this one",
+	polls: () => "Reading the polls",
 };
 
 export async function systemPrompt(a: Account, mode: Action) {
@@ -39,7 +40,7 @@ export async function systemPrompt(a: Account, mode: Action) {
 Today is ${today}.${next ? ` The next general election is ${next.election_day} (${daysUntil(next.election_day)} days away).` : ""}
 
 How to answer:
-- Get every number from the tools; never state a figure from memory. Start with find_races when the user names a race or candidate, then race_detail. Use search_research for headlines, articles and context.
+- Get every number from the tools; never state a figure from memory. Start with find_races when the user names a race or candidate, then race_detail. Use search_research for headlines, articles and context, and polls for public polling (cite pollster and dates; polls and market odds measure different things).
 - Lead with the answer in a sentence or two, then the evidence. Keep it under about 250 words unless asked for more. Use short paragraphs or bullets, plain words, and markdown links.
 - Market odds are crowd probabilities: "traders give Collins a 41% chance". Say when Kalshi and Polymarket disagree. Give the Parlay estimate where it differs from the market and say it is our model's adjustment (clear favorites are nudged up; competitive races keep market odds).
 - Link race pages and articles you rely on (the url fields), e.g. [Maine Senate](https://parlaythepeople.com/2026/senate/maine/).

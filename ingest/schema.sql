@@ -117,3 +117,19 @@ CREATE TABLE IF NOT EXISTS race_results (
   decided_at INTEGER NOT NULL,   -- when we saw it settle (unix seconds)
   source TEXT                    -- k, p or kp (both agreed)
 );
+
+-- Public polls per race, read from Wikipedia's 2026 election pages by ingest/polls.py (text CC BY-SA 4.0;
+-- each poll cites its pollster's release there). The site computes its own average (src/lib/polls.ts).
+CREATE TABLE IF NOT EXISTS polls (
+  race_id TEXT NOT NULL,
+  pollster TEXT NOT NULL,       -- as listed, with sponsor's party when partisan, e.g. "Trafalgar Group (R)"
+  partisan TEXT,                -- D | R | null
+  start_date TEXT, end_date TEXT NOT NULL,   -- ISO dates of fieldwork
+  sample INTEGER, pop TEXT,     -- respondents; LV likely voters | RV registered | A adults
+  d REAL, r REAL, other REAL, undecided REAL,  -- shares 0-1
+  d_name TEXT, r_name TEXT,     -- the two candidates the poll tested
+  source TEXT,                  -- Wikipedia page the row came from
+  seen INTEGER,                 -- last collected (unix seconds)
+  PRIMARY KEY (race_id, pollster, end_date, pop)
+);
+CREATE INDEX IF NOT EXISTS polls_race_end ON polls (race_id, end_date);

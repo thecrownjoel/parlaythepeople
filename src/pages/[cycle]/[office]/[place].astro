@@ -19,6 +19,7 @@ import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
+import { pollAverage, marginText, RCP_URL } from "../../../lib/polls";
 import { moneySince, kalshiRecent } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
@@ -34,6 +35,9 @@ if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
 const c = consensus(race);
+const polls = race.kind === "control" ? null : await pollAverage(race.id);
+const pollPct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+const pollDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
 const estView = est == null ? null : {
 	text: `${est >= 0.5 ? "D" : "R"} ${pct(Math.max(est, 1 - est))}`,
@@ -242,6 +246,25 @@ import { parlayD } from "../../../lib/model";
 				<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}{days > 0 && ` (${days} days)`}</dd></div>
 			</dl>
 		</section>
+
+		{race.kind !== "control" && (
+			<section aria-labelledby="polls-h">
+				<h2 id="polls-h">Polls</h2>
+				{polls ? (
+					<>
+						<p class="sec-note">
+							<strong>Parlay polling average: {marginText(polls)}</strong> ({polls.d_name} {pollPct(polls.d)}, {polls.r_name} {pollPct(polls.r)}) from {polls.used} {polls.used === 1 ? "poll" : "polls"}, newest ended {pollDate(polls.latest)}.
+							Markets give {c.D >= c.R ? candidate(race, "D") ?? "the Democrat" : candidate(race, "R") ?? "the Republican"} a {pct(Math.max(c.D, c.R))} chance to win: a poll lead measures vote share, not odds of winning.
+						</p>
+						<div class="tbl-wrap"><table class="tbl">
+							<thead><tr><th>Pollster</th><th>Fieldwork ended</th><th class="r">Sample</th><th class="r">{polls.d_name.split(/\s+/).pop()} (D)</th><th class="r">{polls.r_name.split(/\s+/).pop()} (R)</th><th class="r">Margin</th></tr></thead>
+							<tbody>{polls.polls.slice(0, 10).map((p) => <tr><td>{p.pollster}</td><td>{pollDate(p.end_date)}</td><td class="r num">{p.sample ? `${p.sample.toLocaleString("en-US")}${p.pop ? ` ${p.pop}` : ""}` : "—"}</td><td class="r num">{pollPct(p.d)}</td><td class="r num">{pollPct(p.r)}</td><td class="r num">{marginText({ margin: p.d - p.r, d_name: polls.d_name, r_name: polls.r_name })}</td></tr>)}</tbody>
+						</table></div>
+						<p class="sec-note" style="font-size:12.5px">Polls as listed on <a href={polls.source} rel="noopener" target="_blank">Wikipedia</a> (CC BY-SA 4.0), each citing its pollster. Average: each pollster's latest poll from the past 30 days, weighted by recency and sample size, partisan polls counted half. (D)/(R) after a pollster marks a party-sponsored poll. Compare with <a href={RCP_URL[race.kind]} rel="noopener nofollow" target="_blank">RealClearPolitics</a>.</p>
+					</>
+				) : <p class="sec-note">No general-election polls of this race are listed yet. See <a href={RCP_URL[race.kind]} rel="noopener nofollow" target="_blank">RealClearPolitics</a> for its poll listings.</p>}
+			</section>
+		)}
 
 		<section aria-labelledby="quotes-h">
 			<h2 id="quotes-h">Share prices</h2>

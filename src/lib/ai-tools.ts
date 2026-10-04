@@ -13,6 +13,7 @@ import { merged } from "./home";
 import { nameKey } from "./names";
 import { aiRun } from "./ai";
 import { findAnalogs } from "./analogs";
+import { pollsFor, average, marginText, pollAverage } from "./polls";
 
 const DAY = 86400;
 const r3 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 1000) / 1000);
@@ -74,6 +75,11 @@ export const TOOLS = [
 		name: "social_pulse",
 		description: "LunarCrush social data for a candidate: 24h interactions, people posting, sentiment (% positive), week-over-week change, 30 days of daily interactions and sentiment, and top posts. Posts are what people are saying, not verified facts.",
 		input_schema: { type: "object", properties: { candidate: { type: "string" } }, required: ["candidate"] },
+	},
+	{
+		name: "polls",
+		description: "Public polls of a race's general election (from Wikipedia's lists, each citing the pollster's release) and the Parlay polling average: each pollster's latest poll from the last 30 days, weighted by recency and sample, partisan polls halved. Compare with market odds: a 3-point poll lead is not a 60% chance.",
+		input_schema: { type: "object", properties: { race_id: { type: "string" }, limit: { type: "integer", default: 12 } }, required: ["race_id"] },
 	},
 	{
 		name: "search_research",
@@ -173,6 +179,19 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 			}).filter((x) => (x.gap ?? 0) >= minGap).sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0)).slice(0, 15);
 			return { cycle: data.meta.cycle, min_gap: minGap, races: rows, note: "Odds are each exchange's two-party Democratic share. Thin markets (little money traded) often show the widest gaps." };
 		}
+		case "polls": {
+			const all = await pollsFor(String(input.race_id ?? ""));
+			const avg = average(all);
+			if (!avg) return { race_id: input.race_id, polls: [], note: "No general-election polls listed for this race yet." };
+			const p3 = (x: number | null) => (x == null ? null : Math.round(x * 1000) / 10);
+			return {
+				race_id: input.race_id, matchup: `${avg.d_name} (D) vs. ${avg.r_name} (R)`,
+				average: { democrat_pct: p3(avg.d), republican_pct: p3(avg.r), margin: marginText(avg), polls_used: avg.used, newest_poll_ended: avg.latest },
+				polls: avg.polls.slice(0, Math.min(25, Number(input.limit ?? 12))).map((p) => ({ pollster: p.pollster, fieldwork: `${p.start_date ?? ""} to ${p.end_date}`, sample: p.sample, population: p.pop, democrat_pct: p3(p.d), republican_pct: p3(p.r), undecided_pct: p3(p.undecided) })),
+				source: `${avg.source} (Wikipedia, CC BY-SA 4.0)`,
+				method: "Each pollster's latest poll ending within 30 days of the newest (or the 3 most recent within 90 days), weighted by recency (14-day half-life) and square root of sample (capped at 2,000); partisan-sponsored polls count half.",
+			};
+		}
 		case "race_analogs": {
 			const races = await allRaces();
 			return findAnalogs(String(input.race_id ?? ""), new Map(races.map(({ r }) => [r.id, `${officeTitle(r)} ${r.cycle}`])));
@@ -225,6 +244,7 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 				democratic_odds_change: { "1d": r3(a1.has(r.id) ? c.D - a1.get(r.id)!.D : null), "7d": r3(a7.has(r.id) ? c.D - a7.get(r.id)!.D : null), "30d": r3(a30.has(r.id) ? c.D - a30.get(r.id)!.D : null) },
 				money_usd: { "24h": usd(m1.get(r.id)?.usd), "7d": usd(m7.get(r.id)?.usd), "30d": usd(m30.get(r.id)?.usd), note: "trade records begin Sep 30, 2026" },
 				social: { democrat: pulse(candidate(r, "D")), republican: pulse(candidate(r, "R")) },
+				poll_average: await pollAverage(r.id).then((a) => a && { margin: marginText(a), democrat_pct: Math.round(a.d * 1000) / 10, republican_pct: Math.round(a.r * 1000) / 10, polls_used: a.used, newest_poll_ended: a.latest }).catch(() => null),
 				model_note: `Parlay estimate: market odds adjusted by a model trained on ${MODEL.trained_on} decided races; competitive races (favorite under 70%) keep the market's odds.`,
 			};
 		}

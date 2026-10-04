@@ -17,13 +17,14 @@ import { moneySince } from "./money";
 import { getSocial, pulseIndex, compact, type Pulse } from "./social";
 import { parlayD, MODEL } from "./model";
 import { dailyReport, dailySummary, isoDate } from "./daily";
+import { average, marginText, type Poll } from "./polls";
 
 const DAY = 86400;
 interface Doc { key: string; body: string; meta: Record<string, string> }
 
 const pts = (d: number) => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts`;
 
-function raceDoc(r: Race, o: { origin: string; eday: string; ago7?: number; ago30?: number; m7?: number; find: ReturnType<typeof pulseIndex>; news: { title: string; source: string | null; url: string; published: number | null }[] }): Doc {
+function raceDoc(r: Race, o: { origin: string; eday: string; ago7?: number; ago30?: number; m7?: number; find: ReturnType<typeof pulseIndex>; news: { title: string; source: string | null; url: string; published: number | null }[]; polls?: Poll[] }): Doc {
 	const c = consensus(r);
 	const ks = shares(r.k), ps = shares(r.p);
 	const est = r.kind !== "control" ? parlayD(c.D, c.R) : null;
@@ -40,6 +41,13 @@ function raceDoc(r: Race, o: { origin: string; eday: string; ago7?: number; ago3
 	if (ps) lines.push(`Polymarket: D ${pct(ps.D, 1)} / R ${pct(ps.R, 1)}.`);
 	if (est != null) lines.push(`Parlay estimate (our model): ${est >= 0.5 ? "Democrat" : "Republican"} ${pct(Math.max(est, 1 - est), 1)}.`);
 	for (const s of [r.k, r.p]) for (const x of s?.o ?? []) if (x.q) lines.push(`Contract "${x.n}" on ${s === r.k ? "Kalshi" : "Polymarket"}: bid ${x.q[0] ?? "—"}, ask ${x.q[1] ?? "—"}, last ${x.q[2] ?? "—"} (dollars per $1 contract).`);
+	const pa = average(o.polls ?? []);
+	if (pa) {
+		lines.push("");
+		lines.push("## Polls");
+		lines.push(`Parlay polling average: ${marginText(pa)} (${pa.d_name} ${pct(pa.d, 1)}, ${pa.r_name} ${pct(pa.r, 1)}) from ${pa.used} polls; newest ended ${pa.latest}. Source: polls listed on Wikipedia (${pa.source}).`);
+		for (const p of pa.polls.slice(0, 5)) lines.push(`- ${p.pollster}, ended ${p.end_date}${p.sample ? `, ${p.sample} ${p.pop ?? ""}`.trimEnd() : ""}: ${pa.d_name.split(/\s+/).pop()} ${pct(p.d)}, ${pa.r_name.split(/\s+/).pop()} ${pct(p.r)}.`);
+	}
 	lines.push("");
 	lines.push("## Movement and money");
 	if (o.ago7 != null) lines.push(`Democratic odds over the past 7 days: ${pts(c.D - o.ago7)} (from ${pct(o.ago7, 1)}).`);
@@ -80,11 +88,16 @@ export async function buildKnowledge(origin = "https://parlaythepeople.com"): Pr
 	try {
 		news = (await env.MARKETS.prepare("SELECT title, source, url, published, first_seen FROM news WHERE first_seen >= ? ORDER BY COALESCE(published, first_seen) DESC").bind(now - 45 * DAY).all<any>()).results ?? [];
 	} catch { /* no headline archive yet */ }
+	const pollsBy = new Map<string, Poll[]>();
+	try {
+		const { results } = await env.MARKETS.prepare("SELECT race_id, pollster, partisan, start_date, end_date, sample, pop, d, r, other, undecided, d_name, r_name, source FROM polls ORDER BY end_date DESC").all<Poll & { race_id: string }>();
+		for (const p of results ?? []) pollsBy.set(p.race_id, [...(pollsBy.get(p.race_id) ?? []), p]);
+	} catch { /* no polls table yet */ }
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
 		if (!data) continue;
 		for (const r of data.races) {
-			docs.push(raceDoc(r, { origin, eday: data.meta.election_day, ago7: at7.get(r.id)?.D, ago30: at30.get(r.id)?.D, m7: m7.get(r.id)?.usd, find, news }));
+			docs.push(raceDoc(r, { origin, eday: data.meta.election_day, ago7: at7.get(r.id)?.D, ago30: at30.get(r.id)?.D, m7: m7.get(r.id)?.usd, find, news, polls: pollsBy.get(r.id) }));
 		}
 	}
 	// presidential markets: one document per cycle with every candidate's odds on both exchanges
