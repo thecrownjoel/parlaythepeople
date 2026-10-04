@@ -1,0 +1,84 @@
+---
+/**
+ * Homepage: polls next to the markets. Left, races where the poll leader and the market favorite differ (or, when
+ * they all agree, the closest races in the polls); right, the newest polls. Polls are the ones listed on Wikipedia's
+ * race pages; the average is ours (lib/polls.ts).
+ */
+import { pollBoard, marginText, type PollAverage } from "../../lib/polls";
+import { consensus, pct, type Race } from "../../lib/markets";
+import { raceName } from "../../lib/home";
+
+interface Props { races: Race[] }
+const { races } = Astro.props;
+const board = await pollBoard();
+const byId = new Map(races.map((r) => [r.id, r]));
+const last = (n: string) => n.split(/\s+/).pop();
+const day = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const side = (m: number) => (Math.abs(m) < 0.005 ? "" : m > 0 ? "D" : "R");
+
+const rows = [...board.averages].flatMap(([id, a]) => {
+	const r = byId.get(id);
+	if (!r) return [];
+	const c = consensus(r);
+	const fav: "D" | "R" = c.D >= c.R ? "D" : "R";
+	return [{ r, a, fav, favP: Math.max(c.D, c.R), pollLead: side(a.margin) }];
+});
+// a disagreement needs a real average: at least 2 polls, at least one not sponsored by a party or campaign
+const solid = (a: PollAverage) => a.used >= 2 && a.independent >= 1;
+const disagree = rows.filter((x) => x.pollLead && x.pollLead !== x.fav && solid(x.a)).sort((a, b) => b.favP - a.favP).slice(0, 6);
+const closest = disagree.length ? [] : rows.filter((x) => x.r.kind !== "house" && solid(x.a)).sort((a, b) => Math.abs(a.a.margin) - Math.abs(b.a.margin)).slice(0, 6);
+const list = disagree.length ? disagree : closest;
+const latest = board.latest.filter((p) => byId.has(p.race_id)).slice(0, 7);
+const favName = (x: { r: Race; a: PollAverage; fav: "D" | "R" }) => last(x.fav === "D" ? x.a.d_name : x.a.r_name);
+---
+{board.averages.size > 0 && (
+	<section aria-labelledby="polls-home-h">
+		<div class="sec-head">
+			<h2 id="polls-home-h">Polls vs. the markets</h2>
+			<p class="sec-note" style="margin:0">Our average of {board.total.toLocaleString("en-US")} public polls in {board.averages.size} races, next to the betting odds</p>
+		</div>
+		<div class="grid2">
+			<div class="panel">
+				<h3>{disagree.length ? "Where polls and markets disagree" : "Closest in the polls"}</h3>
+				<p class="sec-note" style="margin:0 0 8px">{disagree.length ? "The poll leader isn't the candidate traders favor." : "Every poll leader is also the market favorite. The tightest races:"}</p>
+				<ul class="pl-list">
+					{list.map((x) => (
+						<li>
+							<a href={x.r.path}>{raceName(x.r)}</a>
+							<span class="pl-pair">
+								<span class={`num pl-${x.pollLead || "tie"}`}>Polls {marginText(x.a)}</span>
+								<span class={`num pl-${x.fav}`}>Markets {favName(x)} {pct(x.favP)}</span>
+							</span>
+						</li>
+					))}
+				</ul>
+			</div>
+			<div class="panel">
+				<h3>Latest polls</h3>
+				<ul class="pl-list">
+					{latest.map((p) => (
+						<li>
+							<a href={byId.get(p.race_id)!.path}>{raceName(byId.get(p.race_id)!)}</a>
+							<span class="pl-pair">
+								<span class="pl-who">{p.pollster} · {day(p.end_date)}</span>
+								<span class={`num pl-${side(p.d - p.r) || "tie"}`}>{marginText({ margin: p.d - p.r, d_name: p.d_name, r_name: p.r_name })}</span>
+							</span>
+						</li>
+					))}
+				</ul>
+			</div>
+		</div>
+		<p class="sec-note" style="font-size:12.5px;margin-top:8px">Polls as listed on Wikipedia (CC BY-SA 4.0), each citing its pollster. A poll lead measures vote share; market odds are the chance of winning, so a 3-point lead can mean a 70% favorite. Every race page shows its polls.</p>
+	</section>
+)}
+
+<style>
+	.pl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+	.pl-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14px; min-width: 0; }
+	.pl-list a { color: var(--color-text); text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+	.pl-list a:hover { text-decoration: underline; }
+	.pl-pair { display: flex; gap: 12px; align-items: baseline; flex-shrink: 0; }
+	.pl-who { color: var(--color-muted); font-size: 12.5px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pl-D { color: var(--bt-d); font-weight: 600; } .pl-R { color: var(--bt-r); font-weight: 600; } .pl-tie { color: var(--color-text-secondary); font-weight: 600; }
+	@media (max-width: 520px) { .pl-list li { flex-direction: column; gap: 2px; } .pl-pair { flex-wrap: wrap; } .pl-who { max-width: none; } }
+</style>

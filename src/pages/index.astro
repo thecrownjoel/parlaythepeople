@@ -27,6 +27,7 @@ import ClosestBody from "../components/home/ClosestBody.astro";
 import GapsBody from "../components/home/GapsBody.astro";
 import LeadersBody from "../components/home/LeadersBody.astro";
 import MoneyBody from "../components/home/MoneyBody.astro";
+import PollsTeaser from "../components/home/PollsTeaser.astro";
 import { homeData, SECTIONS, type SectionKey } from "../lib/home";
 import { parsePeriod } from "../lib/period";
 import { biggestTrades } from "../lib/money";
@@ -230,6 +231,8 @@ const ld = graph(organization(origin), {
 			<div class="sec-head"><h2 id="story-h">What's moving the markets</h2><PeriodPicker {...pickerOf("moving")} /></div>
 			<div data-period-body><MovingBody d={home} period={P.moving} /></div>
 		</section>
+
+		<PollsTeaser races={home.races} />
 
 		{pulses.length > 0 && (
 			<section class="pulse" aria-labelledby="pulse-h" data-period-section="pulse">

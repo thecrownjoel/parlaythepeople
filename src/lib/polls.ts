@@ -14,7 +14,7 @@ export interface Poll {
 	pollster: string; partisan: string | null; start_date: string | null; end_date: string; sample: number | null;
 	pop: string | null; d: number; r: number; other: number | null; undecided: number | null; d_name: string; r_name: string; source: string;
 }
-export interface PollAverage { d: number; r: number; margin: number; polls: Poll[]; used: number; latest: string; d_name: string; r_name: string; source: string }
+export interface PollAverage { d: number; r: number; margin: number; polls: Poll[]; used: number; independent: number; latest: string; d_name: string; r_name: string; source: string }
 
 const DAY_MS = 86_400_000;
 const POP_RANK: Record<string, number> = { LV: 3, V: 3, RV: 2, A: 1 };
@@ -51,7 +51,7 @@ export function average(polls: Poll[]): PollAverage | null {
 	}
 	if (!wsum) return null;
 	d /= wsum; r /= wsum;
-	return { d, r, margin: d - r, polls: same, used: window.length, latest: each[0].end_date, d_name: polls[0].d_name, r_name: polls[0].r_name, source: polls[0].source };
+	return { d, r, margin: d - r, polls: same, used: window.length, independent: window.filter((p) => !p.partisan).length, latest: each[0].end_date, d_name: polls[0].d_name, r_name: polls[0].r_name, source: polls[0].source };
 }
 
 export async function pollAverage(raceId: string) {
@@ -71,3 +71,16 @@ export const RCP_URL: Record<string, string> = {
 	governor: "https://www.realclearpolling.com/latest-polls/governor",
 	house: "https://www.realclearpolling.com/latest-polls/house",
 };
+
+/** Every race's average plus the newest polls overall, in one query (homepage). */
+export async function pollBoard(): Promise<{ averages: Map<string, PollAverage>; latest: (Poll & { race_id: string })[]; total: number }> {
+	const by = new Map<string, Poll[]>();
+	let rows: (Poll & { race_id: string })[] = [];
+	try {
+		rows = (await env.MARKETS.prepare("SELECT race_id, pollster, partisan, start_date, end_date, sample, pop, d, r, other, undecided, d_name, r_name, source FROM polls ORDER BY end_date DESC, seen DESC").all<Poll & { race_id: string }>()).results ?? [];
+	} catch { /* no polls table yet */ }
+	for (const p of rows) by.set(p.race_id, [...(by.get(p.race_id) ?? []), p]);
+	const averages = new Map<string, PollAverage>();
+	for (const [id, ps] of by) { const a = average(ps); if (a) averages.set(id, a); }
+	return { averages, latest: rows.slice(0, 40), total: rows.length };
+}
