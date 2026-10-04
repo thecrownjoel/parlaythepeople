@@ -27,10 +27,10 @@ const raw = Astro.url.searchParams.get("p");
 const period = parsePeriod(raw === "now" && !sec.asOf ? sec.def : raw, sec.def);
 const d = await homeData();
 const Body = BODIES[key];
-// older periods depend on the viewer's plan: the 60-day view needs a free account, any date needs Pro
-const open = periodGate(PLANS.anon, period.key) === null;
+// a section's default view is free; every other period and any date is Pro (historical data)
+const open = periodGate(PLANS.anon, period.key, sec.def) === null;
 const plan = open ? null : await viewerPlan(Astro.cookies);
-const gate = plan ? periodGate(plan, period.key) : null;
+const gate = plan ? periodGate(plan, period.key, sec.def) : null;
 // prices refresh every 10 minutes; open periods are the same for everyone, so the edge can reuse them for a few
 Astro.response.headers.set("cache-control", open ? "public, max-age=300" : "private, no-store");
 Astro.response.headers.set("x-robots-tag", "noindex");

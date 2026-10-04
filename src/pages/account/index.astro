@@ -62,7 +62,7 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 								<div><dt>AI balance</dt><dd class="num">{dollars(a.balance ?? 0)}<span class="acct-quiet"> · top-ups of ${TOP_UPS.join(", $")} open with billing</span></dd></div>
 							</>
 						) : (
-							<div><dt>AI questions left today</dt><dd class="num">{a.left.toLocaleString("en-US")}<span class="acct-quiet"> · resets {day(a.resets)}</span></dd></div>
+							<div><dt>AI analyst and history</dt><dd><a href="/pro/">Part of Pro</a></dd></div>
 						)}
 					</dl>
 					<p class="acct-links"><a href="/ai/">Ask the analyst</a><button type="button" class="acct-link" data-logout>Sign out</button></p>

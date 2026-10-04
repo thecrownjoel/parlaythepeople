@@ -19,7 +19,7 @@ export interface Plan {
 	/** Membership, USD per month (annual billing gives two months free); null = custom. */
 	price: number | null;
 	priceYear: number | null;
-	/** Standard questions per UTC day (public and free accounts only). */
+	/** AI questions per UTC day for plans without an allowance (0: the AI analyst is Pro only). */
 	daily?: number;
 	/** AI included each month, in cents (paid plans); usage beyond it comes from the AI balance. */
 	aiAllowance?: number;
@@ -32,8 +32,9 @@ export interface Plan {
 	/** Pro analyst tools: trade flow, whale watch, exchange divergence, race analogs, reranked deep research. */
 	proTools: boolean;
 	deep: boolean;
-	/** History beyond the last 30 days: the 60-day view (free accounts too), then any date, 1Y and All (paid). */
-	history: "30d" | "60d" | "all";
+	/** History: "default" = each homepage section's default view and charts up to 3 months; "all" = every period,
+	 *  any date since Nov 2024, 1Y and All charts (Pro). */
+	history: "default" | "all";
 	/** Full daily archive, complete trade lists and full-history downloads. */
 	archive: boolean;
 	blurb: string;
@@ -62,28 +63,30 @@ const std = { ask: STANDARD_MODEL, deep: STANDARD_MODEL };
 
 export const PLANS: Record<PlanId, Plan> = {
 	anon: {
-		id: "anon", name: "Public", price: 0, priceYear: 0, daily: 10, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "30d", archive: false,
-		blurb: "Every race, chart and poll, no account needed.",
-		features: ["Live odds, polls and charts for every race", "24-hour, 1-week and 30-day views", "AI analyst: 10 questions a day"],
+		id: "anon", name: "Public", price: 0, priceYear: 0, daily: 0, seats: 1, model: std,
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false,
+		blurb: "Every race, chart and poll, live, no account needed.",
+		features: ["Live odds, polls and charts for every race", "Today's view of every homepage section", "The last 7 daily reports"],
 	},
 	free: {
-		id: "free", name: "Free account", price: 0, priceYear: 0, daily: 25, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "60d", archive: false,
+		id: "free", name: "Free account", price: 0, priceYear: 0, daily: 0, seats: 1, model: std,
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false,
 		blurb: "Sign up with your email. No card, no password.",
-		features: ["Everything public", "The 60-day view on every section", "AI analyst: 25 questions a day", "Followed races on every device"],
+		features: ["Everything public", "Followed races on every device", "One click to Pro when you want history and the AI analyst"],
 	},
 	pro: {
 		id: "pro", name: "Pro", price: 9, priceYear: 90, aiAllowance: 300, seats: 1, model: std,
 		rounds: { ask: 8, deep: 14 }, maxTokens: { ask: 2500, deep: 5000 }, proTools: true, deep: true, history: "all", archive: true,
 		blurb: "The time machine and the money trail, for anyone who follows races closely.",
 		features: [
-			"Time machine: any date since Nov 2024, plus 1-year and full-history charts",
+			"The AI analyst: ask anything, with Deep analyses, PDF reports and morning briefings",
+			"All historical data: every section for 24 hours, a week, 30 or 60 days, or any date since Nov 2024",
+			"1-year and full-history charts",
 			"The full daily report archive",
 			"Every big trade and Polymarket wallet, not just the top 3",
 			"Full-history data downloads",
 			"Move and big-bet alerts on your races",
-			"AI that pays as you go, with $3 included each month",
+			"AI pays as you go, with $3 included each month",
 		],
 	},
 	team: {
@@ -107,14 +110,4 @@ export const TOP_UPS = [10, 25, 100];
 export function costUsd(model: string, tin: number, tout: number) {
 	const p = MODEL_PRICE[model] ?? MODEL_PRICE[STANDARD_MODEL];
 	return (tin * p.in + tout * p.out) / 1e6;
-}
-
-/** Chart ranges and homepage periods each plan may open (see lib/chart.ts RANGES and lib/period.ts PRESETS). */
-export function canSeePeriod(plan: Plan, key: string) {
-	if (["now", "24h", "7d", "30d"].includes(key)) return true;
-	if (key === "60d") return plan.history !== "30d";
-	return plan.history === "all"; // calendar dates
-}
-export function canSeeRange(plan: Plan, key: string) {
-	return ["1d", "1w", "1m", "3m"].includes(key) || plan.history === "all";
 }

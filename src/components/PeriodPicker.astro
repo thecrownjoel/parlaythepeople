@@ -3,16 +3,20 @@
  * Date picker for a homepage section: 24H · 1W · 30D · 60D, or any date from the calendar.
  * Picking one reloads only that section's body from /partials/home/<section>?p=<period>.
  * `withNow` adds a "Now" button for sections that show the markets as of a moment.
+ * Every period but the section's default is Pro: the server answers those with the Pro gate (lib/gate.ts).
  */
 import { PRESETS, HISTORY_START, isoDay, type Period } from "../lib/period";
+import { SECTIONS } from "../lib/home";
 interface Props { section: string; period: Period; withNow?: boolean; presets?: string[]; min?: string; dark?: boolean }
 const { section, period, withNow = false, presets = PRESETS.map((p) => p.key), min = HISTORY_START, dark = false } = Astro.props;
 const max = isoDay(Math.floor(Date.now() / 1000));
 const shown = PRESETS.filter((p) => presets.includes(p.key));
+// only the section's default view is free; every other period and the calendar are Pro (historical data)
+const def: string = (SECTIONS as Record<string, { def: string }>)[section]?.def ?? "";
 ---
 <div class={`pp${dark ? " pp-dark" : ""}`} data-pp={section} role="group" aria-label="Time period">
-	{withNow && <button type="button" data-p="now" aria-pressed={period.now ? "true" : "false"}>Now</button>}
-	{shown.map((p) => <button type="button" data-p={p.key} data-lock={p.key === "60d" ? "60d" : undefined} aria-pressed={period.key === p.key ? "true" : "false"} title={withNow ? `Show the markets ${p.at}` : `Show changes ${p.since}`}>{p.label}</button>)}
+	{withNow && <button type="button" data-p="now" data-lock={def === "now" ? undefined : "time"} aria-pressed={period.now ? "true" : "false"}>Now</button>}
+	{shown.map((p) => <button type="button" data-p={p.key} data-lock={p.key === def ? undefined : "time"} aria-pressed={period.key === p.key ? "true" : "false"} title={withNow ? `Show the markets ${p.at}` : `Show changes ${p.since}`}>{p.label}</button>)}
 	<label class="pp-cal" data-lock="time" data-on={period.custom ? "true" : "false"} title={withNow ? "Show the markets on a date" : "Show changes since a date"}>
 		<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1.5 6.5h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
 		<span data-pp-label>{period.custom ? period.label : "Date"}</span>

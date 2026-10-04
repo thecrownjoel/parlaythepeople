@@ -7,12 +7,9 @@ import { costUsd, type Action } from "../../../../lib/plans";
 /**
  * The AI analyst. POST {messages: [{role: "user"|"assistant", content: string}], mode?: "ask"|"deep"} → a
  * text/event-stream of {type:"status", text} progress events, then {type:"answer", text, left} (or {type:"error", text}).
- * The loop itself is in lib/analyst.ts. The reader's plan (lib/plans.ts) sets the model, how many tool rounds it
- * may take, whether Pro tools and Deep mode are on, and the limit: questions per day for the public and free
- * accounts, credits per month for Pro, Team and Organization.
+ * The loop itself is in lib/analyst.ts. The analyst is part of Pro: a signed-in paid plan, charged per answer
+ * (model cost × AI_MARKUP) from the monthly allowance, then the AI balance (lib/plans.ts, lib/auth.ts).
  */
-type Env = { AI_GLOBAL_DAILY?: string };
-const E = env as unknown as Env;
 
 export const GET: APIRoute = async ({ cookies, request }) => {
 	const a = await account(cookies, request);
@@ -33,15 +30,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
 	const a = await account(cookies, request);
 	const mode: Action = input.mode === "deep" ? "deep" : "ask";
-	if (mode === "deep" && !a.plan.deep) return Response.json({ error: "pro_only" }, { status: 403 });
+	// the AI analyst is part of Pro (a signed-in paid plan)
+	if (!a.plan.proTools) return Response.json({ error: "pro_only", signed_in: !!a.user }, { status: 403 });
 	if (a.left < price(a, mode)) return Response.json({ error: "limit", plan: a.plan.id, signed_in: !!a.user }, { status: 429 });
-	if (a.plan.aiAllowance == null) {
-		// a ceiling on free questions across the whole site, so a traffic spike can't run up the AI bill
-		const day = Math.floor(Date.now() / 86_400_000);
-		const all = await env.MARKETS.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM ai_usage WHERE day = ?").bind(day).first<{ n: number }>();
-		if ((all?.n ?? 0) >= Number(E.AI_GLOBAL_DAILY ?? 200)) return Response.json({ error: "busy" }, { status: 429 });
-		await env.MARKETS.prepare("INSERT INTO ai_usage (who, day, n) VALUES (?, ?, 1) ON CONFLICT(who, day) DO UPDATE SET n = n + 1").bind(a.subject, day).run();
-	}
 	const model = a.plan.model[mode];
 	const event = await charge(a, mode, model);
 

@@ -15,10 +15,16 @@ import { raceName } from "../../lib/home";
 import { SITE_NAME } from "../../lib/site";
 import "../../styles/data.css";
 import "../../styles/home.css";
+import Gate from "../../components/Gate.astro";
+import { viewerPlan } from "../../lib/auth";
 
 // the analyst always works (Workers AI until a Claude key is added); it stays out of search until Claude powers it
 const claude = !!(env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY;
 const configured = true;
+// the AI analyst is part of Pro: everyone else sees a sample conversation behind the Pro card
+const plan = await viewerPlan(Astro.cookies);
+const pro = plan.proTools;
+Astro.response.headers.set("cache-control", "private, no-store");
 const origin = Astro.url.origin;
 const d = await homeData();
 const money = parsePeriod("24h", "24h");
@@ -40,12 +46,23 @@ const examples = [
 <Base title={`AI election analyst | ${SITE_NAME}`} description="Ask anything about the 2026 midterms and 2028 race. Answers come from live Kalshi and Polymarket odds, every trade, LunarCrush social data and our forecasting model, with links to the source." canonical={`${origin}/ai/`} robots={claude ? null : "noindex, follow"}>
 	<div class="dp ai">
 		<header class="dp-head">
-			<p class="eyebrow">AI analyst · {claude ? "beta" : "preview"}</p>
+			<p class="eyebrow">AI analyst · Pro</p>
 			<h1>Ask the analyst</h1>
-			<p class="lede">Ask anything about the races. Answers come from our own data: live odds on both exchanges, every trade, LunarCrush social data, the Parlay estimate and our research library, with links to the source.</p>
+			<p class="lede">Ask anything about the races. Answers come from our own data: live odds on both exchanges, every trade, the polls, LunarCrush social data, the Parlay estimate and our research library, with links to the source. Part of <a href="/pro/">Pro</a>, about 4¢ a question.</p>
 		</header>
 
-		<section class="ai-chat" data-ai data-configured={configured ? "1" : "0"} aria-label="Chat with the analyst">
+		{!pro && (
+			<Gate kind="ai" plan={plan} next="/ai/">
+				<section class="ai-chat" aria-hidden="true">
+					<ol class="ai-log">
+						<li class="ai-msg ai-user"><div class="ai-body">Who's favored in the Maine Senate race, and why has it moved?</div></li>
+						<li class="ai-msg ai-bot"><div class="ai-body"><p><strong>The answer first, in a sentence or two,</strong> then the evidence: the odds on both exchanges and how they moved, the polls, where the money went and who is buying which side, the headlines behind it, and races that moved the same way, each linked to its source.</p><ul><li>Odds, polls and the Parlay estimate</li><li>Trade flow and the biggest bets</li><li>What happened in races that moved like this</li></ul></div></li>
+						<li class="ai-msg ai-user"><div class="ai-body">Where did the most money go in the last 24 hours?</div></li>
+					</ol>
+				</section>
+			</Gate>
+		)}
+		{pro && <section class="ai-chat" data-ai data-configured={configured ? "1" : "0"} aria-label="Chat with the analyst">
 			<ol class="ai-log" aria-live="polite" data-ai-log>
 				<li class="ai-msg ai-bot">
 					<div class="ai-body">{configured
@@ -66,7 +83,7 @@ const examples = [
 				<button type="submit" disabled={!configured}>Ask</button>
 			</form>
 			<p class="ai-fine">Research, not betting advice. The analyst can be wrong; check the linked pages. Questions are logged to improve answers; when you are signed in, usage counts toward your plan.</p>
-		</section>
+		</section>}
 
 		{edges.length > 0 && (
 			<section class="panel">
@@ -143,7 +160,7 @@ const examples = [
 				const j = (await r.json().catch(() => ({}))) as { error?: string; plan?: string; signed_in?: boolean };
 				throw new Error(j.error === "busy" ? "The free analyst is at capacity for today. [Pro](/pro/) keeps working, or try again tomorrow."
 					: j.error === "pro_only" ? "Deep analysis is part of [Pro](/pro/)."
-					: j.plan === "anon" ? "You've used today's 10 free questions. [Sign in](/account/?next=/ai/) for 25 a day, or see [Pro](/pro/)."
+					: j.plan === "anon" ? "The AI analyst is part of [Pro](/pro/). [Sign in](/account/?next=/ai/) if you're a member."
 					: j.plan === "free" ? "You've used today's free questions. With [Pro](/pro/), AI is pay as you go, about 4¢ a question, with $3 included each month."
 					: "Your AI balance is used up. Top it up on [your account](/account/) to keep going.");
 			}

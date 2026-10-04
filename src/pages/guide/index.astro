@@ -33,7 +33,7 @@ const faqs: [string, string][] = [
 	["How far back does the history go?", "Daily prices go back to November 2024, the day after the last election. The last 7 days are kept every 10 minutes, and Election Day week is kept at full detail permanently. Charts up to 3 months are free; 1-year and full-history charts are part of Pro."],
 	["Can I use the data?", "Yes. Every number is available as JSON or CSV from the Data & API page, free with attribution and a link."],
 	["What is the Parlay estimate?", "Our own probability for each race: the market odds, adjusted by a model trained on decided races. Clear favorites are nudged up because they have won more often than priced; competitive races keep the market's odds. See the Our model page for how it was built and tested."],
-	["Can I see what the markets said on a past date?", "Yes. Use the date selector on a homepage section: 24 hours, a week or 30 days ago for everyone, 60 days with a free account, or any date back to November 2024 from the calendar with Pro."],
+	["Can I see what the markets said on a past date?", "Yes, with Pro. Each homepage section shows its default view to everyone; with Pro, its date selector switches it to 24 hours, a week, 30 or 60 days ago, or any date back to November 2024."],
 	["Is this betting advice?", "No. Parlay the People is election research: market prices, social data and our own estimates. It is not affiliated with Kalshi, Polymarket or any campaign, and nothing here is betting or investment advice."],
 ];
 const ld = graph(
@@ -97,7 +97,7 @@ const ld = graph(
 
 				<section id="dates">
 					<h2>Looking back in time</h2>
-					<p>Most homepage sections have a date selector: <strong>24H · 1W · 30D</strong> for everyone, <strong>60D</strong> with a free account, or <strong>Date</strong> to pick any day back to November 2024 with <a href="/pro/">Pro</a>. Changing it reloads just that section.</p>
+					<p>Most homepage sections have a date selector: <strong>24H · 1W · 30D · 60D</strong> or <strong>Date</strong> to pick any day back to November 2024. Each section's default view is free; the other periods are part of <a href="/pro/">Pro</a>. Changing it reloads just that section.</p>
 					<ul>
 						<li><strong>Sections about change</strong> (the snapshot, the big picture, what's moving, biggest moves, the White House leaderboard, The Pulse) show how things moved over the period you pick: “Senate control: Dem ▲ 4.2 pts over the past 30 days.”</li>
 						<li><strong>Sections about a moment</strong> (the map, the closest races, where the exchanges disagree) show the markets as they stood then, with a <strong>Now</strong> button to come back. Pick a date on the map to see every race shaded by its odds that day.</li>

@@ -22,20 +22,20 @@ const aiPrices: [string, string, string][] = [
 const Y = "✓", N = "";
 const compare: [string, string, string, string][] = [
 	["Live odds, polls and charts for every race", Y, Y, Y],
-	["24-hour, 1-week and 30-day views", Y, Y, Y],
-	["The 60-day view", N, Y, Y],
-	["Time machine: any date since Nov 2024, 1-year and full-history charts", N, N, Y],
+	["Today's view of every homepage section", Y, Y, Y],
+	["History: 24 hours, a week, 30 or 60 days, or any date since Nov 2024", N, N, Y],
+	["1-year and full-history charts", N, N, Y],
 	["Daily reports", "Last 7 days", "Last 7 days", "Full archive"],
 	["Big trades and Polymarket wallets", "Top 3", "Top 3", "All of them"],
 	["Price history downloads", "90 days", "90 days", "Full history"],
-	["AI analyst", "10 a day", "25 a day", "Pay as you go"],
+	["AI analyst", N, N, "Pay as you go"],
 	["Deep analyses, PDF reports, briefings", N, N, Y],
 	["Move and big-bet alerts", N, N, Y],
 	["Followed races on every device", N, Y, Y],
 ];
 const faqs: [string, string][] = [
 	["How does pay-as-you-go AI work?", `Each answer costs what the AI actually used, times ${AI_MARKUP}, usually ${TYPICAL_CENTS.ask}¢ for a question and ${TYPICAL_CENTS.deep}¢ for a Deep analysis. Pro includes ${dollars(included)} of AI each month (about ${Math.floor(included / TYPICAL_CENTS.ask)} questions); after that it comes from your AI balance, topped up in $${TOP_UPS.join(", $")} amounts that never expire. Your account page shows every charge.`],
-	["What stays free?", "Live odds, polls and charts for every race, the 24-hour, 1-week and 30-day views, the last week of daily reports, and the analyst's daily free questions. A free account adds the 60-day view and more questions."],
+	["What stays free?", "Live odds, polls and charts for every race, today's view of every homepage section and the last week of daily reports. History and the AI analyst are part of Pro."],
 	["Where does the trade data come from?", "Every individual trade on both exchanges since September 30, 2026. Kalshi trades are anonymous. Polymarket trades carry public wallet pseudonyms, which Pro reports as they are; we never guess who is behind one."],
 	["Where do the polls come from?", "Every published poll listed on Wikipedia's race pages, each citing its pollster. Our average is our own, and its method is on every race page."],
 	["Is this betting advice?", "No. Parlay the People is election research. The analyst explains what the markets say and why they move; it never tells anyone what to buy or sell."],
@@ -46,12 +46,12 @@ const faqs: [string, string][] = [
 	<div class="dp pro" data-signed-in={a.user ? "1" : "0"}>
 		<header class="dp-head pro-hero">
 			<p class="eyebrow">Parlay the People Pro</p>
-			<h1>The time machine and the money trail</h1>
-			<p class="lede">Go back to any day since November 2024, follow every big bet, and get AI analysis when you want it, paying only for what you use. Pro is ${PLANS.pro.price} a month.</p>
+			<h1>History, the money trail and the AI analyst</h1>
+			<p class="lede">See any section for any period or date since November 2024, follow every big bet, and ask the AI analyst anything, paying only for the AI you use. Pro is ${PLANS.pro.price} a month.</p>
 			{!a.user && (
 				<div class="pro-start">
 					<a class="pro-btn" href="/account/?next=/pro/">Start free</a>
-					<span class="pro-quiet">A free account opens the 60-day view and 25 AI questions a day. No password, no card.</span>
+					<span class="pro-quiet">A free account keeps your followed races on every device. No password, no card. Upgrade to Pro any time.</span>
 				</div>
 			)}
 		</header>
