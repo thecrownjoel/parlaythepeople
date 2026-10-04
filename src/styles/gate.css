@@ -19,9 +19,9 @@
 .gate[data-gate="trades"] { min-height: 250px; margin-top: 4px; }
 @media (max-width: 520px) { .gate { min-height: 360px; } .gate-card { padding: 20px 16px 18px; } }
 
-/* Locked controls: a small PRO badge after buttons the viewer's plan doesn't open (data-history / data-archive are
-   set on <html> by the script in Base.astro; the server enforces every gate regardless). */
-html[data-history="default"] [data-lock~="time"]::after,
+/* Locked links: a small PRO badge on daily-archive links the viewer's plan doesn't open (data-archive is set on
+   <html> by the script in Base.astro). Period and range buttons carry no badge: clicking one shows the Pro gate.
+   The server enforces every gate regardless. */
 html:not([data-archive="1"]) [data-lock~="archive"]::after {
 	content: "PRO"; display: inline-block; margin-left: 5px; padding: 1px 4px 0; border-radius: 4px; vertical-align: 1px;
 	font: 700 8.5px/1.3 var(--font-mono), monospace; letter-spacing: .06em; color: #f08a7e; background: rgb(163 38 42 / .2);
