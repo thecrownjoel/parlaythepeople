@@ -888,6 +888,18 @@ const isLoggedIn = !!Astro.locals.user;
 					}
 				};
 				new MutationObserver(fill).observe(document.body, { childList: true, subtree: true });
+				// Closing a Pro card: in a homepage section or a chart, go back to its free default view; elsewhere, drop the card.
+				document.addEventListener("click", (e) => {
+					const x = (e.target as HTMLElement).closest("[data-gate-close]");
+					if (!x) return;
+					const gate = x.closest<HTMLElement>(".gate");
+					const section = gate?.closest("[data-period-section]");
+					const chart = gate?.closest("[data-chart], [data-multichart]");
+					const back = section?.querySelector<HTMLElement>("[data-pp] button[data-p]:not([data-lock])")
+						?? chart?.querySelector<HTMLElement>("button[data-range]:not([data-lock])");
+					if (back) back.click();
+					else gate?.remove();
+				});
 				const set = (j: { history: string; archive: boolean }) => { document.documentElement.dataset.history = j.history; document.documentElement.dataset.archive = j.archive ? "1" : "0"; fill(); };
 				try {
 					const hit = JSON.parse(sessionStorage.getItem("ptp:me") || "null");

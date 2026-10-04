@@ -54,7 +54,7 @@ export function gateHtml(kind: GateKind, plan: Plan, preview: string, next = "/"
 	const c = COPY[kind];
 	return `<div class="gate" data-gate="${kind}">`
 		+ `<div class="gate-preview" aria-hidden="true" inert>${preview}</div>`
-		+ `<div class="gate-card" role="note"><p class="gate-eyebrow">${LOCK}<span>${esc(c.eyebrow)}</span></p>`
+		+ `<div class="gate-card" role="note"><button type="button" class="gate-x" data-gate-close aria-label="Close">×</button><p class="gate-eyebrow">${LOCK}<span>${esc(c.eyebrow)}</span></p>`
 		+ `<p class="gate-title">${esc(c.title)}</p><p class="gate-body">${esc(c.body)}</p>`
 		+ `<div class="gate-actions">${actions(kind, plan, next)}</div></div></div>`;
 }

@@ -6,6 +6,10 @@
 	display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 26px 26px 22px; border-radius: 16px;
 	background: color-mix(in srgb, var(--color-surface) 84%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 	border: 1px solid color-mix(in srgb, #a3262a 55%, var(--color-border)); box-shadow: 0 18px 50px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .04); }
+.gate-x { all: unset; position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px;
+	cursor: pointer; font-size: 20px; line-height: 1; color: var(--color-text-secondary); }
+.gate-x:hover { color: var(--color-text); background: rgb(255 255 255 / .06); }
+.gate-x:focus-visible { outline: 2px solid var(--color-text); outline-offset: 1px; }
 .gate-eyebrow { display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 4px 10px; border-radius: 999px; background: rgb(163 38 42 / .16);
 	color: #f08a7e; font: 700 11.5px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; }
 .gate-title { margin: 2px 0 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(19px, 2.4vw, 23px); line-height: 1.15; color: var(--color-text); }
