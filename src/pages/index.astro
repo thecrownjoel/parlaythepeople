@@ -28,6 +28,7 @@ import GapsBody from "../components/home/GapsBody.astro";
 import LeadersBody from "../components/home/LeadersBody.astro";
 import MoneyBody from "../components/home/MoneyBody.astro";
 import PollsTeaser from "../components/home/PollsTeaser.astro";
+import PoliticsTeaser from "../components/home/PoliticsTeaser.astro";
 import { homeData, SECTIONS, type SectionKey } from "../lib/home";
 import { parsePeriod } from "../lib/period";
 import { biggestTrades } from "../lib/money";
@@ -309,6 +310,8 @@ const ld = graph(organization(origin), {
 				<div data-period-body><LeadersBody d={home} period={P.leaders} /></div>
 			</section>
 		)}
+
+		<PoliticsTeaser />
 
 		<PollsTeaser races={home.races} />
 

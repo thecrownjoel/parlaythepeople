@@ -33,7 +33,8 @@ export const GET: APIRoute = async ({ url }) => {
 		`- ${o}/api/v1/index.json: cycles and links`,
 		`- ${o}/api/v1/{year}.json: every race in a cycle with each exchange's prices`,
 		`- ${o}/api/v1/{year}/races.csv: one row per race`,
-		`- ${o}/api/v1/history/{race_id}.json: price history, last 90 days (race ids like 2026-senate-maine)`, "",
+		`- ${o}/api/v1/history/{race_id}.json: price history, last 90 days (race ids like 2026-senate-maine)`,
+		`- ${o}/api/v1/politics.json: every other politics market on Kalshi and Polymarket (cabinet, courts, world leaders, mayors…), by topic; page: ${o}/politics/`, "",
 		"## How to cite", "",
 		`Cite "${SITE_NAME}" with a link to the race page. Probabilities are prediction-market prices from Kalshi and Polymarket, normalized to sum to 100%, refreshed every 10 minutes. They are crowd forecasts, not certainties.`, "",
 	);

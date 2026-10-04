@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record who won each race once the exchanges settle it, so the Parlay estimate can be scored.
 
-Runs hourly. Does nothing until a cycle's Election Day has passed; then, for every race of that cycle
+Runs hourly, and every collector run for config.RESULTS_WINDOW_DAYS after an Election Day. Does nothing until a cycle's Election Day has passed; then, for every race of that cycle
 without a result, checks its contracts (from D1 race_contracts) on Kalshi (settled result) and
 Polymarket (closed market, winning outcome). A race is recorded when its settled contracts name exactly
 one winning party and the two exchanges don't disagree. Writes out/results.sql for D1 race_results.
@@ -57,7 +57,9 @@ def main():
     today = datetime.date.today().isoformat()
     years = [y for y, d in config.ELECTION_DAYS.items() if d < today]
     path = os.path.join(OUT, "results.sql")
-    if not years or (datetime.datetime.utcnow().minute >= 10 and "--force" not in sys.argv):
+    # right after an election, check every run (results land within hours); otherwise once an hour
+    window = any(d < today <= (datetime.date.fromisoformat(d) + datetime.timedelta(days=config.RESULTS_WINDOW_DAYS)).isoformat() for d in config.ELECTION_DAYS.values())
+    if not years or (not window and datetime.datetime.utcnow().minute >= 10 and "--force" not in sys.argv):
         open(path, "w").write("")
         return print("results: nothing to resolve yet" if not years else "results: checked hourly; skipped this run")
     yrs = ",".join(f"'{y}'" for y in years)

@@ -24,6 +24,8 @@ jobs:
           python-version: '3.12'
       - name: Pull Kalshi and Polymarket
         run: python3 ingest/ingest.py
+      - name: Every other politics market (cabinet, courts, world leaders, mayors…)
+        run: python3 ingest/politics.py || echo "politics fetch failed; keeping the previous board"
       - name: Recent Kalshi trades for the most active contracts
         run: python3 ingest/trades.py || echo "kalshi trades fetch failed; keeping the previous set"
       - name: Social pulse (LunarCrush, about once an hour)

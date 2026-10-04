@@ -9,7 +9,7 @@ export const GET: APIRoute = async ({ url }) => {
 	const index = await getIndex();
 	const urls: [string, string][] = [[`${o}/`, index?.generated ?? ""], [`${o}/elections/`, ""], [`${o}/methodology/`, ""], [`${o}/guide/`, ""], [`${o}/data/`, ""], [`${o}/posts/`, ""], [`${o}/model/`, ""]];
 	// daily market reports since money and headlines began, plus the archive page
-	urls.push([`${o}/daily/`, ""]);
+	urls.push([`${o}/daily/`, ""], [`${o}/politics/`, index?.generated ?? ""]);
 	for (let t = Date.parse("2026-09-30T00:00:00Z"); t < Date.now() - 86_400_000; t += 86_400_000) {
 		const d = new Date(t).toISOString().slice(0, 10);
 		urls.push([`${o}/daily/${d}/`, new Date(t + 86_400_000).toISOString().slice(0, 10)]);

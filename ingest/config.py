@@ -26,9 +26,19 @@ HISTORY_HOURLY_DAYS = 90
 # Live site, used to skip races whose odds haven't changed since the last run.
 SITE_URL = "https://parlaythepeople.com"
 
-# A build that finds less than this for the next upcoming cycle is treated as a
-# failed pull and is not published.
-MIN_RACES_NEXT_CYCLE = 50
+# A pull is treated as failed (and not published) when either exchange returns fewer open events than
+# this. It checks the exchanges answered, not how many races the next cycle has: right after an election,
+# the finished cycle's markets close and the following cycle starts small (2028 had 45 races in Oct 2026).
+MIN_KALSHI_EVENTS = 200
+MIN_POLYMARKET_EVENTS = 50
+
+# Election rollover: for this many days after a cycle's Election Day the site stays on that cycle
+# (index.phase = "results") while the exchanges settle and results are recorded every run; then the
+# next cycle with races becomes the site's focus on its own (index.phase = "campaign").
+RESULTS_WINDOW_DAYS = 10
+# The site leads with the next cycle that has at least this many races (off-year cycles with a handful of
+# governor races keep their own pages but don't take over the homepage).
+MIN_FOCUS_RACES = 20
 
 # Person-only markets where neither exchange tags a party. Keyed by race id.
 PARTY_HINTS = {

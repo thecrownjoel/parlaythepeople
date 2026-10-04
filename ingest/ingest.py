@@ -760,6 +760,25 @@ def write_d1_sql(cycles):
     return len(lines)
 
 
+def focus_cycle(cycles):
+    """The cycle the site leads with, and its phase.
+
+    "results": within RESULTS_WINDOW_DAYS after a cycle's Election Day, that cycle stays in focus while the
+    exchanges settle (the homepage keeps showing it; results are recorded every run).
+    "campaign": otherwise, the first cycle whose Election Day hasn't passed and that has races. When the window
+    closes this moves on by itself to whatever the exchanges have listed next; no code change is needed.
+    """
+    today = NOW.date()
+    for C in cycles:
+        eday = datetime.date.fromisoformat(election_day(C.year))
+        until = eday + datetime.timedelta(days=config.RESULTS_WINDOW_DAYS)
+        if eday < today <= until and C.races:
+            return C, "results", until.isoformat()
+    upcoming = [C for C in cycles if election_day(C.year) >= today.isoformat() and C.races]
+    big = [C for C in upcoming if len(C.races) >= config.MIN_FOCUS_RACES]
+    return (big or upcoming or [max(cycles, key=lambda c: len(c.races))])[0], "campaign", None
+
+
 def main():
     cached = "--cached" in sys.argv
     kev, pev = load_raw(cached)
@@ -770,19 +789,18 @@ def main():
         finish_cycle(C)
     cycles = [C for C in cycles if C.races or C.pres]
 
-    upcoming = [C for C in cycles if election_day(C.year) >= NOW.date().isoformat()]
-    nxt = upcoming[0] if upcoming else cycles[-1]
+    nxt, phase, results_until = focus_cycle(cycles)
     n_both = sum(1 for r in nxt.races.values() if r["k"] and r["p"])
     summary = {C.year: dict(Counter(r["kind"] for r in C.races.values()),
                             president=bool(C.pres), ballots=len(C.big["ballots"])) for C in cycles}
-    print(json.dumps(summary), f"| next cycle {nxt.year}: {len(nxt.races)} races, {n_both} on both | unmatched {len(UNMATCHED)}")
-    if len(nxt.races) < config.MIN_RACES_NEXT_CYCLE or n_both < config.MIN_RACES_NEXT_CYCLE // 2:
-        sys.exit("Pull looks incomplete; not writing output.")
+    print(json.dumps(summary), f"| focus {nxt.year} ({phase}): {len(nxt.races)} races, {n_both} on both | unmatched {len(UNMATCHED)}")
+    if len(kev) < config.MIN_KALSHI_EVENTS or len(pev) < config.MIN_POLYMARKET_EVENTS:
+        sys.exit(f"Pull looks incomplete ({len(kev)} Kalshi, {len(pev)} Polymarket events); not writing output.")
 
     os.makedirs(os.path.join(OUT, "cycles"), exist_ok=True)
     for C in cycles:
         json.dump(cycle_payload(C), open(os.path.join(OUT, "cycles", f"{C.year}.json"), "w"), separators=(",", ":"))
-    index = {"generated": NOW.isoformat(), "next": nxt.year,
+    index = {"generated": NOW.isoformat(), "next": nxt.year, "phase": phase, "results_until": results_until,
              "cycles": [{"year": C.year, "election_day": election_day(C.year), "races": len(C.races),
                          "offices": sorted({r["kind"] for r in C.races.values()} | ({"president"} if C.pres.get("winner") or C.pres.get("party") else set())),
                          "ballots": len(C.big["ballots"])} for C in cycles]}
