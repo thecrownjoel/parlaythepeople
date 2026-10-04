@@ -232,7 +232,6 @@ const ld = graph(organization(origin), {
 			<div data-period-body><MovingBody d={home} period={P.moving} /></div>
 		</section>
 
-		<PollsTeaser races={home.races} />
 
 		{pulses.length > 0 && (
 			<section class="pulse" aria-labelledby="pulse-h" data-period-section="pulse">
@@ -310,6 +309,8 @@ const ld = graph(organization(origin), {
 				<div data-period-body><LeadersBody d={home} period={P.leaders} /></div>
 			</section>
 		)}
+
+		<PollsTeaser races={home.races} />
 
 		<section class="analysis" aria-labelledby="analysis-h">
 			<div class="analysis-head">
