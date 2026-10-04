@@ -21,7 +21,7 @@ export const GET: APIRoute = async ({ params, url, cookies }) => {
 		const opts = { party, label, range: r, electionDay: data.meta.election_day } as const;
 		return `<p class="hc-move">${describeMove(points, opts)}</p>${renderChart(points, opts)}`;
 	};
-	// only the default range (3M) is free; other ranges and dates are Pro. The preview is the default chart, blurred
+	// only the default range (24H) is free; other ranges and dates are Pro. The preview is the default chart, blurred
 	const open = rangeGate(PLANS.anon, range.key, DEFAULT_RANGE) === null;
 	const plan = open ? null : await viewerPlan(cookies);
 	const gate = plan ? rangeGate(plan, range.key, DEFAULT_RANGE) : null;

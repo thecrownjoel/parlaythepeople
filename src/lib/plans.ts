@@ -32,7 +32,7 @@ export interface Plan {
 	/** Pro analyst tools: trade flow, whale watch, exchange divergence, race analogs, reranked deep research. */
 	proTools: boolean;
 	deep: boolean;
-	/** History: "default" = each homepage section's default view and charts up to 3 months; "all" = every period,
+	/** History: "default" = each homepage section's default view and the 24-hour chart; "all" = every period,
 	 *  any date since Nov 2024, 1Y and All charts (Pro). */
 	history: "default" | "all";
 	/** Full daily archive, complete trade lists and full-history downloads. */

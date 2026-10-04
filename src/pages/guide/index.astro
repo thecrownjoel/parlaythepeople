@@ -30,7 +30,7 @@ const faqs: [string, string][] = [
 	["Where does the social data come from?", "From LunarCrush, which collects public posts from X, Reddit, YouTube, TikTok, news sites and more, filters spam and bots, and scores sentiment. Parlay the People refreshes it about once an hour."],
 	["What does sentiment mean?", "The share of posts about a candidate that read as positive. It describes the tone of the conversation online, not how voters will vote."],
 	["How live are the trades on the map?", "Polymarket trades appear the moment they happen: a comet flies down the race's line, sized by the dollars traded. Prices across the site refresh every 10 minutes from both exchanges."],
-	["How far back does the history go?", "Daily prices go back to November 2024, the day after the last election. The last 7 days are kept every 10 minutes, and Election Day week is kept at full detail permanently. Charts up to 3 months are free; 1-year and full-history charts are part of Pro."],
+	["How far back does the history go?", "Daily prices go back to November 2024, the day after the last election. The last 7 days are kept every 10 minutes, and Election Day week is kept at full detail permanently. Charts open on the last 24 hours for everyone; longer ranges and full history are part of Pro."],
 	["Can I use the data?", "Yes. Every number is available as JSON or CSV from the Data & API page, free with attribution and a link."],
 	["What is the Parlay estimate?", "Our own probability for each race: the market odds, adjusted by a model trained on decided races. Clear favorites are nudged up because they have won more often than priced; competitive races keep the market's odds. See the Our model page for how it was built and tested."],
 	["Can I see what the markets said on a past date?", "Yes, with Pro. Each homepage section shows its default view to everyone; with Pro, its date selector switches it to 24 hours, a week, 30 or 60 days ago, or any date back to November 2024."],
@@ -119,7 +119,7 @@ const ld = graph(
 						<li><strong>Share prices</strong>: a quote board for each exchange.</li>
 						<li><strong>Market activity</strong>: 24-hour volume, open interest, order-book liquidity and weekly moves; a money-flow bar showing which candidate the last day's dollars backed; a live order-book depth chart; and a trade tape with Polymarket trades as they happen and Kalshi trades every 10 minutes.</li>
 						<li><strong>Social pulse</strong>: each candidate's buzz, sentiment and top posts (see <a href="#the-pulse">The Pulse</a>).</li>
-						<li><strong>Price history</strong> with range buttons: <kbd>24H</kbd> <kbd>1W</kbd> <kbd>1M</kbd> <kbd>3M</kbd> <kbd>1Y</kbd> <kbd>All</kbd>. A red line marks Election Day when it's in range.</li>
+						<li><strong>Price history</strong>, opening on the last 24 hours, with range buttons: <kbd>24H</kbd> <kbd>1W</kbd> <kbd>1M</kbd> <kbd>3M</kbd> <kbd>1Y</kbd> <kbd>All</kbd> (longer ranges with Pro). A red line marks Election Day when it's in range.</li>
 						<li><strong>Every candidate</strong> on each exchange, related races, a short FAQ and links to the raw data.</li>
 					</ul>
 					<p><strong>Follow a race</strong> with the ☆ button under its headline. Races you follow appear at the top of the homepage under <strong>Your races</strong>, with how the odds moved since your last visit. Follows are kept in your browser; there's no account to create.</p>

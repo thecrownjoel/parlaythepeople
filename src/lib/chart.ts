@@ -14,9 +14,9 @@ export const RANGES: Range[] = [
 	{ key: "1y", label: "1Y", words: "the past year", secs: 365 * 86400, bucket: 86400 },
 	{ key: "all", label: "All", words: "all recorded history", secs: null, bucket: 86400 },
 ];
-export const DEFAULT_RANGE = "3m";
-/** Multi-line charts (presidential candidates, nominations) open on a year. */
-export const MULTI_DEFAULT_RANGE = "1y";
+/** Every chart opens on the last 24 hours; that view is free, other ranges are Pro (lib/gate.ts). */
+export const DEFAULT_RANGE = "1d";
+export const MULTI_DEFAULT_RANGE = "1d";
 /** A preset range by key, or a calendar date ("2026-06-01") meaning "from that day to now". */
 export function rangeOf(key?: string | null): Range {
 	const pre = RANGES.find((r) => r.key === key);
