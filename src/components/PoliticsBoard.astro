@@ -1,6 +1,6 @@
 ---
 /** The politics board (every other politics market), for /politics/ and each topic page /politics/<topic>/. */
-import { politicsSparks, newListings, sparkPath, money, TOPIC_COLOR, TOPIC_SLUG, type PolEvent, type PolBoard } from "../lib/politics";
+import { politicsSparks, newListings, sparkPath, money, marketPath, TOPIC_COLOR, TOPIC_SLUG, type PolEvent, type PolBoard } from "../lib/politics";
 import "../styles/data.css";
 
 interface Props { board: PolBoard | null; topic?: string }
@@ -60,7 +60,7 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 			<section class="pol-marquee" aria-label="Biggest moves in the last 24 hours">
 				<div class="pol-track" data-track>
 					{[0, 1].map((copy) => movers.map((e) => (
-						<a class="pol-tick" href={`#e-${e.id.replace(/[^a-z0-9]/gi, "-")}`} aria-hidden={copy ? "true" : undefined} tabindex={copy ? -1 : undefined}>
+						<a class="pol-tick" href={marketPath(e)} aria-hidden={copy ? "true" : undefined} tabindex={copy ? -1 : undefined}>
 							<span class="pol-tick-t">{e.title}</span>
 							<b>{e.multi ? `${e.o[0].n} ` : ""}{pct(e.o[0].p)}</b>
 							<em class={e.o[0].d! > 0 ? "up" : "down"}>{pts(e.o[0].d)}</em>
@@ -75,7 +75,7 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 				<div class="sec-head"><h2 id="field-h">Where the money is today</h2><p class="sec-note" style="margin:0">Each bubble is a market, sized by dollars traded in the last 24 hours</p></div>
 				<div class="pol-field" style={`aspect-ratio:${BW}/${BH}`}>
 					{bubbles.map((b) => (
-						<a class="pol-bub" href={`#e-${b.e.id.replace(/[^a-z0-9]/gi, "-")}`} style={`left:${(b.x / BW) * 100}%;top:${(b.y / BH) * 100}%;width:${((b.r * 2) / BW) * 100}%;--tc:${TOPIC_COLOR[b.e.topic] ?? "#9aa1ad"}`} title={`${b.e.title}: ${money(b.e.vol24)} today`}>
+						<a class="pol-bub" href={marketPath(b.e)} style={`left:${(b.x / BW) * 100}%;top:${(b.y / BH) * 100}%;width:${((b.r * 2) / BW) * 100}%;--tc:${TOPIC_COLOR[b.e.topic] ?? "#9aa1ad"}`} title={`${b.e.title}: ${money(b.e.vol24)} today`}>
 							<span class="pol-bub-in">
 								<b>{pct(b.e.o[0].p)}</b>
 								{b.r > 44 && <span class="pol-bub-t">{b.e.multi ? b.e.o[0].n : b.e.title}</span>}
@@ -91,7 +91,7 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 			<section aria-labelledby="new-h">
 				<div class="sec-head"><h2 id="new-h">Just listed</h2><p class="sec-note" style="margin:0">Markets that opened in the last three days</p></div>
 				<div class="pol-new">
-					{fresh.map((e) => <a class="pol-new-c" href={e.url} rel="noopener nofollow" target="_blank" style={`--tc:${TOPIC_COLOR[e.topic] ?? "#9aa1ad"}`}><span class="pol-new-badge">New</span><span>{e.title}</span><b>{e.multi ? `${e.o[0].n} ${pct(e.o[0].p)}` : pct(e.o[0].p)}</b></a>)}
+					{fresh.map((e) => <a class="pol-new-c" href={marketPath(e)} style={`--tc:${TOPIC_COLOR[e.topic] ?? "#9aa1ad"}`}><span class="pol-new-badge">New</span><span>{e.title}</span><b>{e.multi ? `${e.o[0].n} ${pct(e.o[0].p)}` : pct(e.o[0].p)}</b></a>)}
 				</div>
 			</section>
 		)}
@@ -126,7 +126,7 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 										<span class={`pc-src pc-${e.src}`}>{e.src === "k" ? "Kalshi" : "Polymarket"}</span>
 										{lead.d != null && Math.abs(lead.d) >= 0.005 && <span class={`pc-move ${lead.d > 0 ? "up" : "down"}`}>{pts(lead.d)} pts</span>}
 									</div>
-									<h3><a href={e.url} rel="noopener nofollow" target="_blank">{e.title}</a></h3>
+									<h3><a href={marketPath(e)}>{e.title}</a></h3>
 									{e.sub && <p class="pc-sub">{e.sub}</p>}
 									{e.multi ? (
 										<ul class="pc-bars">
@@ -160,7 +160,7 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 									return (
 										<li id={`e-${e.id.replace(/[^a-z0-9]/gi, "-")}`}>
 											<span class={`pc-src pc-${e.src}`}>{e.src === "k" ? "K" : "P"}</span>
-											<a href={e.url} rel="noopener nofollow" target="_blank">{e.title}</a>
+											<a href={marketPath(e)}>{e.title}</a>
 											<b>{e.multi ? `${lead.n}: ` : ""}{pct(lead.p)}{e.n_out > 1 ? <span> of {e.n_out}</span> : null}</b>
 											<span class="pol-list-vol">{e.vol24 ? `${money(e.vol24)} today · ` : ""}{money(e.vol)} traded</span>
 										</li>

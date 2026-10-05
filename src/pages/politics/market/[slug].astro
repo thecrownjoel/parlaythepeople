@@ -1,0 +1,158 @@
+---
+/**
+ * One politics market: /politics/market/<title words>--<k|p>-<exchange id>/
+ * Answer first, every outcome's odds, the price history, the money, and related markets on the same topic.
+ */
+import Base from "../../../layouts/Base.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import {
+	getPolitics, findMarket, marketPath, marketSeries, marketChart, marketAnswer, relatedMarkets, exchangeName, money,
+	TOPIC_COLOR, TOPIC_SLUG, TOPIC_SEO,
+} from "../../../lib/politics";
+import { RANGES, DEFAULT_RANGE, rangeOf } from "../../../lib/chart";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../../lib/site";
+import "../../../styles/data.css";
+import "../../../styles/charts.css";
+
+const slug = Astro.params.slug ?? "";
+const key = slug.split("--").pop() ?? "";
+const board = await getPolitics();
+const e = findMarket(board, key);
+if (!board || !e) return Astro.rewrite("/404");
+const path = marketPath(e);
+if (`/politics/market/${slug}/` !== path) return Astro.redirect(path, 301); // the title changed; the id didn't
+Astro.response.headers.set("cache-control", "public, max-age=300");
+
+const origin = Astro.url.origin;
+const topicName = board.topics.find((t) => t.key === e.topic)?.name ?? "Politics";
+const topicPath = `/politics/${TOPIC_SLUG[e.topic] ?? e.topic}/`;
+const asOf = new Date(board.generated).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+const lede = marketAnswer(e, asOf);
+const lead = e.o[0];
+const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`);
+const pts = (d: number | null) => (d == null || Math.abs(d) < 0.005 ? "no change" : `${d > 0 ? "up" : "down"} ${Math.abs(Math.round(d * 100))} pts`);
+const ends = e.ends && e.ends < "9999" ? new Date(`${e.ends}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
+const range = rangeOf(DEFAULT_RANGE);
+const chart = marketChart(lead.n, e.multi, await marketSeries(e, range.secs), range);
+const related = relatedMarkets(board, e);
+const question = e.title.trim().endsWith("?") ? e.title.trim() : `What are the odds for "${e.title.trim()}"?`;
+const title = `${e.title.replace(/\?$/, "")}: odds and chances | ${SITE_NAME}`;
+const description = `${lede} Live ${exchangeName(e)} odds, updated every 10 minutes.`.slice(0, 300);
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["Politics", "/politics/"], [topicName, topicPath], [e.title, path]]),
+	faq([[question, lede], [`Where does this market trade?`, `On ${exchangeName(e)}, a regulated prediction market${e.src === "p" ? " (Polymarket)" : ""}. Parlay the People shows its prices; it is research, not betting advice.`]]),
+	{ "@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: e.title, description, dateModified: board.generated, isPartOf: { "@id": `${origin}/#website` }, about: { "@type": "Thing", name: TOPIC_SEO[e.topic]?.about ?? "politics" } },
+);
+---
+<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={board.generated}>
+	<JsonLd slot="head" data={ld} />
+	<article class="dp mk" style={`--tc:${TOPIC_COLOR[e.topic] ?? "#9aa1ad"}`}>
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href="/politics/">Politics</a> › <a href={topicPath}>{topicName}</a></nav>
+		<header class="dp-head">
+			<p class="eyebrow"><span class={`pc-src pc-${e.src}`}>{exchangeName(e)}</span></p>
+			<h1>{e.title}</h1>
+			{e.sub && <p class="mk-sub">{e.sub}</p>}
+			<p class="lede">{lede}</p>
+		</header>
+
+		<dl class="mk-stats">
+			<div><dt>{e.multi ? "Favorite" : "Chance of Yes"}</dt><dd>{e.multi ? <>{lead.n} <b>{pct(lead.p)}</b></> : <b>{pct(lead.p)}</b>}</dd></div>
+			<div><dt>24 hours</dt><dd>{pts(lead.d)}</dd></div>
+			<div><dt>Traded today</dt><dd>{money(e.vol24)}</dd></div>
+			<div><dt>Traded in all</dt><dd>{money(e.vol)}</dd></div>
+			{ends && <div><dt>Closes</dt><dd>{ends}</dd></div>}
+		</dl>
+
+		<section class="panel">
+			<h2>{e.multi ? `Every outcome${e.n_out > e.o.length ? ` (top ${e.o.length} of ${e.n_out})` : ""}` : "The odds"}</h2>
+			<ol class="mk-outs">
+				{e.o.map((o) => (
+					<li>
+						<span class="mk-n">{e.multi ? o.n : "Yes"}</span>
+						<span class="mk-bar"><i style={`width:${Math.max(1, o.p * 100)}%`}></i></span>
+						<b>{pct(o.p)}</b>
+						<span class="mk-d">{o.d == null || Math.abs(o.d) < 0.005 ? "" : `${o.d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(o.d * 100))}`}</span>
+					</li>
+				))}
+			</ol>
+			{e.n_out > e.o.length && <p class="sec-note">{e.n_out - e.o.length} more outcomes, mostly long shots, are listed on <a href={e.url} rel="noopener nofollow" target="_blank">{exchangeName(e)}</a>.</p>}
+		</section>
+
+		<section class="panel">
+			<h2>How the odds have moved</h2>
+			<div class="hc-wrap" data-mchart={e.id.replace(":", "-").toLowerCase()}>
+				<div class="hc-ranges" role="group" aria-label="Chart time range">
+					{RANGES.map((r) => <button type="button" data-range={r.key} data-lock={r.key === range.key ? undefined : "time"} aria-pressed={r.key === range.key ? "true" : "false"} title={`Show ${r.words}`}>{r.label}</button>)}
+				</div>
+				<div class="hc-body" data-chart-body aria-live="polite" set:html={chart} />
+			</div>
+			<p class="sec-note">{e.multi ? `The line follows the current favorite, ${lead.n}.` : "The price of a Yes contract, read as the chance the market resolves Yes."} One reading an hour.</p>
+		</section>
+
+		<p class="mk-cta"><a class="mk-ex" href={e.url} rel="noopener nofollow" target="_blank">See this market on {exchangeName(e)} →</a></p>
+
+		{related.length > 0 && (
+			<section class="panel">
+				<h2>More {topicName.toLowerCase()} markets</h2>
+				<ul class="mk-rel">
+					{related.map((r) => <li><a href={marketPath(r)}>{r.title}</a><b>{r.multi ? `${r.o[0].n} ` : ""}{pct(r.o[0].p)}</b></li>)}
+				</ul>
+				<p class="sec-note"><a href={topicPath}>Every {topicName.toLowerCase()} market →</a></p>
+			</section>
+		)}
+		<p class="sec-note" style="font-size:12.5px">Prices are {exchangeName(e)}'s own ({e.src === "k" ? "bid/ask midpoint" : "displayed price"}), collected every 10 minutes. Research, not betting advice.</p>
+	</article>
+</Base>
+
+<script>
+	for (const wrap of document.querySelectorAll<HTMLElement>("[data-mchart]")) {
+		const body = wrap.querySelector<HTMLElement>("[data-chart-body]")!;
+		const cache = new Map<string, string>([["1d", body.innerHTML]]);
+		wrap.querySelectorAll<HTMLButtonElement>("[data-range]").forEach((btn) => btn.addEventListener("click", async () => {
+			const key = btn.dataset.range!;
+			wrap.querySelectorAll("[data-range]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+			if (!cache.has(key)) {
+				body.classList.add("hc-loading");
+				try {
+					const r = await fetch(`/api/v1/politics-chart/${wrap.dataset.mchart}?range=${key}&from=${encodeURIComponent(location.pathname)}`);
+					cache.set(key, r.ok ? await r.text() : `<p class="hc-empty">Couldn't load this range. Try again in a moment.</p>`);
+				} catch {
+					cache.set(key, `<p class="hc-empty">Couldn't load this range. Check your connection and try again.</p>`);
+				}
+				body.classList.remove("hc-loading");
+			}
+			body.innerHTML = cache.get(key)!;
+		}));
+	}
+</script>
+
+<style>
+	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
+	.mk-crumbs a { color: var(--color-text-secondary); }
+	.mk h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.15; }
+	.mk-sub { color: var(--color-muted); margin: -6px 0 10px; }
+	.pc-src { font: 700 10.5px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+	.pc-k { color: #00d991; background: rgb(0 217 145 / .1); } .pc-p { color: #6f8bff; background: rgb(46 92 255 / .14); }
+	.mk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0 0 20px; }
+	.mk-stats > div { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); }
+	.mk-stats dt { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.mk-stats dd { margin: 6px 0 0; font-size: 17px; }
+	.mk-stats dd b { font-family: var(--font-display); font-size: 22px; }
+	.mk-outs { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+	.mk-outs li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 2fr) 52px 44px; gap: 10px; align-items: center; font-size: 14.5px; }
+	.mk-n { overflow-wrap: anywhere; }
+	.mk-bar { height: 8px; border-radius: 4px; background: rgb(255 255 255 / .07); overflow: hidden; }
+	.mk-bar i { display: block; height: 100%; border-radius: 4px; background: var(--tc); }
+	.mk-outs b { font-family: var(--font-mono), monospace; text-align: right; }
+	.mk-d { font: 600 12px var(--font-mono), monospace; color: var(--color-muted); }
+	.mk-outs + .sec-note { margin-top: 14px; }
+	.mk-cta { margin: 18px 0; }
+	.mk-ex { display: inline-block; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--tc); color: var(--color-text); font-weight: 600; text-decoration: none; }
+	.mk-ex:hover { background: color-mix(in srgb, var(--tc) 14%, transparent); }
+	.mk-rel { list-style: none; padding: 0; margin: 0; }
+	.mk-rel li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
+	.mk-rel a { color: var(--color-text); }
+	.mk-rel b { font-family: var(--font-mono), monospace; white-space: nowrap; }
+	@media (max-width: 560px) { .mk-outs li { grid-template-columns: minmax(0, 1fr) 52px; } .mk-bar, .mk-d { display: none; } }
+</style>

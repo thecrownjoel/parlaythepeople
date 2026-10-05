@@ -5,6 +5,7 @@
  */
 import { env } from "cloudflare:workers";
 import { r2json } from "./markets";
+import { renderMulti, type Range } from "./chart";
 
 export interface PolOutcome { n: string; p: number; d: number | null }
 export interface PolEvent {
@@ -82,6 +83,8 @@ export const TOPIC_SEO: Record<string, { title: string; about: string }> = {
 export const topicFromSlug = (slug: string) => Object.entries(TOPIC_SLUG).find(([, s]) => s === slug)?.[0] ?? null;
 
 const pctWord = (p: number) => (p >= 0.995 ? "more than 99%" : p < 0.005 ? "less than 1%" : `${Math.round(p * 100)}%`);
+/** "a" or "an" before a spoken number: an 8%, an 11%, an 18%, an 80-something%. */
+const anA = (w: string) => (/^(8|11|18)\b|^8\d/.test(w) ? "an" : "a");
 const exName = (e: PolEvent) => (e.src === "k" ? "Kalshi" : "Polymarket");
 
 /** One plain-language sentence per market, for answers and structured data. */
@@ -89,7 +92,7 @@ export function marketAnswer(e: PolEvent, asOf: string) {
 	const lead = e.o[0];
 	const odds = e.multi
 		? `traders on ${exName(e)} favor ${lead.n} at ${pctWord(lead.p)}${e.o[1] ? `, ahead of ${e.o[1].n} at ${pctWord(e.o[1].p)}` : ""}`
-		: `traders on ${exName(e)} give it a ${pctWord(lead.p)} chance`;
+		: `traders on ${exName(e)} give it ${anA(pctWord(lead.p))} ${pctWord(lead.p)} chance`;
 	return `As of ${asOf}, ${odds}. ${money(e.vol24)} traded in the last 24 hours, ${money(e.vol)} in all.`;
 }
 
@@ -103,7 +106,7 @@ export function politicsLd(origin: string, path: string, name: string, descripti
 		"@graph": [
 			{ "@type": "CollectionPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name, description, dateModified: generated, isPartOf: { "@id": `${origin}/#website` }, about: { "@type": "Thing", name: "Political prediction markets" } },
 			{ "@type": "BreadcrumbList", itemListElement: crumbs.map(([n, p], i) => ({ "@type": "ListItem", position: i + 1, name: n, item: `${origin}${p}` })) },
-			{ "@type": "ItemList", name, numberOfItems: events.length, itemListElement: top.slice(0, 50).map((e, i) => ({ "@type": "ListItem", position: i + 1, name: e.title, url: e.url, description: marketAnswer(e, asOf) })) },
+			{ "@type": "ItemList", name, numberOfItems: events.length, itemListElement: top.slice(0, 50).map((e, i) => ({ "@type": "ListItem", position: i + 1, name: e.title, url: `${origin}${marketPath(e)}`, description: marketAnswer(e, asOf) })) },
 			{ "@type": "Dataset", name: `${name} (Kalshi and Polymarket)`, description, url: `${origin}${path}`, dateModified: generated, license: "https://parlaythepeople.com/data/", isAccessibleForFree: true,
 				creator: { "@type": "Organization", name: "Parlay the People", url: origin },
 				distribution: [{ "@type": "DataDownload", encodingFormat: "application/json", contentUrl: `${origin}/api/v1/politics.json` }],
@@ -111,4 +114,44 @@ export function politicsLd(origin: string, path: string, name: string, descripti
 			{ "@type": "FAQPage", mainEntity: top.slice(0, 10).map((e) => ({ "@type": "Question", name: q(e), acceptedAnswer: { "@type": "Answer", text: marketAnswer(e, asOf) } })) },
 		],
 	};
+}
+
+// ---- one page per market: /politics/market/<title words>--<k|p>-<exchange id>/ ----
+
+/** Lowercase words joined by hyphens, accents dropped, at most 80 characters. */
+export const slugify = (s: string) =>
+	s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+/** The stable part of a market's URL: its exchange and id ("k:KXFOO-26" → "k-kxfoo-26"). Titles can change; this can't. */
+export const marketKey = (id: string) => id.replace(":", "-").toLowerCase();
+export const marketPath = (e: PolEvent) => `/politics/market/${slugify(e.title) || "market"}--${marketKey(e.id)}/`;
+export const findMarket = (board: PolBoard | null, key: string) => board?.events.find((e) => marketKey(e.id) === key.toLowerCase()) ?? null;
+export const exchangeName = (e: PolEvent) => (e.src === "k" ? "Kalshi" : "Polymarket");
+
+/** The leading outcome's hourly price over a range (secs null = all recorded), ending at the current price. */
+export async function marketSeries(e: PolEvent, secs: number | null): Promise<{ ts: number; v: number }[]> {
+	const now = Math.floor(Date.now() / 1000);
+	let pts: { ts: number; v: number }[] = [];
+	try {
+		const { results } = await env.MARKETS.prepare("SELECT ts, p AS v FROM politics_history WHERE event_id = ? AND ts >= ? ORDER BY ts")
+			.bind(e.id, secs ? now - secs : 0).all<{ ts: number; v: number }>();
+		pts = (results ?? []).filter((r) => r.v != null);
+	} catch { /* no history yet */ }
+	// thin long ranges to one point a day
+	if (!secs || secs > 10 * 86400) {
+		const day = new Map<number, { ts: number; v: number }>();
+		for (const p of pts) day.set(Math.floor(p.ts / 86400), p);
+		pts = [...day.values()];
+	}
+	pts.push({ ts: now, v: e.o[0].p });
+	return pts;
+}
+
+/** Other markets to read next: the same topic, busiest today first. */
+export const relatedMarkets = (board: PolBoard, e: PolEvent, n = 8) =>
+	board.events.filter((x) => x.topic === e.topic && x.id !== e.id).sort((a, b) => b.vol24 - a.vol24).slice(0, n);
+
+/** The market's chart: the leading outcome (or Yes) over a range. */
+export function marketChart(lead: string, multi: boolean, points: { ts: number; v: number }[], range: Range) {
+	const label = multi ? lead : "Chance of Yes";
+	return renderMulti([{ spec: { kind: "out", id: "m", key: "lead", label, color: "#5e92ee" }, points }], { range, title: label });
 }

@@ -1,4 +1,4 @@
-import { TOPIC_SLUG } from "../lib/politics";
+import { TOPIC_SLUG, getPolitics, marketPath } from "../lib/politics";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { getIndex, getCycle } from "../lib/markets";
@@ -12,6 +12,9 @@ export const GET: APIRoute = async ({ url }) => {
 	// daily market reports since money and headlines began, plus the archive page
 	urls.push([`${o}/daily/`, ""], [`${o}/politics/`, index?.generated ?? ""]);
 	for (const slug of Object.values(TOPIC_SLUG)) urls.push([`${o}/politics/${slug}/`, index?.generated ?? ""]);
+	// one page per politics market
+	const board = await getPolitics();
+	for (const e of board?.events ?? []) urls.push([`${o}${marketPath(e)}`, board!.generated]);
 	for (let t = Date.parse("2026-09-30T00:00:00Z"); t < Date.now() - 86_400_000; t += 86_400_000) {
 		const d = new Date(t).toISOString().slice(0, 10);
 		urls.push([`${o}/daily/${d}/`, new Date(t + 86_400_000).toISOString().slice(0, 10)]);

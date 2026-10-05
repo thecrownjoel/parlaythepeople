@@ -1,6 +1,6 @@
 ---
 /** Homepage: a taste of /politics/, the busiest market in each of six topics today. */
-import { getPolitics, money, TOPIC_COLOR } from "../../lib/politics";
+import { getPolitics, money, marketPath, TOPIC_COLOR } from "../../lib/politics";
 
 const board = await getPolitics();
 const pick = board ? board.topics.map((t) => board.events.filter((e) => e.topic === t.key).sort((a, b) => b.vol24 - a.vol24)[0]).filter(Boolean).sort((a, b) => b!.vol24 - a!.vol24).slice(0, 6) : [];
@@ -20,7 +20,7 @@ const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.ro
 		<p class="sec-note" style="margin:0 0 14px">{money(board.totals.vol24)} traded today on cabinet picks, the courts, world leaders, mayors and more. The busiest market in each topic:</p>
 		<div class="ptz-grid">
 			{pick.map((e) => (
-				<a class="ptz-c" href={`/politics/#e-${e!.id.replace(/[^a-z0-9]/gi, "-")}`} style={`--tc:${TOPIC_COLOR[e!.topic] ?? "#9aa1ad"}`}>
+				<a class="ptz-c" href={marketPath(e!)} style={`--tc:${TOPIC_COLOR[e!.topic] ?? "#9aa1ad"}`}>
 					<span class="ptz-topic"><i></i>{name.get(e!.topic)}</span>
 					<span class="ptz-t">{e!.title}</span>
 					{e!.multi ? (

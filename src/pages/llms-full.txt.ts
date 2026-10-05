@@ -3,7 +3,7 @@ import type { APIRoute } from "astro";
 import { getIndex, getCycle, consensus, shares, candidate, pct, fmtDate, fmtVol, RATING_LABEL } from "../lib/markets";
 import { SITE_NAME } from "../lib/site";
 import { pollBoard, marginText } from "../lib/polls";
-import { getPolitics, money, TOPIC_SLUG } from "../lib/politics";
+import { getPolitics, money, marketPath, TOPIC_SLUG } from "../lib/politics";
 
 /** Every race with its current odds, one line each, for AI assistants and researchers. */
 export const GET: APIRoute = async ({ url }) => {
@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ url }) => {
 			out.push(`## ${t.name} (${o}/politics/${TOPIC_SLUG[t.key] ?? t.key}/)`, "");
 			for (const e of board.events.filter((x) => x.topic === t.key).slice(0, 40)) {
 				const odds = e.o.slice(0, 3).map((x) => `${e.multi ? x.n : "Yes"} ${Math.round(x.p * 100)}%`).join(", ");
-				out.push(`- ${e.title}: ${odds} (${e.src === "k" ? "Kalshi" : "Polymarket"}; ${money(e.vol24)} today, ${money(e.vol)} total). ${e.url}`);
+				out.push(`- ${e.title}: ${odds} (${e.src === "k" ? "Kalshi" : "Polymarket"}; ${money(e.vol24)} today, ${money(e.vol)} total). ${o}${marketPath(e)}`);
 			}
 			out.push("");
 		}
