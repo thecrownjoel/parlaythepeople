@@ -167,3 +167,33 @@ CREATE TABLE IF NOT EXISTS fec_outside (
   updated INTEGER,
   PRIMARY KEY (cand_id, cycle)
 ) WITHOUT ROWID;
+-- Outside spenders (super PACs, parties, groups) by whom their spending helped, from independent expenditures.
+CREATE TABLE IF NOT EXISTS fec_spenders (
+  spe_id TEXT NOT NULL, cycle INTEGER NOT NULL, name TEXT,
+  helps_d REAL, helps_r REAL, other REAL, n INTEGER,   -- helps_*: general-election spending; other: primaries and unaffiliated
+  top_cands TEXT,               -- up to 5 FEC candidate ids they spent the most on, "|"-separated
+  updated INTEGER,
+  PRIMARY KEY (spe_id, cycle)
+) WITHOUT ROWID;
+-- Outside spending by week (Monday), by the party it helped.
+CREATE TABLE IF NOT EXISTS fec_ie_weeks (
+  cycle INTEGER NOT NULL, week TEXT NOT NULL, helps_d REAL, helps_r REAL,
+  PRIMARY KEY (cycle, week)
+) WITHOUT ROWID;
+-- Every committee that raised $100K+ this cycle: party committees, super PACs, PACs (FEC committee summary file).
+CREATE TABLE IF NOT EXISTS fec_committees (
+  cmte_id TEXT NOT NULL, cycle INTEGER NOT NULL, name TEXT,
+  type TEXT,                    -- X/Y party, O super PAC, U single-candidate IE, V/W hybrid PAC, N/Q PAC, I independent expenditor
+  dsgn TEXT, receipts REAL, indiv REAL, disbursements REAL, cash REAL, debts REAL,
+  contrib_to_others REAL, indep_exp REAL, coord_exp REAL, coverage_end TEXT, updated INTEGER,
+  PRIMARY KEY (cmte_id, cycle)
+) WITHOUT ROWID;
+-- OpenFEC detail for the candidates in competitive races (refreshed every few days): donors by size, money by state, each report.
+CREATE TABLE IF NOT EXISTS fec_detail (
+  cand_id TEXT NOT NULL, cycle INTEGER NOT NULL,
+  small REAL, large REAL, pac REAL, party REAL, self_funding REAL,
+  by_state TEXT,                -- {"ME": dollars, …}
+  reports TEXT,                 -- [[coverage end date, raised in period, spent in period, cash on hand], …]
+  updated INTEGER,
+  PRIMARY KEY (cand_id, cycle)
+) WITHOUT ROWID;
