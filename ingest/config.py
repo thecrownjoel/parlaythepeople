@@ -45,6 +45,14 @@ PARTY_HINTS = {
     "2026-senate-alaska": {"peltola": "D", "sullivan": "R"},
 }
 
+# LunarCrush social data ("The Pulse"). Candidates are taken from the race data automatically:
+# every Senate and governor candidate, House candidates in competitive races (leader below
+# SOCIAL_HOUSE_MAX_LEAD), and the top presidential contenders. Fetched about once an hour.
+SOCIAL_HOUSE_MAX_LEAD = 0.80
+SOCIAL_PRES_TOP = 12
+SOCIAL_EXTRA_TOPICS = ["midterms", "white house", "donald trump", "republicans", "democrats", "congress", "senate", "polymarket", "kalshi"]
+SOCIAL_POSTS_PER_TOPIC = 4
+
 # Headlines for the homepage "Latest" strip. All free: publishers' own RSS feeds plus Google News
 # search feeds. Each entry takes up to N headlines per refresh, so N sets the mix. Feeds marked
 # political=False carry other news too and are filtered to politics keywords.

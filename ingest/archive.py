@@ -4,7 +4,11 @@
 Writes:
   out/archive/snap.json.gz       every contract's price, quote, volume and open interest this run
                                  (uploaded to R2 archive/snap/YYYY/MM/DD/HHMM.json.gz)
-  out/archive/raw-*.json.gz      the exchanges' raw responses, once an hour (archive/raw/...)
+  out/archive/books.json.gz      the full order book of every race contract on both exchanges, this run
+                                 (archive/books/YYYY/MM/DD/HHMM.json.gz)
+  out/archive/raw-*.json.gz      the exchanges' raw responses, once an hour; the whole politics board (every
+                                 outcome) every run; LunarCrush's untouched responses whenever social.py ran
+                                 (archive/raw/...)
   out/archive.sql                money-traded history, headlines, social posts, hourly social readings
                                  (D1 ballottape-markets)
   out/trades.sql                 every new trade on any contract whose volume moved (D1 ballottape-trades)
@@ -36,6 +40,8 @@ WR = ["npx", "--yes", "wrangler@4"]
 MAX_MARKETS = 500        # contracts fetched per run (busiest first); the rest wait for the next run
 FIRST_LOOKBACK = 3 * 86400  # how far back to start a contract we've never collected
 MAX_PAGES = 5
+FRESH = 15 * 60          # an output file older than this was not written by this run
+D1_WARN_GB = 7           # D1 databases stop at 10 GB; warn early enough to start the next cycle's database
 
 
 def d1_rows(db, sql):
@@ -75,12 +81,63 @@ def write_files(cyc):
     with gzip.open(os.path.join(ARC, "snap.json.gz"), "wt") as fh:
         json.dump({"ts": NOW, "cycles": cyc}, fh, separators=(",", ":"))
     n = 1
-    if datetime.datetime.fromtimestamp(NOW, datetime.timezone.utc).minute < 10:  # raw pulls hourly
-        for f in glob.glob(os.path.join(OUT, "raw", "*.json")):
-            with open(f, "rb") as src, gzip.open(os.path.join(ARC, f"raw-{os.path.basename(f)}.gz"), "wb") as dst:
-                shutil.copyfileobj(src, dst)
-                n += 1
+    try:
+        books = order_books(cyc)
+        with gzip.open(os.path.join(ARC, "books.json.gz"), "wt") as fh:
+            json.dump(books, fh, separators=(",", ":"))
+        n += 1
+        print(f"  order books: {len(books['k'])} Kalshi, {len(books['p'])} Polymarket")
+    except Exception as e:
+        print(f"  order books failed: {str(e)[:200]}")
+    raw = []
+    if datetime.datetime.fromtimestamp(NOW, datetime.timezone.utc).minute < 10:  # exchange pulls hourly (large)
+        raw += glob.glob(os.path.join(OUT, "raw", "*.json"))
+    raw += [f for f in (os.path.join(OUT, "politics.json"), os.path.join(OUT, "lunarcrush_raw.json"))
+            if os.path.exists(f) and NOW - os.path.getmtime(f) < FRESH]
+    for f in raw:
+        with open(f, "rb") as src, gzip.open(os.path.join(ARC, f"raw-{os.path.basename(f)}.gz"), "wb") as dst:
+            shutil.copyfileobj(src, dst)
+            n += 1
     return n
+
+
+# ---------------------------------------------------------------- order books
+def order_books(cyc):
+    """Every race and presidential contract's full book, as each exchange returned it.
+    Kalshi: both sides per ticker, 100 tickers a call. Polymarket: the Yes token's book (the No book mirrors it),
+    500 tokens a call."""
+    ks, ps = set(), set()
+    for src, _market, _race, _name, _v, o in contracts(cyc):
+        if src == "k" and o.get("id"):
+            ks.add(o["id"])
+        elif src == "p" and o.get("tok"):
+            ps.add(o["tok"])
+    ks, ps = sorted(ks), sorted(ps)
+    kb, pb = [], []
+    for i in range(0, len(ks), 100):
+        kb += get("https://api.elections.kalshi.com/trade-api/v2/markets/orderbooks", {"tickers": ks[i:i + 100]}).get("orderbooks") or []
+    for i in range(0, len(ps), 500):
+        d = get("https://clob.polymarket.com/books", body=[{"token_id": t} for t in ps[i:i + 500]])
+        pb += d if isinstance(d, list) else []
+    return {"ts": NOW, "k": kb, "p": pb}
+
+
+# ---------------------------------------------------------------- database size
+def db_sizes():
+    """Once a day: each D1 database's size, with a workflow warning when one nears the 10 GB cap."""
+    if datetime.datetime.fromtimestamp(NOW, datetime.timezone.utc).strftime("%H%M") >= "0010":
+        return
+    for db in ("ballottape-markets", "ballottape-trades", "parlay-accounts", "ballottape-cms"):
+        r = subprocess.run(WR + ["d1", "info", db, "--json"], capture_output=True, text=True, cwd=os.path.dirname(HERE))
+        try:
+            gb = json.loads(r.stdout)["database_size"] / 1e9
+        except Exception:
+            print(f"  d1 size unavailable for {db}")
+            continue
+        print(f"  d1 {db}: {gb:.2f} GB")
+        if gb >= D1_WARN_GB:
+            print(f"::warning::D1 {db} is {gb:.1f} GB of 10 GB. Start a new database for the next cycle "
+                  f"(e.g. {db}-{datetime.date.today().year + 1}) and point new writes at it.")
 
 
 # ---------------------------------------------------------------- money-traded history
@@ -254,6 +311,7 @@ def main():
     if not cyc:
         sys.exit("no cycle files; run ingest.py first")
     files = write_files(cyc)
+    db_sizes()
     a = volume_sql(cyc) + news_sql() + social_sql()
     open(os.path.join(OUT, "archive.sql"), "w").write("\n".join(a) + "\n")
     t, note = trades_sql(cyc)

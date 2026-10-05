@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS polls (
 );
 CREATE INDEX IF NOT EXISTS polls_race_end ON polls (race_id, end_date);
 
--- Every other politics market (ingest/politics.py): one price per event per hour for sparklines (30 days kept),
+-- Every other politics market (ingest/politics.py): one price per event per hour (kept forever),
 -- and when each event first appeared on either exchange (new listings).
 CREATE TABLE IF NOT EXISTS politics_history (
   event_id TEXT NOT NULL,       -- k:<Kalshi event ticker> | p:<Polymarket event id>

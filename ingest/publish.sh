@@ -16,7 +16,8 @@ $WR r2 object put ballottape-data/unmatched.json --file ingest/out/unmatched.jso
 $WR d1 execute ballottape-markets --remote --file ingest/schema.sql >/dev/null
 $WR d1 execute ballottape-markets --remote --file ingest/out/d1.sql >/dev/null
 # The permanent record (archive.py): money-traded history, headlines and social posts; every trade;
-# a full snapshot of every contract each run and the raw exchange pulls hourly. A failure here
+# a full snapshot and every order book each run, the politics board and LunarCrush responses as they
+# arrive, and the raw exchange pulls hourly. A failure here
 # never blocks the site update above.
 [ -s ingest/out/results.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/results.sql >/dev/null || echo "results upload failed"; }
 [ -s ingest/out/politics.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/politics.sql >/dev/null && rm ingest/out/politics.sql || echo "politics upload failed"; }
@@ -29,7 +30,7 @@ STAMP=$(date -u +%Y/%m/%d/%H%M)
 for f in ingest/out/archive/*.json.gz; do
   [ -f "$f" ] || continue
   name=$(basename "$f" .json.gz)
-  case "$name" in snap) key="archive/snap/$STAMP.json.gz" ;; *) key="archive/raw/$STAMP-${name#raw-}.json.gz" ;; esac
+  case "$name" in snap) key="archive/snap/$STAMP.json.gz" ;; books) key="archive/books/$STAMP.json.gz" ;; *) key="archive/raw/$STAMP-${name#raw-}.json.gz" ;; esac
   $WR r2 object put "ballottape-data/$key" --file "$f" --content-type application/gzip --remote >/dev/null || echo "archive upload failed: $key"
 done
 echo "published $(ls ingest/out/cycles | wc -l | tr -d ' ') cycles"

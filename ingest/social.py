@@ -3,7 +3,8 @@
 
 For each topic: 24h interactions, contributors, posts, sentiment and trend (topic endpoint),
 a 30-day daily series (time-series endpoint), and the top posts (for Senate/governor/president).
-Writes out/social.json and out/social.sql (daily rows for D1's social_history).
+Writes out/social.json and out/social.sql (daily rows for D1's social_history), and out/lunarcrush_raw.json:
+every LunarCrush response untouched, which archive.py stores in R2.
 
 Needs LUNARCRUSH_API_KEY. Usage: python3 ingest/social.py [--force]
 Runs at most once an hour unless --force (it's called from every 10-minute collector run).
@@ -115,13 +116,16 @@ def fetch(topic, meta):
         if d.get("interactions_24h"):
             break
         time.sleep(1.5 * (attempt + 1))
+    raw = {"topic": d}
     if not d.get("interactions_24h"):
-        return topic, None
+        return topic, None, raw
     ts = (lc(f"/topic/{tid}/time-series/v2", {"bucket": "day", "interval": "1m"}) or {}).get("data") or []
+    raw["series"] = ts
     series = [[p["time"], p.get("interactions") or 0, p.get("sentiment")] for p in ts if p.get("time")]
     posts = []
     if meta["posts"]:
-        for p in ((lc(f"/topic/{tid}/posts/v1") or {}).get("data") or [])[:40]:
+        raw["posts"] = (lc(f"/topic/{tid}/posts/v1") or {}).get("data") or []
+        for p in raw["posts"][:40]:
             if not p.get("post_link"):
                 continue
             posts.append({"t": (p.get("post_title") or p.get("post_description") or "")[:220], "u": p["post_link"],
@@ -143,7 +147,7 @@ def fetch(topic, meta):
         "series": series[-30:], "top": posts,
         "rel": [t for t in (d.get("related_topics") or []) if t not in STOP_TOPICS][:12],
         "link": f"https://lunarcrush.com/topic/{urllib.parse.quote(topic.replace(' ', '-'))}",
-    }
+    }, raw
 
 
 def main():
@@ -154,9 +158,10 @@ def main():
         print("social: skipped (runs once an hour)")
         return
     topics = topics_from_cycles()
-    out = {}
+    out, raw = {}, {}
     with cf.ThreadPoolExecutor(6) as ex:  # well under LunarCrush's 500 calls/minute
-        for topic, data in ex.map(lambda kv: fetch(*kv), topics.items()):
+        for topic, data, r in ex.map(lambda kv: fetch(*kv), topics.items()):
+            raw[topic] = r
             if data:
                 out[topic] = data
     # different spellings ("J.D. Vance", "JD Vance") can resolve to the same LunarCrush topic: keep one
@@ -171,6 +176,7 @@ def main():
             by_title[k] = topic
     gen = int(time.time())
     json.dump({"generated": gen, "source": "LunarCrush", "topics": out}, open(prev, "w"), separators=(",", ":"))
+    json.dump({"generated": gen, "topics": raw}, open(os.path.join(OUT, "lunarcrush_raw.json"), "w"), separators=(",", ":"))
     # daily rows for long-term history (last 2 days per topic; the first run backfills 30 days)
     first = "--backfill" in sys.argv
     rows = []

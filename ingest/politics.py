@@ -174,14 +174,14 @@ def main():
                         "kalshi": sum(1 for e in events if e["src"] == "k"), "polymarket": sum(1 for e in events if e["src"] == "p")}}
     json.dump(board, open(os.path.join(OUT, "politics.json"), "w"), separators=(",", ":"))
 
-    # D1: an hourly point per event (leading outcome) and first-seen times
+    # D1: an hourly point per event (leading outcome), kept forever, and first-seen times
+    # (archive.py also stores the whole board, every outcome, every run in R2)
     hour = int(NOW.timestamp()) // 3600 * 3600
     q = lambda s: "'" + str(s).replace("'", "''") + "'"
     lines = []
     for e in events:
         lines.append(f"INSERT OR REPLACE INTO politics_history (event_id, ts, p) VALUES ({q(e['id'])}, {hour}, {e['o'][0]['p']});")
         lines.append(f"INSERT OR IGNORE INTO politics_first_seen (event_id, title, topic, src, first_seen) VALUES ({q(e['id'])}, {q(e['title'][:200])}, {q(e['topic'])}, {q(e['src'])}, {int(NOW.timestamp())});")
-    lines.append(f"DELETE FROM politics_history WHERE ts < {hour - 30 * 86400};")
     open(os.path.join(OUT, "politics.sql"), "w").write("\n".join(lines) + "\n")
     print(f"politics: {len(events)} events ({board['totals']['kalshi']} Kalshi, {board['totals']['polymarket']} Polymarket), "
           f"${board['totals']['vol24']:,} traded in 24h; topics {by_topic}")
