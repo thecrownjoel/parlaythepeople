@@ -1,0 +1,68 @@
+---
+/** Campaign finance for a race page: each candidate's money from the FEC and outside spending for and against them. */
+import { raceFinance, fecName, fecUrl, partyLetter, usd, asOfReport, type FecCandidate } from "../lib/fec";
+import type { Race } from "../lib/markets";
+interface Props { race: Race; names: string[] }
+const { race, names } = Astro.props;
+const field = await raceFinance(race);
+// the candidates the markets name first, then the rest of the field by money raised; long shots under $10K left out
+const lastOf = (n: string) => n.trim().split(/\s+/).pop()!.toLowerCase().replace(/[^a-z]/g, "");
+const marketLast = new Set(names.map(lastOf));
+const isMarket = (c: FecCandidate) => marketLast.has(c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "").split(/\s+/).pop() ?? "");
+const rows = (field ?? []).filter((c) => isMarket(c) || c.receipts >= 10_000).sort((a, b) => Number(isMarket(b)) - Number(isMarket(a)) || b.receipts - a.receipts).slice(0, 8);
+const latest = rows.map((c) => c.coverage_end).filter(Boolean).sort().pop() ?? null;
+const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open seat" : x === "C" ? "Challenger" : "");
+---
+<section aria-labelledby="fin-h">
+	<h2 id="fin-h">Campaign finance</h2>
+	{field === null ? (
+		<p class="sec-note">Candidates for governor report to their states, not the FEC, so there's no federal fundraising data for this race.</p>
+	) : rows.length === 0 ? (
+		<p class="sec-note">No FEC filings for this seat yet.</p>
+	) : (
+		<>
+			<p class="sec-note">Money each campaign has raised and has left, through {asOfReport(latest)}, and outside spending by super PACs, parties and groups. From the FEC, updated daily.</p>
+			<div class="fin-scroll">
+				<table class="fin">
+					<thead><tr><th scope="col">Candidate</th><th scope="col">Raised</th><th scope="col">Spent</th><th scope="col">Cash on hand</th><th scope="col">Outside for</th><th scope="col">Outside against</th></tr></thead>
+					<tbody>
+						{rows.map((c) => (
+							<tr class={isMarket(c) ? "fin-mk" : undefined}>
+								<th scope="row"><a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a> <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
+								<td>{usd(c.receipts)}</td><td>{usd(c.disbursements)}</td><td><b>{usd(c.cash)}</b></td>
+								<td>{c.support ? usd(c.support) : "—"}</td><td>{c.oppose ? usd(c.oppose) : "—"}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{rows.some((c) => c.spenders.length) && (
+				<details class="fin-who">
+					<summary>Who's spending outside the campaigns</summary>
+					<ul>
+						{rows.flatMap((c) => c.spenders.slice(0, 3).map((s) => (
+							<li><b>{s.name}</b>: {s.support ? `${usd(s.support)} for` : ""}{s.support && s.oppose ? ", " : ""}{s.oppose ? `${usd(s.oppose)} against` : ""} {fecName(c.name)}</li>
+						)))}
+					</ul>
+				</details>
+			)}
+		</>
+	)}
+</section>
+
+<style>
+	.fin-scroll { overflow-x: auto; }
+	.fin { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+	.fin th, .fin td { padding: 9px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: right; white-space: nowrap; }
+	.fin th:first-child { text-align: left; white-space: normal; }
+	.fin thead th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+	.fin tbody th { font-weight: 500; }
+	.fin a { color: var(--color-text); }
+	.fin-mk th a { font-weight: 700; }
+	.fin-p { font: 700 10.5px var(--font-mono), monospace; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+	.fin-D { color: #fff; background: var(--bt-d, #2f6bd8); } .fin-R { color: #fff; background: var(--bt-r, #d8432f); } .fin-I, .fin-o { background: var(--color-border); }
+	.fin-ici { display: block; font-size: 11.5px; color: var(--color-muted); }
+	.fin-who { margin-top: 10px; font-size: 14px; }
+	.fin-who summary { cursor: pointer; color: var(--color-text-secondary); }
+	.fin-who ul { margin: 8px 0 0; padding-left: 18px; }
+</style>

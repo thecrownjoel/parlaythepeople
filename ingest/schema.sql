@@ -148,3 +148,22 @@ CREATE TABLE IF NOT EXISTS politics_first_seen (
   first_seen INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS politics_first_seen_ts ON politics_first_seen (first_seen);
+
+-- Campaign finance from the FEC's bulk files (ingest/fec.py, daily): every House and Senate candidate running this cycle,
+-- with totals through their latest report, and outside spending for or against them. Replaced each day.
+CREATE TABLE IF NOT EXISTS fec_candidates (
+  cand_id TEXT NOT NULL, cycle INTEGER NOT NULL,
+  name TEXT, party TEXT, office TEXT, state TEXT, district TEXT, ici TEXT,  -- ici: I incumbent, C challenger, O open seat
+  receipts REAL, disbursements REAL, cash REAL, debts REAL,
+  indiv REAL, pac REAL, party_contrib REAL, self_funding REAL,             -- where the money came from
+  coverage_end TEXT, updated INTEGER,
+  PRIMARY KEY (cand_id, cycle)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS fec_candidates_seat ON fec_candidates (cycle, office, state, district);
+CREATE TABLE IF NOT EXISTS fec_outside (
+  cand_id TEXT NOT NULL, cycle INTEGER NOT NULL,
+  support REAL, oppose REAL, n INTEGER,
+  top_spenders TEXT,            -- up to 5: "name~support~oppose|…"
+  updated INTEGER,
+  PRIMARY KEY (cand_id, cycle)
+) WITHOUT ROWID;

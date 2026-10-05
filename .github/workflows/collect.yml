@@ -36,6 +36,8 @@ jobs:
         run: python3 ingest/news.py || echo "news fetch failed; keeping the previous headlines"
       - name: Public polls from Wikipedia's race pages (every 6 hours)
         run: python3 ingest/polls.py || echo "polls fetch failed; keeping the previous polls"
+      - name: Campaign finance from the FEC (daily)
+        run: python3 ingest/fec.py || echo "fec step failed; keeping yesterday's figures"
       - name: Parlay estimates (hourly)
         run: python3 ingest/model/forecast.py || echo "forecast step failed"
       - name: Race results once the exchanges settle (hourly, after Election Day)

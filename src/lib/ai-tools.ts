@@ -3,6 +3,7 @@
  * searches the research documents through Cloudflare AI Search. Every tool is read-only.
  */
 import { env } from "cloudflare:workers";
+import { raceFinance, fecName, fecUrl } from "./fec";
 import { getIndex, getCycle, consensus, shares, candidate, officeTitle, RATING_LABEL, type Race, type CycleData } from "./markets";
 import { racesAt, moversSince, leadChangesSince } from "./trends";
 import { moneySince, biggestTrades, raceMoneyByDay } from "./money";
@@ -80,6 +81,11 @@ export const TOOLS = [
 		name: "polls",
 		description: "Public polls of a race's general election (from Wikipedia's lists, each citing the pollster's release) and the Parlay polling average: each pollster's latest poll from the last 30 days, weighted by recency and sample, partisan polls halved. Compare with market odds: a 3-point poll lead is not a 60% chance.",
 		input_schema: { type: "object", properties: { race_id: { type: "string" }, limit: { type: "integer", default: 12 } }, required: ["race_id"] },
+	},
+	{
+		name: "campaign_finance",
+		description: "FEC campaign finance for a House or Senate race: each candidate's money raised, spent, cash on hand and debts through their latest report, where it came from (individuals, PACs, party, self-funding), and outside spending for or against them with the biggest outside spenders. Updated daily. Governors report to their states, so governor races have no FEC data.",
+		input_schema: { type: "object", properties: { race_id: { type: "string" } }, required: ["race_id"] },
 	},
 	{
 		name: "search_research",
@@ -178,6 +184,25 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 				return { ...summary(r), kalshi_D: r3(kd), polymarket_D: r3(pd), gap: r3(Math.abs(kd - pd)), richer_for_D: kd > pd ? "Kalshi" : "Polymarket", kalshi_traded_usd: usd(r.k?.v), polymarket_traded_usd: usd(r.p?.v) };
 			}).filter((x) => (x.gap ?? 0) >= minGap).sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0)).slice(0, 15);
 			return { cycle: data.meta.cycle, min_gap: minGap, races: rows, note: "Odds are each exchange's two-party Democratic share. Thin markets (little money traded) often show the widest gaps." };
+		}
+		case "campaign_finance": {
+			const id = String(input.race_id ?? "");
+			const m = /^(\d{4})-/.exec(id);
+			const race = m ? (await getCycle(Number(m[1])))?.races.find((r) => r.id === id) : null;
+			if (!race) return { error: `Unknown race_id ${id}. Use find_races first.` };
+			const field = await raceFinance(race);
+			if (field === null) return { race_id: id, note: "Governor candidates report to their states, not the FEC; there is no federal finance data for this race." };
+			return {
+				race_id: id, source: "FEC bulk filings, updated daily",
+				candidates: field.filter((c) => c.receipts >= 10_000).slice(0, 8).map((c) => ({
+					name: fecName(c.name), party: c.party, status: c.ici === "I" ? "incumbent" : c.ici === "O" ? "open seat" : "challenger",
+					through: c.coverage_end, raised_usd: Math.round(c.receipts), spent_usd: Math.round(c.disbursements), cash_on_hand_usd: Math.round(c.cash), debts_usd: Math.round(c.debts),
+					from_individuals_usd: Math.round(c.indiv), from_pacs_usd: Math.round(c.pac), from_party_usd: Math.round(c.party_contrib), self_funding_usd: Math.round(c.self_funding),
+					outside_for_usd: Math.round(c.support ?? 0), outside_against_usd: Math.round(c.oppose ?? 0),
+					top_outside_spenders: c.spenders.map((x) => ({ name: x.name, for_usd: x.support, against_usd: x.oppose })),
+					fec_page: fecUrl(c.cand_id),
+				})),
+			};
 		}
 		case "polls": {
 			const all = await pollsFor(String(input.race_id ?? ""));

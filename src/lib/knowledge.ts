@@ -18,13 +18,27 @@ import { getSocial, pulseIndex, compact, type Pulse } from "./social";
 import { parlayD, MODEL } from "./model";
 import { dailyReport, dailySummary, isoDate } from "./daily";
 import { average, marginText, type Poll } from "./polls";
+import { fecName, usd, type FecCandidate } from "./fec";
+
+/** Every FEC candidate in a cycle, by seat ("S-ME", "H-CA-30"), most money first. */
+async function fecBySeat(cycle: number) {
+	const out = new Map<string, FecCandidate[]>();
+	try {
+		const { results } = await env.MARKETS.prepare("SELECT c.*, o.support, o.oppose FROM fec_candidates c LEFT JOIN fec_outside o ON o.cand_id = c.cand_id AND o.cycle = c.cycle WHERE c.cycle = ? ORDER BY c.receipts DESC").bind(cycle).all<any>();
+		for (const c of results ?? []) {
+			const k = c.office === "S" ? `S-${c.state}` : `H-${c.state}-${c.district}`;
+			out.set(k, [...(out.get(k) ?? []), { ...c, spenders: [] }]);
+		}
+	} catch { /* no finance data yet */ }
+	return out;
+}
 
 const DAY = 86400;
 interface Doc { key: string; body: string; meta: Record<string, string> }
 
 const pts = (d: number) => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts`;
 
-function raceDoc(r: Race, o: { origin: string; eday: string; ago7?: number; ago30?: number; m7?: number; find: ReturnType<typeof pulseIndex>; news: { title: string; source: string | null; url: string; published: number | null }[]; polls?: Poll[] }): Doc {
+function raceDoc(r: Race, o: { fec?: FecCandidate[]; origin: string; eday: string; ago7?: number; ago30?: number; m7?: number; find: ReturnType<typeof pulseIndex>; news: { title: string; source: string | null; url: string; published: number | null }[]; polls?: Poll[] }): Doc {
 	const c = consensus(r);
 	const ks = shares(r.k), ps = shares(r.p);
 	const est = r.kind !== "control" ? parlayD(c.D, c.R) : null;
@@ -62,6 +76,12 @@ function raceDoc(r: Race, o: { origin: string; eday: string; ago7?: number; ago3
 			for (const post of (p.top ?? []).slice(0, 3)) lines.push(`- Top post (${post.net ?? "social"}${post.by ? `, ${post.by}` : ""}): "${post.t.slice(0, 200)}" ${post.u}`);
 		}
 	}
+	const money = (o.fec ?? []).filter((c) => c.receipts >= 50_000).slice(0, 6);
+	if (money.length) {
+		lines.push("");
+		lines.push(`## Campaign finance (FEC, through ${money[0].coverage_end ?? "the latest report"})`);
+		for (const c of money) lines.push(`- ${fecName(c.name)} (${c.party ?? "no party"}${c.ici === "I" ? ", incumbent" : ""}): raised ${usd(c.receipts)}, spent ${usd(c.disbursements)}, ${usd(c.cash)} cash on hand${c.support || c.oppose ? `; outside groups spent ${usd(c.support)} for and ${usd(c.oppose)} against` : ""}.`);
+	}
 	const names = [dName, rName].filter(Boolean).map((n) => n!.split(/\s+/).pop()!.toLowerCase()).filter((n) => n.length > 3);
 	const hits = names.length ? o.news.filter((n) => names.some((w) => n.title.toLowerCase().includes(w))).slice(0, 8) : [];
 	if (hits.length) {
@@ -96,8 +116,10 @@ export async function buildKnowledge(origin = "https://parlaythepeople.com"): Pr
 	for (const cy of index?.cycles ?? []) {
 		const data = await getCycle(cy.year);
 		if (!data) continue;
+		const seats = await fecBySeat(cy.year);
 		for (const r of data.races) {
-			docs.push(raceDoc(r, { origin, eday: data.meta.election_day, ago7: at7.get(r.id)?.D, ago30: at30.get(r.id)?.D, m7: m7.get(r.id)?.usd, find, news, polls: pollsBy.get(r.id) }));
+			const seat = r.kind === "senate" ? `S-${r.st}` : r.kind === "house" ? `H-${r.st}-${/^\d+$/.test(r.dist ?? "") ? r.dist!.padStart(2, "0") : "00"}` : "";
+			docs.push(raceDoc(r, { fec: seats.get(seat), origin, eday: data.meta.election_day, ago7: at7.get(r.id)?.D, ago30: at30.get(r.id)?.D, m7: m7.get(r.id)?.usd, find, news, polls: pollsBy.get(r.id) }));
 		}
 	}
 	// presidential markets: one document per cycle with every candidate's odds on both exchanges

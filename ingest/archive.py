@@ -92,7 +92,7 @@ def write_files(cyc):
     raw = []
     if datetime.datetime.fromtimestamp(NOW, datetime.timezone.utc).minute < 10:  # exchange pulls hourly (large)
         raw += glob.glob(os.path.join(OUT, "raw", "*.json"))
-    raw += [f for f in (os.path.join(OUT, "politics.json"), os.path.join(OUT, "lunarcrush_raw.json"))
+    raw += [f for f in [os.path.join(OUT, "politics.json"), os.path.join(OUT, "lunarcrush_raw.json")] + glob.glob(os.path.join(OUT, "fec_raw", "*"))
             if os.path.exists(f) and NOW - os.path.getmtime(f) < FRESH]
     for f in raw:
         with open(f, "rb") as src, gzip.open(os.path.join(ARC, f"raw-{os.path.basename(f)}.gz"), "wb") as dst:
