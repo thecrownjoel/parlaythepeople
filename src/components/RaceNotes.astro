@@ -14,7 +14,7 @@ const { raceId } = Astro.props;
 		const race = el.dataset.notes!;
 		const list = el.querySelector<HTMLElement>("[data-rn-list]")!;
 		const load = async () => {
-			const j = await fetch(`/api/notes?race=${race}`).then((r) => r.json()).catch(() => ({ notes: null }));
+			const j: any = await fetch(`/api/notes?race=${race}`).then((r) => r.json()).catch(() => ({ notes: null }));
 			if (!j.notes) return;
 			el.hidden = false;
 			el.querySelector<HTMLElement>("[data-rn-who]")!.textContent = j.team ? `Shared with everyone on ${j.team}.` : "Only you can see these.";
@@ -24,12 +24,14 @@ const { raceId } = Astro.props;
 				meta.textContent = `${n.email} · ${new Date(n.ts * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
 				const p = document.createElement("p");
 				p.textContent = n.body;
-				li.append(meta, p);
+				li.appendChild(meta);
+				li.appendChild(p);
 				if (n.user_id === j.me || j.owner) {
 					const b = document.createElement("button");
 					b.type = "button"; b.textContent = "Delete";
 					b.addEventListener("click", async () => { await send({ delete: n.id }); load(); });
-					meta.append(" ", b);
+					meta.appendChild(document.createTextNode(" "));
+					meta.appendChild(b);
 				}
 				return li;
 			}));

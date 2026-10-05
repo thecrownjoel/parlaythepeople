@@ -67,7 +67,7 @@ const racePath = (id: string) => { const [y, office, ...rest] = id.split("-"); r
 </Base>
 
 <script>
-	const post = (body: object) => fetch("/api/team/members", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }));
+	const post = (body: object) => fetch("/api/team/members", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: (await r.json().catch(() => ({}))) as any }));
 	const WHY: Record<string, string> = { seats_full: "All seats are in use.", already_member: "They're already on the team.", other_team: "That email belongs to another team.", email: "Check the email address." };
 	document.querySelector<HTMLFormElement>("[data-invite]")?.addEventListener("submit", async (e) => {
 		e.preventDefault();
