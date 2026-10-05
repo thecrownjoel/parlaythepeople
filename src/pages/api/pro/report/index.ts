@@ -6,6 +6,7 @@ import { reportHtml, renderPdf } from "../../../../lib/report";
 import { getIndex, getCycle, officeTitle } from "../../../../lib/markets";
 import { costUsd } from "../../../../lib/plans";
 import { readJson } from "../../auth/_json";
+import { orgOf, notesFor } from "../../../../lib/team";
 
 /**
  * POST {race_id} (Pro) → text/event-stream: {type:"status"} while the Deep analysis runs and the PDF renders, then
@@ -27,6 +28,13 @@ export const POST: APIRoute = async ({ request, cookies, url }) => {
 	}
 	if (!found) return Response.json({ error: "no_race" }, { status: 404 });
 	const { race, eday } = found;
+	// memo branding: who it's prepared for (the team by default), an optional title, and the team's notes if asked
+	const org = await orgOf(a.user);
+	const memo = {
+		preparedFor: String(body?.prepared_for ?? org?.name ?? "").trim().slice(0, 80) || null,
+		title: String(body?.title ?? "").trim().slice(0, 120) || null,
+		notes: body?.notes ? (await notesFor(a.subject, race.id, 20)).reverse() : [],
+	};
 	const model = a.plan.model.deep;
 	const event = await charge(a, "report", model);
 	const user = a.user;
@@ -44,7 +52,7 @@ export const POST: APIRoute = async ({ request, cookies, url }) => {
 				});
 				if (!r.ok) throw new Error("analysis incomplete");
 				send({ type: "status", text: "Laying out the PDF" });
-				const pdf = await renderPdf(await reportHtml(race, eday, r.text, url.origin));
+				const pdf = await renderPdf(await reportHtml(race, eday, r.text, url.origin, memo));
 				const id = randomToken(12);
 				const key = `reports/${user.id}/${id}.pdf`;
 				await env.DATA.put(key, pdf, { httpMetadata: { contentType: "application/pdf" } });

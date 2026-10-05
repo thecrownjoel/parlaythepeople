@@ -4,7 +4,13 @@ interface Props { id: string }
 const { id } = Astro.props;
 ---
 <div class="rpt" data-report={id}>
-	<button type="button" class="rpt-btn" data-rpt-go hidden>Download PDF report</button>
+	<button type="button" class="rpt-btn" data-rpt-go hidden>Download PDF memo</button>
+	<details class="rpt-opts" data-rpt-opts hidden>
+		<summary>Memo options</summary>
+		<label>Prepared for <input type="text" maxlength="80" placeholder="Your campaign or client" data-rpt-for /></label>
+		<label>Title <input type="text" maxlength="120" placeholder="e.g. Where the Maine Senate race stands" data-rpt-title /></label>
+		<label class="rpt-chk"><input type="checkbox" data-rpt-notes /> Include our notes on this race</label>
+	</details>
 	<a class="rpt-btn rpt-ghost" href="/pro/" data-rpt-pro hidden>PDF report · Pro</a>
 	<span class="rpt-status" data-rpt-status aria-live="polite"></span>
 </div>
@@ -13,14 +19,14 @@ const { id } = Astro.props;
 		const go = box.querySelector<HTMLButtonElement>("[data-rpt-go]")!;
 		const status = box.querySelector<HTMLElement>("[data-rpt-status]")!;
 		fetch("/api/v1/ai/chat").then((r) => r.json() as Promise<{ deep?: boolean; unit?: string }>).then((j) => {
-			if (j.deep) { go.hidden = false; go.title = "About 15¢ of AI: a Deep analysis with charts, as a PDF"; }
+			if (j.deep) { go.hidden = false; box.querySelector<HTMLElement>("[data-rpt-opts]")!.hidden = false; go.title = "About 15¢ of AI: a Deep analysis with charts, money and polls, as a PDF"; }
 			else box.querySelector<HTMLElement>("[data-rpt-pro]")!.hidden = false;
 		}).catch(() => {});
 		go.addEventListener("click", async () => {
 			go.disabled = true;
 			status.textContent = "Starting the analysis… this takes two or three minutes.";
 			try {
-				const r = await fetch("/api/pro/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ race_id: box.dataset.report }) });
+				const r = await fetch("/api/pro/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ race_id: box.dataset.report, prepared_for: box.querySelector<HTMLInputElement>("[data-rpt-for]")!.value || undefined, title: box.querySelector<HTMLInputElement>("[data-rpt-title]")!.value, notes: box.querySelector<HTMLInputElement>("[data-rpt-notes]")!.checked }) });
 				if (!r.ok || !r.body) throw new Error(r.status === 429 ? "Your AI balance is used up. Top it up on your account page." : "The report couldn't start. Please try again.");
 				const reader = r.body.getReader();
 				const dec = new TextDecoder();
@@ -54,5 +60,10 @@ const { id } = Astro.props;
 	.rpt-ghost { background: none; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
 	.rpt-btn:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
 	.rpt-status { font-size: 13px; color: var(--color-text-secondary); }
+	.rpt-opts { font-size: 13.5px; }
+	.rpt-opts[hidden] { display: none; }
+	.rpt-opts summary { cursor: pointer; color: var(--color-text-secondary); }
+	.rpt-opts label { display: block; margin: 6px 0; }
+	.rpt-opts input[type="text"] { display: block; width: min(100%, 320px); margin-top: 3px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; }
 	.rpt-status :global(a) { color: #8fb4ff; }
 </style>

@@ -67,3 +67,20 @@ export const usd = (x: number | null | undefined) => {
 };
 export const asOfReport = (iso: string | null) =>
 	iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "the latest report";
+
+/**
+ * The finance rows to show for a race: the candidates the markets name first, then the rest of the field by money
+ * raised (long shots under $10K left out), up to `max`; `missing` = market-named candidates with no FEC report yet.
+ */
+export function financeRows(field: FecCandidate[] | null, names: string[], max = 8) {
+	const lastOf = (n: string) => n.trim().split(/\s+/).pop()!.toLowerCase().replace(/[^a-z]/g, "");
+	const fecLast = (c: FecCandidate) => c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "");
+	const wanted = new Set(names.map(lastOf));
+	const isMarket = (c: FecCandidate) => wanted.has(fecLast(c));
+	const all = (field ?? []).filter((c) => isMarket(c) || c.receipts >= 10_000);
+	const market = all.filter(isMarket);
+	const covered = new Set(market.map(fecLast));
+	const missing = field ? names.filter((n) => !covered.has(lastOf(n))) : [];
+	const rest = all.filter((c) => !isMarket(c)).slice(0, Math.max(2, max - market.length - missing.length));
+	return { market, missing, rest };
+}

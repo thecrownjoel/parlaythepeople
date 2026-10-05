@@ -1,20 +1,12 @@
 ---
 /** Campaign finance for a race page: each candidate's money from the FEC and outside spending for and against them. */
-import { raceFinance, fecName, fecUrl, partyLetter, usd, asOfReport, type FecCandidate } from "../lib/fec";
+import { raceFinance, financeRows, fecName, fecUrl, partyLetter, usd, asOfReport } from "../lib/fec";
 import type { Race } from "../lib/markets";
 interface Props { race: Race; names: string[] }
 const { race, names } = Astro.props;
 const field = await raceFinance(race);
-// the candidates the markets name first, then the rest of the field by money raised; long shots under $10K left out
-const lastOf = (n: string) => n.trim().split(/\s+/).pop()!.toLowerCase().replace(/[^a-z]/g, "");
-const marketLast = new Set(names.map(lastOf));
-const isMarket = (c: FecCandidate) => marketLast.has(c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "").split(/\s+/).pop() ?? "");
-const rows = (field ?? []).filter((c) => isMarket(c) || c.receipts >= 10_000).sort((a, b) => Number(isMarket(b)) - Number(isMarket(a)) || b.receipts - a.receipts).slice(0, 8);
-// a nominee the markets name who hasn't filed a report yet (new or replacement candidates) still gets a row
-const covered = new Set(rows.map((c) => c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "")));
-const missing = field ? names.filter((n) => !covered.has(lastOf(n))) : [];
-const shown = rows.filter(isMarket).length + missing.length;
-const rest = rows.filter((c) => !isMarket(c)).slice(0, Math.max(2, 8 - shown));
+const { market, missing, rest } = financeRows(field, names);
+const rows = [...market, ...rest];
 const latest = rows.map((c) => c.coverage_end).filter(Boolean).sort().pop() ?? null;
 const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open seat" : x === "C" ? "Challenger" : "");
 ---
@@ -31,7 +23,7 @@ const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open s
 				<table class="fin">
 					<thead><tr><th scope="col">Candidate</th><th scope="col">Raised</th><th scope="col">Spent</th><th scope="col">Cash on hand</th><th scope="col">Outside for</th><th scope="col">Outside against</th></tr></thead>
 					<tbody>
-						{rows.filter(isMarket).map((c, _i, _a, mk = true) => (
+						{market.map((c, _i, _a, mk = true) => (
 							<tr class={mk ? "fin-mk" : undefined}>
 								<th scope="row"><a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a> <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
 								<td>{usd(c.receipts)}</td><td>{usd(c.disbursements)}</td><td><b>{usd(c.cash)}</b></td>
