@@ -1,0 +1,126 @@
+---
+/**
+ * Compare races side by side: /compare/?races=2026-senate-maine,2026-senate-iowa (up to 4).
+ * Odds on each exchange, rating, money traded, polls, campaign cash, outside spending and buzz, with one chart.
+ */
+import Base from "../../layouts/Base.astro";
+import MultiChart from "../../components/MultiChart.astro";
+import { getIndex, getCycle, consensus, shares, candidate, pct, fmtVol, RATING_LABEL, officeTitle, type Race } from "../../lib/markets";
+import { raceFinance, financeRows, usd } from "../../lib/fec";
+import { pollAverage, marginText } from "../../lib/polls";
+import { getSocial, pulseIndex, racePulse } from "../../lib/social";
+import { moneySince } from "../../lib/money";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const index = await getIndex();
+const all: Race[] = [];
+let eday: string | undefined;
+for (const cy of index?.cycles ?? []) {
+	const d = await getCycle(cy.year);
+	if (!d) continue;
+	if (cy.year === index?.next) eday = d.meta.election_day;
+	all.push(...d.races);
+}
+const ids = (Astro.url.searchParams.get("races") ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 4);
+const races = ids.map((id) => all.find((r) => r.id === id)).filter((r): r is Race => !!r);
+const short = (r: Race) => (r.kind === "house" ? r.label : r.kind === "control" ? officeTitle(r) : `${r.st} ${r.kind === "senate" ? "Sen" : "Gov"}`);
+const COLORS = ["#5e92ee", "#e0b44f", "#4cc38a", "#ef7b6f"];
+const social = pulseIndex(await getSocial());
+const week = await moneySince(Math.floor(Date.now() / 1000) - 7 * 86400);
+const cols = await Promise.all(races.map(async (r, i) => {
+	const c = consensus(r), ks = shares(r.k), ps = shares(r.p);
+	const lead = c.lead === "I" ? "D" : c.lead;
+	const names = [candidate(r, "D"), candidate(r, "R")].filter((n): n is string => !!n);
+	const fin = r.kind === "control" ? null : financeRows(await raceFinance(r), names, 4);
+	const cash = (p: "D" | "R") => fin?.market.find((x) => (x.party === "DEM" ? "D" : x.party === "REP" ? "R" : "I") === p) ?? null;
+	const polls = r.kind === "control" ? null : await pollAverage(r.id);
+	const rp = r.kind === "control" ? null : racePulse(r, social);
+	return {
+		r, c, ks, ps, color: COLORS[i], fav: `${candidate(r, c.lead) ?? (c.lead === "D" ? "Democrat" : c.lead === "R" ? "Republican" : "Independent")} (${c.lead})`,
+		traded: (r.k?.v ?? 0) + (r.p?.v ?? 0), week: week.get(r.id)?.usd ?? 0,
+		polls: polls ? marginText(polls) : "—",
+		cashD: cash("D"), cashR: cash("R"),
+		outside: fin ? [...fin.market].reduce((a, x) => a + (x.support ?? 0) + (x.oppose ?? 0), 0) : 0,
+		buzz: rp?.sovD != null ? `${Math.round(rp.sovD * 100)}% of the talk is about the Democrat` : "—",
+		spec: { kind: "race" as const, id: r.id, key: lead, label: `${short(r)}: ${lead === "D" ? "Dem" : "Rep"} odds`, color: COLORS[i] },
+	};
+}));
+const options = all.filter((r) => r.cycle >= (index?.next ?? 0)).map((r) => ({ id: r.id, label: `${r.cycle} ${officeTitle(r)}` }));
+const title = races.length ? `Compare: ${races.map(short).join(" vs. ")}` : "Compare races";
+---
+<Base title={`${title} | ${SITE_NAME}`} description="Compare election races side by side: odds on Kalshi and Polymarket, ratings, money traded, polls, campaign cash and outside spending." canonical={`${Astro.url.origin}/compare/`} robots={races.length ? "noindex, follow" : undefined}>
+	<div class="dp" style="max-width:1100px">
+		<header class="dp-head">
+			<p class="eyebrow">Compare</p>
+			<h1>{races.length ? races.map(short).join(" · ") : "Compare races side by side"}</h1>
+			<p class="lede">Pick up to four races to line up their odds, money, polls and buzz. Share the address to send the same view to your team.</p>
+			<form class="cp-pick" data-pick>
+				<input list="cp-races" placeholder="Add a race: Maine Senate, TX-15, Ohio governor…" aria-label="Add a race" data-pick-input />
+				<datalist id="cp-races">{options.map((o) => <option value={o.label} data-id={o.id} />)}</datalist>
+				<button type="submit">Add</button>
+			</form>
+			{races.length > 0 && <p class="cp-chips">{races.map((r) => <a href={`/compare/?races=${races.filter((x) => x.id !== r.id).map((x) => x.id).join(",")}`} title="Remove">{short(r)} ×</a>)}</p>}
+		</header>
+
+		{races.length > 0 && (
+			<>
+				<section class="panel">
+					<div class="fin-scroll">
+						<table class="cp">
+							<thead><tr><th scope="col"></th>{cols.map((x) => <th scope="col" style={`border-top:3px solid ${x.color}`}><a href={x.r.path}>{x.r.cycle} {officeTitle(x.r)}</a></th>)}</tr></thead>
+							<tbody>
+								<tr><th scope="row">Favorite</th>{cols.map((x) => <td><b>{x.fav}</b> {pct(x.c.lp)}</td>)}</tr>
+								<tr><th scope="row">Rating</th>{cols.map((x) => <td>{RATING_LABEL[x.c.rating]}</td>)}</tr>
+								<tr><th scope="row">Kalshi (D / R)</th>{cols.map((x) => <td>{x.ks ? `${pct(x.ks.D)} / ${pct(x.ks.R)}` : "—"}</td>)}</tr>
+								<tr><th scope="row">Polymarket (D / R)</th>{cols.map((x) => <td>{x.ps ? `${pct(x.ps.D)} / ${pct(x.ps.R)}` : "—"}</td>)}</tr>
+								<tr><th scope="row">Traded, all time</th>{cols.map((x) => <td>{fmtVol(x.traded)}</td>)}</tr>
+								<tr><th scope="row">Traded, past week</th>{cols.map((x) => <td>{fmtVol(x.week)}</td>)}</tr>
+								<tr><th scope="row">Polling average</th>{cols.map((x) => <td>{x.polls}</td>)}</tr>
+								<tr><th scope="row">Democrat's cash on hand</th>{cols.map((x) => <td>{x.cashD ? usd(x.cashD.cash) : "—"}</td>)}</tr>
+								<tr><th scope="row">Republican's cash on hand</th>{cols.map((x) => <td>{x.cashR ? usd(x.cashR.cash) : "—"}</td>)}</tr>
+								<tr><th scope="row">Outside spending</th>{cols.map((x) => <td>{x.outside ? usd(x.outside) : "—"}</td>)}</tr>
+								<tr><th scope="row">Social buzz</th>{cols.map((x) => <td>{x.buzz}</td>)}</tr>
+							</tbody>
+						</table>
+					</div>
+					<p class="sec-note">Cash on hand from each nominee's latest FEC report (governors report to their states). Buzz from LunarCrush.</p>
+				</section>
+				<section class="panel">
+					<h2>Odds over time</h2>
+					<MultiChart specs={cols.map((x) => x.spec)} title="Favorite's odds" electionDay={eday} />
+				</section>
+			</>
+		)}
+	</div>
+</Base>
+
+<script>
+	const form = document.querySelector<HTMLFormElement>("[data-pick]");
+	form?.addEventListener("submit", (e) => {
+		e.preventDefault();
+		const input = form.querySelector<HTMLInputElement>("[data-pick-input]")!;
+		const opt = [...document.querySelectorAll<HTMLOptionElement>("#cp-races option")].find((o) => o.value.toLowerCase() === input.value.trim().toLowerCase())
+			?? [...document.querySelectorAll<HTMLOptionElement>("#cp-races option")].find((o) => o.value.toLowerCase().includes(input.value.trim().toLowerCase()));
+		if (!opt) { input.setCustomValidity("Pick a race from the list"); input.reportValidity(); return; }
+		const ids = (new URLSearchParams(location.search).get("races") ?? "").split(",").filter(Boolean);
+		if (!ids.includes(opt.dataset.id!)) ids.push(opt.dataset.id!);
+		location.search = `?races=${ids.slice(-4).join(",")}`;
+	});
+	form?.querySelector("input")?.addEventListener("input", (e) => (e.target as HTMLInputElement).setCustomValidity(""));
+</script>
+
+<style>
+	.cp-pick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+	.cp-pick input { flex: 1; min-width: 260px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; }
+	.cp-pick button { padding: 0 16px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font-weight: 600; cursor: pointer; }
+	.cp-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+	.cp-chips a { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-border); color: var(--color-text-secondary); text-decoration: none; font-size: 13px; }
+	.fin-scroll { overflow-x: auto; }
+	.cp { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+	.cp th, .cp td { padding: 9px 10px; border-bottom: 1px solid var(--color-border-subtle); text-align: left; vertical-align: top; }
+	.cp thead th { font-size: 14px; }
+	.cp thead a { color: var(--color-text); }
+	.cp tbody th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); white-space: nowrap; }
+</style>

@@ -53,12 +53,26 @@ export async function fecCandidate(id: string, cycle: number): Promise<FecCandid
 	}
 }
 
-/** The FEC record for a market's candidate name, matched on last name within the race's field. */
+/**
+ * Whether an FEC name ("ARENHOLZ, ASHLEY HINSON") is the person a market names ("Ashley Hinson"): the surname matches,
+ * or both the first and last names appear in it (married and legal names). First name required for the second rule,
+ * so "John James" doesn't match "SMITH, JAMES".
+ */
+export function sameCandidate(fec: string, market: string) {
+	const words = (s: string) => s.toLowerCase().replace(/[^a-z\s,-]/g, "").split(/[\s,-]+/).filter(Boolean);
+	const m = words(market).filter((w) => !["jr", "sr", "ii", "iii", "iv"].includes(w));
+	if (!m.length) return false;
+	const first = m[0], last = m[m.length - 1];
+	const surname = words(fec.split(",")[0]).join("");
+	if (surname === last || surname.endsWith(last)) return true;
+	const all = new Set(words(fec));
+	return m.length > 1 && all.has(last) && all.has(first);
+}
+
+/** The FEC record for a market's candidate name within the race's field. */
 export function matchFec(field: FecCandidate[], name: string | null) {
 	if (!name) return null;
-	const last = name.trim().split(/\s+/).pop()!.toLowerCase().replace(/[^a-z]/g, "");
-	const hits = field.filter((c) => c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "").endsWith(last));
-	return hits.sort((a, b) => b.receipts - a.receipts)[0] ?? null;
+	return field.filter((c) => sameCandidate(c.name, name)).sort((a, b) => b.receipts - a.receipts)[0] ?? null;
 }
 
 export const usd = (x: number | null | undefined) => {
@@ -73,14 +87,11 @@ export const asOfReport = (iso: string | null) =>
  * raised (long shots under $10K left out), up to `max`; `missing` = market-named candidates with no FEC report yet.
  */
 export function financeRows(field: FecCandidate[] | null, names: string[], max = 8) {
-	const lastOf = (n: string) => n.trim().split(/\s+/).pop()!.toLowerCase().replace(/[^a-z]/g, "");
-	const fecLast = (c: FecCandidate) => c.name.split(",")[0].toLowerCase().replace(/[^a-z]/g, "");
-	const wanted = new Set(names.map(lastOf));
-	const isMarket = (c: FecCandidate) => wanted.has(fecLast(c));
+	const isMarket = (c: FecCandidate) => names.some((n) => sameCandidate(c.name, n));
 	const all = (field ?? []).filter((c) => isMarket(c) || c.receipts >= 10_000);
-	const market = all.filter(isMarket);
-	const covered = new Set(market.map(fecLast));
-	const missing = field ? names.filter((n) => !covered.has(lastOf(n))) : [];
+	// one row per named candidate (the best-funded record, if someone filed twice)
+	const market = names.map((n) => all.filter((c) => sameCandidate(c.name, n)).sort((a, b) => b.receipts - a.receipts)[0]).filter((c): c is FecCandidate => !!c);
+	const missing = field ? names.filter((n) => !market.some((c) => sameCandidate(c.name, n))) : [];
 	const rest = all.filter((c) => !isMarket(c)).slice(0, Math.max(2, max - market.length - missing.length));
 	return { market, missing, rest };
 }

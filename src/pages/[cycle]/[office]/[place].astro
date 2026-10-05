@@ -320,6 +320,8 @@ import { parlayD } from "../../../lib/model";
 			<RaceActivity race={race} kalshi={kalshiByTicker} kalshiTickers={kalshiTickers} />
 		</section>
 
+		<p class="sec-note"><a href={`/compare/?races=${race.id}`}>Compare this race with others →</a></p>
+
 		<RaceNotes raceId={race.id} />
 
 		<EmbedCode src={`${origin}/embed/race/${race.id}/`} height={race.kind === "control" ? 200 : 210} />
