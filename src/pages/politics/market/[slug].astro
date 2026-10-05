@@ -39,7 +39,8 @@ const related = relatedMarkets(board, e);
 const question = e.title.trim().endsWith("?") ? e.title.trim() : `What are the odds for "${e.title.trim()}"?`;
 const q = e.title.replace(/\?$/, "").trim();
 const title = q.length <= 54 ? `${q}: odds` : q;
-const description = `${lede} Live ${exchangeName(e)} odds, updated every 10 minutes.`.slice(0, 300);
+// the market's own question first: keyword-rich, and unique even when similar markets share prices
+const description = `${e.title.replace(/\?$/, "")}: ${lede.replace(/^As of [^,]+, /, "")} Live ${exchangeName(e)} odds, updated every 10 minutes.`;
 const ld = graph(
 	organization(origin),
 	breadcrumbs(origin, [["Politics", "/politics/"], [topicName, topicPath], [e.title, path]]),

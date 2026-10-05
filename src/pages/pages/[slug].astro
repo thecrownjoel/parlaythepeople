@@ -28,12 +28,16 @@ const seo = getSeoMeta(page, {
 	siteUrl: Astro.url.origin,
 	path: Astro.url.pathname.replace(/\/$/, ""),
 });
+// pages without an SEO description in the admin fall back to their opening text
+const blocks: any[] = Array.isArray((page.data as any).content) ? (page.data as any).content : [];
+const opening = blocks.map((b) => (Array.isArray(b?.children) ? b.children.map((c: any) => c?.text ?? "").join("") : "")).filter(Boolean).join(" ").trim();
+const pageDescription = seo.description || (opening ? opening : `${(page.data as any).title ?? ""} on ${siteTitle}: election odds from Kalshi and Polymarket, campaign money, polls and analysis.`);
 ---
 
 <Base
 	title={seo.title}
 	pageTitle={seo.ogTitle}
-	description={seo.description}
+	description={pageDescription}
 	canonical={seo.canonical}
 	robots={seo.robots}
 	content={{ collection: "pages", id: page.data.id, slug }}
