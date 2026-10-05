@@ -1,0 +1,60 @@
+---
+/**
+ * Voting: /voting/. How to vote in every state, and how America has voted: every state's presidential margin, the
+ * popular vote and House seats, 1976-2024 (MEDSL). 2024 is free; earlier years are Pro (/api/v1/past).
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { getPresident, getHouseSeats, nationTiles, seatsBar, votingPath, PRES_YEARS, LATEST_PRES, marginWords, person } from "../../lib/history";
+import { STATES } from "../../lib/states";
+import { calendar, calDay } from "../../lib/calendar";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+import "../../styles/finance.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=3600");
+const origin = Astro.url.origin;
+const [pres, seats] = await Promise.all([getPresident(), getHouseSeats()]);
+const next = (await calendar(undefined, 400)).find((e) => e.kind === "election");
+const nat = pres?.national[LATEST_PRES];
+const lede = `How to vote in your state, and how every state has voted since 1976.${nat ? ` In ${LATEST_PRES}, ${person(nat.rn)} won the popular vote ${marginWords(nat).replace("R+", "by ")} points.` : ""}${next ? ` The next Election Day is ${calDay(next.date)}.` : ""}`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/"]]),
+	faq([
+		...(nat ? [[`Who won the ${LATEST_PRES} popular vote?`, `${person(nat.rn)} (R) won ${(nat.R / nat.T * 100).toFixed(1)}% to ${person(nat.dn)}'s (D) ${(nat.D / nat.T * 100).toFixed(1)}%, ${nat.R.toLocaleString()} votes to ${nat.D.toLocaleString()}, according to the MIT Election Data and Science Lab.`] as [string, string]] : []),
+		...(next ? [["When is the next election?", `Election Day is ${calDay(next.date)}.`] as [string, string]] : []),
+	]));
+---
+<Base title={`Voting: how to vote, and how every state has voted | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}/voting/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="fx">
+		<header class="fx-hero">
+			<p class="eyebrow">Voting</p>
+			<h1>Your vote, and how America voted</h1>
+			<p class="fx-lede">{lede}</p>
+		</header>
+
+		<section class="fx-sec">
+			<h2>How to vote in your state</h2>
+			<p class="fx-note">Registration, mail ballots, early voting and ID rules, with each state's official election office.</p>
+			<ul class="vx-states" data-pop>{Object.entries(STATES).map(([st, name]) => <li><a href={votingPath(st)}><b>{st}</b><span>{name}</span></a></li>)}</ul>
+		</section>
+
+		{pres && (
+			<section class="fx-sec" data-past="nation">
+				<h2>How every state voted</h2>
+				<p class="fx-note">The presidential winner's margin in each state. Tap a year to go back in time; tap a state for its counties and House races.</p>
+				<div class="vx-years" role="group" aria-label="Election year">{[...PRES_YEARS].reverse().map((y) => <button type="button" data-year={y} aria-pressed={y === LATEST_PRES ? "true" : "false"} data-lock={y === LATEST_PRES ? undefined : "time"}>{y}</button>)}</div>
+				<div data-past-body aria-live="polite" set:html={nationTiles(pres, LATEST_PRES) + (seats ? seatsBar(seats, LATEST_PRES) : "")} />
+				<p class="fx-legend" style="margin-top:12px"><span><i style="background:color-mix(in srgb, var(--bt-d) 90%, var(--color-surface))"></i>Democratic</span><span><i style="background:color-mix(in srgb, var(--bt-r) 90%, var(--color-surface))"></i>Republican</span><span>Darker = wider margin</span></p>
+			</section>
+		)}
+		<p class="fx-src">Results: <a href="https://electionlab.mit.edu/data" rel="noopener">MIT Election Data and Science Lab</a> (CC0) via Harvard Dataverse, and <a href="https://openelections.net/" rel="noopener">OpenElections</a>. Election offices: <a href="https://www.usa.gov/state-election-office" rel="noopener">USA.gov</a>.</p>
+	</div>
+</Base>
+
+<script>
+	import { motion } from "../../scripts/motion";
+	import { pastYears } from "../../scripts/past";
+	motion();
+	pastYears();
+</script>

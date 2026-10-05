@@ -1,6 +1,7 @@
 import { TOPIC_SLUG, getPolitics, marketPath } from "../lib/politics";
 import { allCandidates, candidatePath } from "../lib/candidates";
 import { STATES, statePath } from "../lib/states";
+import { votingPath } from "../lib/history";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { getIndex, getCycle } from "../lib/markets";
@@ -15,7 +16,8 @@ export const GET: APIRoute = async ({ url }) => {
 	urls.push([`${o}/daily/`, ""], [`${o}/politics/`, index?.generated ?? ""]);
 	for (const slug of Object.values(TOPIC_SLUG)) urls.push([`${o}/politics/${slug}/`, index?.generated ?? ""]);
 	urls.push([`${o}/track-record/`, ""], [`${o}/calendar/`, index?.generated ?? ""], [`${o}/results/2026/`, index?.generated ?? ""], [`${o}/states/`, index?.generated ?? ""], [`${o}/candidates/`, index?.generated ?? ""]);
-	for (const st of Object.keys(STATES)) urls.push([`${o}${statePath(st)}`, index?.generated ?? ""]);
+	for (const st of Object.keys(STATES)) urls.push([`${o}${statePath(st)}`, index?.generated ?? ""], [`${o}${votingPath(st)}`, ""]);
+	urls.push([`${o}/finance/`, index?.generated ?? ""], [`${o}/voting/`, ""]);
 	for (const c of await allCandidates()) urls.push([`${o}${candidatePath(c)}`, index?.generated ?? ""]);
 	// one page per politics market
 	const board = await getPolitics();
@@ -39,7 +41,10 @@ export const GET: APIRoute = async ({ url }) => {
 		if (!data) continue;
 		urls.push([`${o}/${cy.year}/`, data.meta.generated]);
 		if (data.pres.party || data.pres.winner) urls.push([`${o}/${cy.year}/president/`, data.meta.generated]);
-		for (const r of data.races) urls.push([`${o}${r.path}`, changed.get(r.id) ?? data.meta.generated]);
+		for (const r of data.races) {
+			urls.push([`${o}${r.path}`, changed.get(r.id) ?? data.meta.generated]);
+			if (r.kind === "senate" || r.kind === "house") urls.push([`${o}/finance/race/${r.id}/`, data.meta.generated]);
+		}
 	}
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
 		.map(([loc, mod]) => `<url><loc>${loc}</loc>${mod ? `<lastmod>${mod}</lastmod>` : ""}</url>`)

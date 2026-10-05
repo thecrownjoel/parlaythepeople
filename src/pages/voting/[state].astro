@@ -1,0 +1,105 @@
+---
+/**
+ * One state's voting page: /voting/maine/. How to vote (Democracy Works when connected, otherwise the state's official
+ * election office), key dates, and how the state has voted: presidential results and county maps (2024 free,
+ * 2000-2020 Pro), 2022 midterm county maps (OpenElections), Senate races and the House delegation.
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { STATES, stateFromSlug, statePath, stateView } from "../../lib/states";
+import { getPresident, getSenateHistory, getStateHistory, duelBar, countyMap, houseTable, senateList, PRES_YEARS, LATEST_PRES, LATEST_HOUSE, marginWords, person } from "../../lib/history";
+import { howToVote, hasDemocracyWorks } from "../../lib/democracyworks";
+import { calendar, calDay } from "../../lib/calendar";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import offices from "../../data/election-offices.json";
+import "../../styles/data.css";
+import "../../styles/finance.css";
+
+const st = stateFromSlug(Astro.params.state ?? "");
+if (!st) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=3600");
+const origin = Astro.url.origin;
+const name = STATES[st];
+const path = `/voting/${Astro.params.state}/`;
+const [pres, senate, h, how] = await Promise.all([getPresident(), getSenateHistory(), getStateHistory(st), howToVote(st)]);
+const office = (offices.offices as Record<string, string>)[name] ?? null;
+// election days only for years this state votes in (2027 is a handful of states)
+const cycles = new Set((await stateView(st)).races.map((r) => r.cycle));
+const dates = (await calendar(undefined, 400)).filter((e) => (e.kind === "election" && (cycles.has(Number(e.date.slice(0, 4))) || Number(e.date.slice(0, 4)) % 2 === 0)) || (e.st === st && e.kind !== "markets"));
+const p24 = pres?.states[st]?.[LATEST_PRES];
+const lastSen = senate?.[st]?.at(-1);
+const house = h?.house[LATEST_HOUSE];
+const lede = `How to vote in ${name}, and how ${name} has voted.${p24 ? ` In ${LATEST_PRES}, ${person(p24.D > p24.R ? p24.dn : p24.rn)} carried ${name} ${marginWords(p24).replace(/^[DR]\+/, "by ")} points.` : ""}${house ? ` Its House delegation after ${LATEST_HOUSE}: ${Object.values(house).filter((v) => v.w === "D").length} Democrats, ${Object.values(house).filter((v) => v.w === "R").length} Republicans.` : ""}`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/"], [name, path]]),
+	faq([
+		[`How do I vote in ${name}?`, `${name}'s official election office${office ? ` (${office})` : ""} lists how to register, request a mail ballot, find your polling place and what ID to bring.${dates[0] ? ` The next Election Day is ${calDay(dates[0].date)}.` : ""}`],
+		...(p24 ? [[`Who won ${name} in ${LATEST_PRES}?`, `${person(p24.D > p24.R ? p24.dn : p24.rn)} won ${name}'s ${LATEST_PRES} presidential vote, ${(Math.max(p24.D, p24.R) / p24.T * 100).toFixed(1)}% to ${(Math.min(p24.D, p24.R) / p24.T * 100).toFixed(1)}%.`] as [string, string]] : []),
+	]));
+---
+<Base title={`${name} voting: how to vote and past election results | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="fx">
+		<nav class="fx-src" aria-label="Breadcrumb"><a href="/voting/">Voting</a> › <a href={statePath(st)}>{name} races and odds</a></nav>
+		<header class="fx-hero">
+			<p class="eyebrow">{st} · Voting</p>
+			<h1>Voting in {name}</h1>
+			<p class="fx-lede">{lede}</p>
+		</header>
+
+		<section class="fx-sec">
+			<h2>How to vote</h2>
+			{how ? (
+				<div class="vx-how">
+					{how.deadlines.length > 0 && <div><h3 class="vx-h3">Deadlines</h3><ul>{how.deadlines.slice(0, 8).map((d) => <li><b>{calDay(d.date)}</b>: {d.label}</li>)}</ul></div>}
+					{how.byMail.length > 0 && <div><h3 class="vx-h3">Voting by mail</h3><ul>{how.byMail.slice(0, 8).map((x) => <li>{x}</li>)}</ul></div>}
+					{(how.inPerson.length > 0 || how.idRule) && <div><h3 class="vx-h3">Voting in person</h3><ul>{how.idRule && <li>{how.idRule}</li>}{how.inPerson.slice(0, 6).map((x) => <li>{x}</li>)}</ul></div>}
+					<p class="fx-src">From Democracy Works. Confirm with {how.contact ? <a href={how.contact} rel="noopener">the {how.office ?? "state election office"}</a> : "your state election office"}.</p>
+				</div>
+			) : (
+				<>
+					<p class="fx-note">{name}'s official election office is the place to register, check your registration, request a mail ballot, find your polling place and see what ID to bring.</p>
+					{office && <p><a class="vx-cta" href={office} rel="noopener" target="_blank">{name} election office →</a></p>}
+				</>
+			)}
+			{dates.length > 0 && <ul class="mk-rel vx-dates">{dates.slice(0, 4).map((e) => <li><span>{e.title}</span><b>{calDay(e.date)}</b></li>)}</ul>}
+			{!hasDemocracyWorks() && <p class="fx-src">Election offices from <a href="https://www.usa.gov/state-election-office" rel="noopener">USA.gov</a>.</p>}
+		</section>
+
+		{pres && h && (
+			<section class="fx-sec" data-past="state" data-st={st}>
+				<h2>How {name} has voted for president</h2>
+				<p class="fx-note">The statewide result and every county. Tap a year to go back to 1976 (counties from 2000).</p>
+				<div class="vx-years" role="group" aria-label="Election year">{[...PRES_YEARS].reverse().map((y) => <button type="button" data-year={y} aria-pressed={y === LATEST_PRES ? "true" : "false"} data-lock={y === LATEST_PRES ? undefined : "time"}>{y}</button>)}</div>
+				<div data-past-body aria-live="polite" set:html={(p24 ? duelBar(p24, `${LATEST_PRES} presidential vote in ${name}`) : "") + countyMap(st, h, { year: LATEST_PRES }) + `<h3 class="vx-h3">The House in ${LATEST_HOUSE}</h3>` + houseTable(st, h, LATEST_HOUSE)} />
+			</section>
+		)}
+
+		{h?.mid2022 && (
+			<section class="fx-sec">
+				<h2>The 2022 midterms by county</h2>
+				<div class="fx-two" style="gap:16px">
+					{(["senate", "governor"] as const).filter((k) => h.mid2022![k]).map((k) => (
+						<div><h3 class="vx-h3">{k === "senate" ? "U.S. Senate" : "Governor"}</h3><Fragment set:html={countyMap(st, h, { mid: k })} /></div>
+					))}
+				</div>
+				<p class="fx-src">2022 results from <a href="https://openelections.net/" rel="noopener">OpenElections</a>, where available.</p>
+			</section>
+		)}
+
+		{senate?.[st] && lastSen && (
+			<section class="fx-sec">
+				<h2>Senate races</h2>
+				<p class="fx-note">The most recent race. Every {name} Senate race since 1976 is part of Pro.</p>
+				<Fragment set:html={senateList(senate[st], false)} />
+			</section>
+		)}
+		<p class="fx-src">Results: <a href="https://electionlab.mit.edu/data" rel="noopener">MIT Election Data and Science Lab</a> (CC0). <a href={statePath(st)}>{name}'s {new Date().getUTCFullYear()} races, odds and money →</a></p>
+	</div>
+</Base>
+
+<script>
+	import { motion } from "../../scripts/motion";
+	import { pastYears } from "../../scripts/past";
+	motion();
+	pastYears();
+</script>

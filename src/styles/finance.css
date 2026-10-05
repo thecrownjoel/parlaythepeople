@@ -114,3 +114,37 @@ b.d { color: var(--bt-d); } b.r { color: var(--bt-r); }
 	.fx-bars .fx-bt { grid-column: 1 / -1; grid-row: 2; }
 	.fx-kv dd { font-size: 17px; }
 }
+
+/* voting: head-to-head bars, the state tile map, House seats, county maps */
+.vx-duel { margin: 0 0 16px; }
+.vx-duel-h { display: flex; justify-content: space-between; gap: 10px; margin: 0 0 6px; font-size: 15px; }
+.vx-duel-h span { font: 700 14px var(--font-mono), monospace; }
+.vx-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: rgb(127 127 127 / .12); }
+.vx-bar i { display: block; height: 100%; border-radius: 0; }
+.vx-bar i.d { background: var(--bt-d); } .vx-bar i.r { background: var(--bt-r); margin-left: auto; } .vx-bar i.o { background: rgb(127 127 127 / .25); }
+.vx-duel-n { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0 0; font-size: 13.5px; color: var(--color-text-secondary); }
+.vx-tiles { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin: 0 0 22px; max-width: 760px; }
+.vx-tile { aspect-ratio: 1; border-radius: 7px; display: grid; place-content: center; text-align: center; color: #fff; text-decoration: none; line-height: 1.1; text-shadow: 0 1px 2px rgb(0 0 0 / .35); transition: transform .15s; }
+.vx-tile:hover { transform: scale(1.08); outline: 2px solid var(--color-text); }
+.vx-tile b { font: 800 clamp(10px, 1.5vw, 15px) var(--font-display); }
+.vx-tile small { font: 600 clamp(7px, .9vw, 10px) var(--font-mono), monospace; opacity: .9; }
+.vx-seats { margin-top: 18px; }
+.vx-dots { display: grid; grid-template-columns: repeat(auto-fill, minmax(9px, 1fr)); gap: 3px; max-width: 760px; }
+.vx-dots i { display: block; aspect-ratio: 1; border-radius: 50%; width: auto; height: auto; }
+.vx-map { max-width: 620px; margin: 8px 0 18px; }
+.vx-h3 { font: 700 16px var(--font-display); margin: 18px 0 8px; }
+.vx-t { width: 100%; border-collapse: collapse; font-size: 14px; }
+.vx-t th, .vx-t td { padding: 7px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: left; }
+.vx-t thead th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+.vx-sen { list-style: none; padding: 0; margin: 0; }
+.vx-yr { font: 700 13px var(--font-mono), monospace; color: var(--color-muted); }
+.vx-states { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.vx-states a { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--color-border); color: var(--color-text); text-decoration: none; background: color-mix(in srgb, var(--color-bg) 40%, var(--color-surface)); }
+.vx-states a:hover { border-color: var(--color-text-secondary); }
+.vx-states b { font: 800 14px var(--font-mono), monospace; color: var(--color-muted); }
+.vx-cta { display: inline-block; padding: 10px 16px; border-radius: 10px; background: #a3262a; color: #fff; font-weight: 700; text-decoration: none; }
+.vx-how { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.vx-how ul { padding-left: 18px; margin: 0; }
+.vx-dates { list-style: none; padding: 0; margin: 14px 0 0; }
+.vx-dates li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); }
+@media (max-width: 640px) { .vx-tiles { gap: 2px; } .vx-tile small { display: none; } }

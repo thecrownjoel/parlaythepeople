@@ -88,7 +88,7 @@ const ld = graph(
 			<section class="panel">
 				<h2>Key dates</h2>
 				<ul class="mk-rel">{dates.map((e) => <li><span>{e.title}</span><b>{calDay(e.date)}</b></li>)}</ul>
-				<p class="sec-note"><a href="/calendar/">The full election calendar →</a></p>
+				<p class="sec-note"><a href={`/voting/${Astro.params.state}/`}>How to vote in {v.name}, and how it has voted →</a> · <a href="/calendar/">The full election calendar →</a></p>
 			</section>
 		)}
 
