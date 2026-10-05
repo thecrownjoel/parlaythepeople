@@ -195,8 +195,14 @@ export async function settle(a: Account, rowid: number, o: { tin: number; tout: 
 	return cents;
 }
 
-/** The viewer's plan only (no usage queries): for gating history, the archive and downloads. */
-export async function viewerPlan(cookies: AstroCookies): Promise<Plan> {
+/** The viewer's plan only (no usage queries): for gating history, the archive and downloads. An API key
+ *  (Authorization: Bearer ptp_…) counts as its plan's member. */
+export async function viewerPlan(cookies: AstroCookies, request?: Request): Promise<Plan> {
+	if (request?.headers.has("authorization")) {
+		const { planFromKey } = await import("./apikeys");
+		const p = await planFromKey(request);
+		if (p) return p;
+	}
 	if (!cookies.get(SESSION_COOKIE)) return PLANS.anon;
 	const user = await currentUser(cookies);
 	if (!user) return PLANS.anon;

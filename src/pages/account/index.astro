@@ -93,6 +93,15 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 					)}
 					{!paid && <p class="acct-quiet"><a href="/pro/">Pro</a> adds a morning briefing and alerts on the races you follow.</p>}
 				</section>
+				{a.plan.archive && (
+					<section class="panel acct-panel" data-keys>
+						<h2>Data API keys</h2>
+						<p class="acct-quiet" style="margin:0">Send <code>Authorization: Bearer ptp_…</code> with requests to <a href="/data/">the data API</a> to get your plan's full history and downloads from scripts and spreadsheets. Each key is shown once.</p>
+						<ul class="acct-keys" data-key-list></ul>
+						<div class="acct-row"><input type="text" placeholder="Name (e.g. war room sheet)" maxlength="60" data-key-name style="flex:1;min-width:200px" /><button type="button" class="acct-ghost" data-key-new>Create key</button></div>
+						<p class="acct-msg" data-key-msg aria-live="polite"></p>
+					</section>
+				)}
 				{charges.length > 0 && (
 					<section class="panel acct-panel">
 						<h2>Recent AI charges</h2>
@@ -204,6 +213,32 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 		const r = await post("/api/alerts", { test_webhook: url }).catch(() => null);
 		say(f.querySelector("[data-msg]"), r?.ok ? "Test sent. Check the channel." : "The test didn't go through. Check the address.", !r?.ok);
 	});
+	// data API keys
+	const keysEl = document.querySelector<HTMLElement>("[data-keys]");
+	if (keysEl) {
+		const list = keysEl.querySelector<HTMLElement>("[data-key-list]")!, msg = keysEl.querySelector<HTMLElement>("[data-key-msg]")!;
+		const loadKeys = async () => {
+			const j: any = await fetch("/api/keys").then((r) => r.json()).catch(() => ({ keys: [] }));
+			list.replaceChildren(...(j.keys ?? []).map((k: any) => {
+				const li = document.createElement("li");
+				const s = document.createElement("span");
+				s.textContent = `${k.name ?? "Unnamed key"} · created ${new Date(k.created * 1000).toLocaleDateString()} by ${k.email}${k.last_used ? ` · last used ${new Date(k.last_used * 1000).toLocaleDateString()}` : " · never used"}`;
+				const b = document.createElement("button");
+				b.type = "button"; b.className = "acct-ghost"; b.textContent = "Revoke";
+				b.addEventListener("click", async () => { if (confirm("Revoke this key? Anything using it stops working.")) { await post("/api/keys", { revoke: k.id }); loadKeys(); } });
+				li.appendChild(s); li.appendChild(b);
+				return li;
+			}));
+		};
+		keysEl.querySelector("[data-key-new]")!.addEventListener("click", async () => {
+			const name = keysEl.querySelector<HTMLInputElement>("[data-key-name]")!.value;
+			const r = await post("/api/keys", { name }).catch(() => null);
+			const j: any = r ? await r.json().catch(() => ({})) : {};
+			msg.textContent = j.key ? `Your new key (copy it now, it won't be shown again): ${j.key}` : "Couldn't create a key. You can have up to 10.";
+			loadKeys();
+		});
+		loadKeys();
+	}
 	document.querySelector("[data-logout]")?.addEventListener("click", async () => { await post("/api/auth/logout"); location.href = "/"; });
 </script>
 

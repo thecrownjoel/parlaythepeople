@@ -8,8 +8,8 @@ import { FREE_TRADES, homeTradeRow, raceTradeRow } from "../../../lib/tradeRows"
  * The big trades past the free top 3, as HTML rows, for Pro readers: ?race=<race id> (race page) or ?since=<unix
  * seconds> (homepage "Where the money went"). Anyone else gets 403 and keeps seeing the gate.
  */
-export const GET: APIRoute = async ({ url, cookies }) => {
-	const plan = await viewerPlan(cookies);
+export const GET: APIRoute = async ({ url, cookies, request }) => {
+	const plan = await viewerPlan(cookies, request);
 	const headers = { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" };
 	if (!plan.archive) return new Response("", { status: 403, headers });
 	const race = url.searchParams.get("race");

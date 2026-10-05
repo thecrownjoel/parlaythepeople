@@ -161,3 +161,16 @@ CREATE TABLE IF NOT EXISTS race_notes (
 );
 CREATE INDEX IF NOT EXISTS race_notes_race ON race_notes (subject, race_id, ts);
 CREATE INDEX IF NOT EXISTS race_notes_recent ON race_notes (subject, ts);
+
+-- Data API keys for paid plans ("Authorization: Bearer ptp_…"). Only a hash of each key is stored; the key is shown once.
+CREATE TABLE IF NOT EXISTS api_keys (
+  hash TEXT PRIMARY KEY,
+  id TEXT NOT NULL UNIQUE,          -- short public id, for listing and revoking
+  subject TEXT NOT NULL,            -- billed plan: 'u:<id>' | 'o:<id>'
+  user_id TEXT NOT NULL,
+  name TEXT,
+  created INTEGER NOT NULL,
+  last_used INTEGER,
+  revoked INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS api_keys_subject ON api_keys (subject);
