@@ -1,0 +1,127 @@
+---
+/**
+ * How often the prediction markets called races right: every decided 2024 and 2025 race on Kalshi and Polymarket
+ * (src/data/track-2024-25.json, built from ingest/model/training.py), and 2026 as races settle (lib/trackrecord.ts).
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import track from "../../data/track-2024-25.json";
+import { trackRecord } from "../../lib/trackrecord";
+import { MODEL } from "../../lib/model";
+import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=3600");
+const origin = Astro.url.origin;
+const live = await trackRecord().catch(() => null);
+const H = track.horizons;
+const pc = (x: number) => `${Math.round(x * 100)}%`;
+const strong = H.d1.buckets.filter((b) => b.lo >= 0.8);
+const strongN = strong.reduce((a, b) => a + b.n, 0), strongWon = strong.reduce((a, b) => a + Math.round(b.won * b.n), 0);
+const close = H.d1.buckets.find((b) => b.lo === 0.5);
+const lede = `Across ${H.d1.n} decided 2024 and 2025 races, the prediction-market favorite on the eve of the election won ${H.d1.fav_won} (${pc(H.d1.fav_won / H.d1.n)}). Favorites priced at 80% or more won ${strongWon} of ${strongN}.${close ? ` Races priced near a coin flip (50 to 60%) went to the favorite ${pc(close.won)} of the time.` : ""}`;
+const raceName = (key: string) => {
+	const [y, office, st, dist] = key.split("-");
+	return office === "house" ? `${st}-${dist} House` : office === "president" ? `${st} presidential` : `${st} ${office === "senate" ? "Senate" : "governor"}`;
+};
+const upsets = track.races.filter((r) => r.d1 != null && (r.d1 >= 0.5) !== (r.winner === "D")).sort((a, b) => Math.abs(b.d1! - 0.5) - Math.abs(a.d1! - 0.5));
+const ex = track.exchanges;
+const horizons = [["The day before", H.d1], ["A week before", H.d7], ["A month before", H.d30]] as const;
+const description = lede.slice(0, 155).replace(/\s\S*$/, "") + "…";
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["Track record", "/track-record/"]]),
+	faq([
+		["How accurate are election prediction markets?", lede],
+		["Is Kalshi or Polymarket more accurate?", `On the ${ex.both_listed} decided 2024–25 races both exchanges listed, Polymarket's eve-of-election prices scored a Brier score of ${ex.p_on_shared} and Kalshi's ${ex.k_on_shared} (lower is better).`],
+		["What happens to races the markets call close?", close ? `Favorites priced between 50% and 60% won ${pc(close.won)} of the time in 2024–25, about what their prices implied: close races really are close.` : "Close races are close."],
+	]),
+	dataset(origin, { name: "Prediction market track record, 2024–25 U.S. races", description: lede, path: "/track-record/", json: "/api/v1/track-record.json", modified: "2026-10-05", keywords: ["prediction market accuracy", "Kalshi accuracy", "Polymarket accuracy", "election forecasting"] }),
+);
+---
+<Base title={`How accurate are election prediction markets? Track record | ${SITE_NAME}`} description={description} canonical={`${origin}/track-record/`}>
+	<JsonLd slot="head" data={ld} />
+	<article class="dp" style="max-width:900px">
+		<header class="dp-head">
+			<p class="eyebrow">Track record</p>
+			<h1>How often the markets get it right</h1>
+			<p class="lede">{lede}</p>
+		</header>
+
+		<section class="panel">
+			<h2>Do favorites win as often as their price says?</h2>
+			<p class="sec-note">Each row groups races by the favorite's price, and compares that price with how often the favorite actually won. A well-calibrated market's two bars match.</p>
+			{horizons.map(([label, h]) => (
+				<div class="tr-h">
+					<h3>{label} <span>{h.fav_won} of {h.n} favorites won · Brier {h.brier}</span></h3>
+					{h.buckets.map((b) => (
+						<div class="tr-row">
+							<span class="tr-lab">{Math.round(b.lo * 100)}–{Math.round(b.hi * 100)}%<small>{b.n} races</small></span>
+							<span class="tr-bars">
+								<span class="tr-bar tr-p"><i style={`width:${b.priced * 100}%`}></i><b>priced {pc(b.priced)}</b></span>
+								<span class="tr-bar tr-w"><i style={`width:${b.won * 100}%`}></i><b>won {pc(b.won)}</b></span>
+							</span>
+						</div>
+					))}
+				</div>
+			))}
+			<p class="sec-note">Price = the average of Kalshi's and Polymarket's latest readings in the week up to each date, as the Democrat's share of the two main parties. Brier score: the average squared miss, 0 is perfect, 0.25 is a coin flip.</p>
+		</section>
+
+		<section class="panel">
+			<h2>Kalshi vs. Polymarket</h2>
+			<table class="tr-t">
+				<thead><tr><th scope="col">Exchange</th><th scope="col">Races listed</th><th scope="col">Favorite won</th><th scope="col">Brier, all</th><th scope="col">Brier, shared races</th></tr></thead>
+				<tbody>
+					<tr><th scope="row">Kalshi</th><td>{ex.k.n}</td><td>{ex.k.fav_won} ({pc(ex.k.fav_won / ex.k.n)})</td><td>{ex.k.brier}</td><td>{ex.k_on_shared}</td></tr>
+					<tr><th scope="row">Polymarket</th><td>{ex.p.n}</td><td>{ex.p.fav_won} ({pc(ex.p.fav_won / ex.p.n)})</td><td>{ex.p.brier}</td><td>{ex.p_on_shared}</td></tr>
+				</tbody>
+			</table>
+			<p class="sec-note">"Shared races" are the {ex.both_listed} races both exchanges listed, the fair head-to-head.</p>
+		</section>
+
+		<section class="panel">
+			<h2>The Parlay estimate</h2>
+			<p>Our model nudges clear favorites further toward winning, because in these races they won more often than priced. Tested on races it wasn't fit to, it scored a Brier of <b>{MODEL.cv.model.brier}</b> against the market's <b>{MODEL.cv.market.brier}</b>. <a href="/model/">How the model works →</a></p>
+		</section>
+
+		<section class="panel">
+			<h2>The upsets: {upsets.length} favorites that lost</h2>
+			<ul class="tr-up">
+				{upsets.map((r) => {
+					const fav = r.d1! >= 0.5 ? "D" : "R";
+					const names = r.names as Record<string, string>;
+					return <li><b>{r.year} {raceName(r.key)}</b>: {names[fav] ?? (fav === "D" ? "the Democrat" : "the Republican")} was favored at {pc(Math.max(r.d1!, 1 - r.d1!))}; {names[r.winner] ?? (r.winner === "D" ? "the Democrat" : "the Republican")} won.</li>;
+				})}
+			</ul>
+		</section>
+
+		<section class="panel">
+			<h2>2026</h2>
+			<p>{live && live.logged ? `We've logged ${live.logged.toLocaleString()} hourly readings of ${live.racesLogged} races${live.resolved ? `, and ${live.resolved} have been decided so far` : ""}. ` : ""}Every 2026 race is scored here as it settles after Election Day, November 3, using the odds recorded before the result.</p>
+		</section>
+		<p class="sec-note" style="font-size:12.5px">{track.source}. Download the race-by-race data: <a href="/api/v1/track-record.json">track-record.json</a>. Research, not betting advice.</p>
+	</article>
+</Base>
+
+<style>
+	.tr-h { margin: 18px 0 8px; }
+	.tr-h h3 { font-size: 16px; margin: 0 0 8px; }
+	.tr-h h3 span { font: 500 12.5px var(--font-mono), monospace; color: var(--color-muted); margin-left: 8px; }
+	.tr-row { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; align-items: center; padding: 5px 0; }
+	.tr-lab { font: 600 13px var(--font-mono), monospace; }
+	.tr-lab small { display: block; font-weight: 400; color: var(--color-muted); font-size: 11px; }
+	.tr-bars { display: grid; gap: 4px; }
+	.tr-bar { position: relative; height: 18px; border-radius: 5px; background: rgb(255 255 255 / .05); overflow: hidden; }
+	.tr-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+	.tr-p i { background: color-mix(in srgb, var(--color-text-secondary) 40%, transparent); }
+	.tr-w i { background: #3fb68b; }
+	.tr-bar { display: block; }
+	.tr-bar b { position: relative; display: block; font: 600 11.5px/18px var(--font-mono), monospace; padding-left: 8px; }
+	.tr-t { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+	.tr-t th, .tr-t td { padding: 9px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: right; }
+	.tr-t th:first-child { text-align: left; }
+	.tr-t thead th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+	.tr-up { padding-left: 18px; }
+	.tr-up li { margin: 6px 0; }
+</style>
