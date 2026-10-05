@@ -1,14 +1,12 @@
 ---
 /**
- * One state's voting page: /voting/maine/. How to vote (Democracy Works when connected, otherwise the state's official
- * election office), key dates, and how the state has voted: presidential results and county maps (2024 free,
+ * One state's voting page: /voting/maine/. How to vote (the state's official election office), key dates, and how the state has voted: presidential results and county maps (2024 free,
  * 2000-2020 Pro), 2022 midterm county maps (OpenElections), Senate races and the House delegation.
  */
 import Base from "../../layouts/Base.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { STATES, stateFromSlug, statePath, stateView } from "../../lib/states";
 import { getPresident, getSenateHistory, getStateHistory, duelBar, countyMap, houseTable, senateList, PRES_YEARS, LATEST_PRES, LATEST_HOUSE, marginWords, person } from "../../lib/history";
-import { howToVote, hasDemocracyWorks } from "../../lib/democracyworks";
 import { calendar, calDay } from "../../lib/calendar";
 import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
 import offices from "../../data/election-offices.json";
@@ -21,7 +19,7 @@ Astro.response.headers.set("cache-control", "public, max-age=3600");
 const origin = Astro.url.origin;
 const name = STATES[st];
 const path = `/voting/${Astro.params.state}/`;
-const [pres, senate, h, how] = await Promise.all([getPresident(), getSenateHistory(), getStateHistory(st), howToVote(st)]);
+const [pres, senate, h] = await Promise.all([getPresident(), getSenateHistory(), getStateHistory(st)]);
 const office = (offices.offices as Record<string, string>)[name] ?? null;
 // election days only for years this state votes in (2027 is a handful of states)
 const cycles = new Set((await stateView(st)).races.map((r) => r.cycle));
@@ -48,21 +46,10 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/
 
 		<section class="fx-sec">
 			<h2>How to vote</h2>
-			{how ? (
-				<div class="vx-how">
-					{how.deadlines.length > 0 && <div><h3 class="vx-h3">Deadlines</h3><ul>{how.deadlines.slice(0, 8).map((d) => <li><b>{calDay(d.date)}</b>: {d.label}</li>)}</ul></div>}
-					{how.byMail.length > 0 && <div><h3 class="vx-h3">Voting by mail</h3><ul>{how.byMail.slice(0, 8).map((x) => <li>{x}</li>)}</ul></div>}
-					{(how.inPerson.length > 0 || how.idRule) && <div><h3 class="vx-h3">Voting in person</h3><ul>{how.idRule && <li>{how.idRule}</li>}{how.inPerson.slice(0, 6).map((x) => <li>{x}</li>)}</ul></div>}
-					<p class="fx-src">From Democracy Works. Confirm with {how.contact ? <a href={how.contact} rel="noopener">the {how.office ?? "state election office"}</a> : "your state election office"}.</p>
-				</div>
-			) : (
-				<>
-					<p class="fx-note">{name}'s official election office is the place to register, check your registration, request a mail ballot, find your polling place and see what ID to bring.</p>
-					{office && <p><a class="vx-cta" href={office} rel="noopener" target="_blank">{name} election office →</a></p>}
-				</>
-			)}
+			<p class="fx-note">{name}'s official election office is the place to register, check your registration, request a mail ballot, find your polling place and see what ID to bring.</p>
+			{office && <p><a class="vx-cta" href={office} rel="noopener" target="_blank">{name} election office →</a></p>}
 			{dates.length > 0 && <ul class="mk-rel vx-dates">{dates.slice(0, 4).map((e) => <li><span>{e.title}</span><b>{calDay(e.date)}</b></li>)}</ul>}
-			{!hasDemocracyWorks() && <p class="fx-src">Election offices from <a href="https://www.usa.gov/state-election-office" rel="noopener">USA.gov</a>.</p>}
+			<p class="fx-src">Election offices from <a href="https://www.usa.gov/state-election-office" rel="noopener">USA.gov</a>.</p>
 		</section>
 
 		{pres && h && (

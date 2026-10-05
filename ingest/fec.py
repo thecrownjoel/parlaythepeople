@@ -173,6 +173,7 @@ def committee_rows(cycle):
 
 def api(path, **params):
     params["api_key"] = API_KEY
+    time.sleep(1.1)  # the key allows 60 requests a minute
     for attempt in range(3):
         r = subprocess.run(["curl", "-s", "--max-time", "60", f"{API}{path}?{urllib.parse.urlencode(params)}"], capture_output=True, text=True)
         try:
@@ -181,7 +182,7 @@ def api(path, **params):
             d = {}
         if "results" in d:
             return d["results"]
-        time.sleep(2 * (attempt + 1))  # rate limited or busy
+        time.sleep(20 * (attempt + 1))  # rate limited or busy: wait for the minute to roll over
     return None
 
 
@@ -225,7 +226,8 @@ def focus_candidates(cands, cycle):
 def detail_rows(ids, cycle, today):
     """OpenFEC for a third of the focus candidates each day: small vs. large donors, money by state, and each report."""
     out = []
-    for cid in [i for i in ids if int(hashlib.md5(i.encode()).hexdigest(), 16) % ROTATE == today % ROTATE]:
+    every = "--all-detail" in sys.argv  # fill in every focus candidate at once (first run)
+    for cid in [i for i in ids if every or int(hashlib.md5(i.encode()).hexdigest(), 16) % ROTATE == today % ROTATE]:
         tot = api(f"/candidate/{cid}/totals/", cycle=cycle, election_full="true")
         t = (tot or [{}])[0] if tot is not None else None
         states = api("/schedules/schedule_a/by_state/by_candidate/", candidate_id=cid, cycle=cycle, election_full="true", per_page=100)
