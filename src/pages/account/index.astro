@@ -30,8 +30,8 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 	<div class="dp acct" style="max-width:720px" data-next={next}>
 		<header class="dp-head">
 			<p class="eyebrow">Account</p>
-			<h1>{user ? "Your account" : "Sign in"}</h1>
-			{!user && <p class="lede">No password. We email you a one-time link, or you can use a passkey you've added.</p>}
+			<h1>{user ? "Your account" : "Sign in or sign up"}</h1>
+			{!user && <p class="lede">Free, no password, no card. Enter your email and we'll send a one-time link; new emails get a free account. Already added a passkey? Use that instead.</p>}
 		</header>
 
 		{!user && (

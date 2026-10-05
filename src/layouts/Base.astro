@@ -170,7 +170,8 @@ const isLoggedIn = !!Astro.locals.user;
 							</a>
 						)
 					}
-					<a href="/pro/" class="nav-pro">Pro</a>
+					<a href="/account/" class="nav-acct" data-acct>Sign in</a>
+					<a href="/pro/" class="nav-pro" data-nav-pro>Pro</a>
 					<SearchOverlay />
 					<CountrySwitcher />
 				</div>
@@ -498,6 +499,15 @@ const isLoggedIn = !!Astro.locals.user;
 				transition: color var(--transition-fast);
 			}
 
+			.nav-acct {
+				font-size: var(--font-size-sm);
+				color: var(--color-text-secondary);
+				text-decoration: none;
+				white-space: nowrap;
+			}
+			.nav-acct:hover {
+				color: var(--color-text);
+			}
 			.nav-pro {
 				font-family: var(--font-mono), monospace;
 				font-size: 12px;
@@ -925,13 +935,25 @@ const isLoggedIn = !!Astro.locals.user;
 					if (back) back.click();
 					else gate?.remove();
 				});
-				const set = (j: { history: string; archive: boolean }) => { document.documentElement.dataset.history = j.history; document.documentElement.dataset.archive = j.archive ? "1" : "0"; fill(); };
+				type Me = { plan: string; signedIn: boolean; history: string; archive: boolean };
+				const set = (j: Me) => {
+					document.documentElement.dataset.history = j.history;
+					document.documentElement.dataset.archive = j.archive ? "1" : "0";
+					// header: "Sign in" becomes "Account"; members of a paid plan don't need the Pro link
+					const acct = document.querySelector<HTMLElement>("[data-acct]");
+					if (acct && j.signedIn) acct.textContent = "Account";
+					const pro = document.querySelector<HTMLElement>("[data-nav-pro]");
+					if (pro && j.plan !== "anon" && j.plan !== "free") pro.hidden = true;
+					fill();
+				};
+				// the account page is where signing in and out lands, so it always asks fresh
+				const fresh = location.pathname.startsWith("/account");
 				try {
 					const hit = JSON.parse(sessionStorage.getItem("ptp:me") || "null");
-					if (hit && Date.now() - hit.t < 5 * 60_000) return set(hit.v);
+					if (!fresh && hit && "signedIn" in hit.v && Date.now() - hit.t < 5 * 60_000) return set(hit.v);
 				} catch { /* storage blocked */ }
 				try {
-					const v = (await (await fetch("/api/me")).json()) as { history: string; archive: boolean };
+					const v = (await (await fetch("/api/me")).json()) as Me;
 					set(v);
 					try { sessionStorage.setItem("ptp:me", JSON.stringify({ t: Date.now(), v })); } catch { /* storage blocked */ }
 				} catch { /* offline */ }
