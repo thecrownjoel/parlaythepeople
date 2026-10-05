@@ -40,7 +40,7 @@ const question = e.title.trim().endsWith("?") ? e.title.trim() : `What are the o
 const q = e.title.replace(/\?$/, "").trim();
 const title = q.length <= 54 ? `${q}: odds` : q;
 // the market's own question first: keyword-rich, and unique even when similar markets share prices
-const description = `${e.title.replace(/\?$/, "")}: ${lede.replace(/^As of [^,]+, /, "")} Live ${exchangeName(e)} odds, updated every 10 minutes.`;
+const description = `${e.title.replace(/\?$/, "")}: ${lede.replace(/^As of [A-Z][a-z]+ \d{1,2}, \d{4}, /, "")} Live ${exchangeName(e)} odds, updated every 10 minutes.`;
 const ld = graph(
 	organization(origin),
 	breadcrumbs(origin, [["Politics", "/politics/"], [topicName, topicPath], [e.title, path]]),
