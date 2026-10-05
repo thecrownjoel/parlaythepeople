@@ -19,6 +19,7 @@ import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
 import RaceFinance from "../../../components/RaceFinance.astro";
 import EmbedCode from "../../../components/EmbedCode.astro";
+import RaceNotes from "../../../components/RaceNotes.astro";
 import { candidateLinks } from "../../../lib/candidates";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
@@ -318,6 +319,8 @@ import { parlayD } from "../../../lib/model";
 			<RaceMoney raceId={race.id} />
 			<RaceActivity race={race} kalshi={kalshiByTicker} kalshiTickers={kalshiTickers} />
 		</section>
+
+		<RaceNotes raceId={race.id} />
 
 		<EmbedCode src={`${origin}/embed/race/${race.id}/`} height={race.kind === "control" ? 200 : 210} />
 

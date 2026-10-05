@@ -1,0 +1,102 @@
+---
+/** A team's workspace: members (the owner invites and removes), everyone's followed races, and the latest notes. */
+import Base from "../../layouts/Base.astro";
+import { account } from "../../lib/auth";
+import { orgOf, members, teamWatchlist, notesFor } from "../../lib/team";
+import { SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "no-store");
+const a = await account(Astro.cookies, Astro.request);
+if (!a.user) return Astro.redirect("/account/?next=/account/team/");
+const org = await orgOf(a.user);
+const isOwner = org?.owner_id === a.user.id;
+const people = org ? await members(org.id) : [];
+const watch = org ? await teamWatchlist(org.id) : [];
+const notes = org ? await notesFor(a.subject, undefined, 20) : [];
+const day = (t: number | null) => (t ? new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "never");
+const racePath = (id: string) => { const [y, office, ...rest] = id.split("-"); return `/${y}/${office}/${rest.join("-")}/`; };
+---
+<Base title={`Team | ${SITE_NAME}`} description="Your team on Parlay the People." robots="noindex, nofollow">
+	<div class="dp" style="max-width:820px">
+		<header class="dp-head">
+			<p class="eyebrow"><a href="/account/" style="color:inherit">Account</a></p>
+			<h1>{org ? org.name : "Team"}</h1>
+			{org ? <p class="lede">{a.plan.name} · {people.length} of {org.seats} seats · one AI balance and shared notes for everyone below.</p>
+				: <p class="lede">You're not on a team. Teams share one plan, one AI balance, notes on races and each other's followed races. <a href="/pro/">See Team plans</a>.</p>}
+		</header>
+
+		{org && (
+			<>
+				<section class="panel">
+					<h2>Members</h2>
+					<ul class="tm">
+						{people.map((p) => (
+							<li>
+								<span><b>{p.email}</b>{p.id === org.owner_id && <em>Owner</em>}</span>
+								<span class="tm-m">Last seen {day(p.last_seen)}</span>
+								{isOwner && p.id !== org.owner_id && <button type="button" data-remove={p.id}>Remove</button>}
+							</li>
+						))}
+					</ul>
+					{isOwner && (people.length < org.seats ? (
+						<form class="tm-add" data-invite>
+							<label for="tm-email">Add a member</label>
+							<div><input id="tm-email" type="email" required placeholder="name@campaign.org" /><button type="submit">Add and email them</button></div>
+							<p class="sec-note" data-msg aria-live="polite"></p>
+						</form>
+					) : <p class="sec-note">All {org.seats} seats are in use. Remove someone, or ask us for more seats.</p>)}
+				</section>
+
+				<section class="panel">
+					<h2>Races the team follows</h2>
+					{watch.length ? (
+						<ul class="mk-rel">{watch.map((w) => <li><a href={racePath(w.race_id)}>{w.name ?? w.race_id}</a><span class="tm-m">{w.who}</span></li>)}</ul>
+					) : <p class="sec-note">Nobody on the team follows a race yet. Use the star on any race page.</p>}
+				</section>
+
+				<section class="panel">
+					<h2>Latest notes</h2>
+					{notes.length ? (
+						<ul class="tm-notes">{notes.map((n) => <li><a href={racePath(n.race_id)}>{n.race_id.replace(/^\d{4}-/, "").replace(/-/g, " ")}</a> <span class="tm-m">{n.email} · {day(n.ts)}</span><p>{n.body}</p></li>)}</ul>
+					) : <p class="sec-note">Notes anyone on the team writes on a race page show up here.</p>}
+				</section>
+			</>
+		)}
+	</div>
+</Base>
+
+<script>
+	const post = (body: object) => fetch("/api/team/members", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }));
+	const WHY: Record<string, string> = { seats_full: "All seats are in use.", already_member: "They're already on the team.", other_team: "That email belongs to another team.", email: "Check the email address." };
+	document.querySelector<HTMLFormElement>("[data-invite]")?.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const f = e.currentTarget as HTMLFormElement, msg = f.querySelector<HTMLElement>("[data-msg]")!, input = f.querySelector("input")!;
+		msg.textContent = "Adding…";
+		const r = await post({ email: input.value });
+		if (r.ok) location.reload();
+		else msg.textContent = WHY[r.j.error] ?? "Couldn't add them. Try again.";
+	});
+	document.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((b) => b.addEventListener("click", async () => {
+		if (!confirm("Remove this member from the team? They keep a free account.")) return;
+		if ((await post({ remove: b.dataset.remove })).ok) location.reload();
+	}));
+</script>
+
+<style>
+	.tm { list-style: none; padding: 0; margin: 0 0 14px; }
+	.tm li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.tm em { font: 600 10.5px var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .06em; margin-left: 8px; color: #f08a7e; font-style: normal; }
+	.tm-m { color: var(--color-muted); font-size: 13px; }
+	.tm button, .tm-add button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); cursor: pointer; font-weight: 600; }
+	.tm-add label { display: block; font-weight: 600; margin-bottom: 6px; }
+	.tm-add div { display: flex; gap: 8px; flex-wrap: wrap; }
+	.tm-add input { flex: 1; min-width: 220px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; }
+	.mk-rel { list-style: none; padding: 0; margin: 0; }
+	.mk-rel li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.mk-rel a { color: var(--color-text); }
+	.tm-notes { list-style: none; padding: 0; margin: 0; }
+	.tm-notes li { padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.tm-notes a { color: var(--color-text); font-weight: 600; text-transform: capitalize; }
+	.tm-notes p { margin: 4px 0 0; white-space: pre-wrap; }
+</style>

@@ -55,6 +55,7 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 				<section class="panel acct-panel">
 					<dl class="acct-facts">
 						<div><dt>Signed in as</dt><dd>{user.email}</dd></div>
+						{user.org_id && <div><dt>Team</dt><dd><a href="/account/team/">Members, notes and followed races</a></dd></div>}
 						<div><dt>Plan</dt><dd><strong>{a.plan.name}</strong>{!metered && <> · <a href="/pro/">See Pro</a></>}</dd></div>
 						{metered ? (
 							<>

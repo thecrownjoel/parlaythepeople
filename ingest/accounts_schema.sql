@@ -148,3 +148,15 @@ CREATE TABLE IF NOT EXISTS reports (
   r2_key TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reports_user ON reports (user_id, ts);
+
+-- Notes on races, shared by everyone on a team (subject 'o:<org id>') or kept by a solo Pro member ('u:<user id>').
+CREATE TABLE IF NOT EXISTS race_notes (
+  id TEXT PRIMARY KEY,
+  subject TEXT NOT NULL,
+  race_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS race_notes_race ON race_notes (subject, race_id, ts);
+CREATE INDEX IF NOT EXISTS race_notes_recent ON race_notes (subject, ts);

@@ -1,0 +1,58 @@
+---
+/** Notes on a race for paid members (shared with their team). Loaded in the browser, so the page stays cacheable. */
+interface Props { raceId: string }
+const { raceId } = Astro.props;
+---
+<section class="rn" data-notes={raceId} hidden aria-labelledby="rn-h">
+	<h2 id="rn-h">Notes</h2>
+	<p class="sec-note" data-rn-who></p>
+	<form data-rn-form><textarea rows="3" maxlength="4000" placeholder="Add a note: what you're hearing, what to watch, who to call" aria-label="New note"></textarea><button type="submit">Save note</button></form>
+	<ul data-rn-list></ul>
+</section>
+<script>
+	for (const el of document.querySelectorAll<HTMLElement>("[data-notes]")) {
+		const race = el.dataset.notes!;
+		const list = el.querySelector<HTMLElement>("[data-rn-list]")!;
+		const load = async () => {
+			const j = await fetch(`/api/notes?race=${race}`).then((r) => r.json()).catch(() => ({ notes: null }));
+			if (!j.notes) return;
+			el.hidden = false;
+			el.querySelector<HTMLElement>("[data-rn-who]")!.textContent = j.team ? `Shared with everyone on ${j.team}.` : "Only you can see these.";
+			list.replaceChildren(...j.notes.map((n: any) => {
+				const li = document.createElement("li");
+				const meta = document.createElement("span");
+				meta.textContent = `${n.email} · ${new Date(n.ts * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+				const p = document.createElement("p");
+				p.textContent = n.body;
+				li.append(meta, p);
+				if (n.user_id === j.me || j.owner) {
+					const b = document.createElement("button");
+					b.type = "button"; b.textContent = "Delete";
+					b.addEventListener("click", async () => { await send({ delete: n.id }); load(); });
+					meta.append(" ", b);
+				}
+				return li;
+			}));
+		};
+		const send = (body: object) => fetch("/api/notes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+		el.querySelector<HTMLFormElement>("[data-rn-form]")!.addEventListener("submit", async (e) => {
+			e.preventDefault();
+			const t = (e.currentTarget as HTMLFormElement).querySelector("textarea")!;
+			if (!t.value.trim()) return;
+			await send({ race, body: t.value });
+			t.value = "";
+			load();
+		});
+		load();
+	}
+</script>
+<style>
+	.rn form { display: grid; gap: 8px; margin-bottom: 12px; }
+	.rn textarea { padding: 10px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; resize: vertical; }
+	.rn form button { justify-self: start; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font-weight: 600; cursor: pointer; }
+	.rn ul { list-style: none; padding: 0; margin: 0; }
+	.rn li { padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.rn li span { font-size: 12.5px; color: var(--color-muted); }
+	.rn li button { margin-left: 6px; font-size: 12px; background: none; border: 0; color: var(--color-muted); text-decoration: underline; cursor: pointer; }
+	.rn li p { margin: 4px 0 0; white-space: pre-wrap; }
+</style>
