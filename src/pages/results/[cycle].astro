@@ -1,0 +1,103 @@
+---
+/** Election results by the markets: /results/2026/. Before Election Day, what the markets expect; on the night, races as the markets call them. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { resultsBoard, tally, CALL, type RaceResult, type Status } from "../../lib/results";
+import { pct, fmtDate, PARTY_WORD } from "../../lib/markets";
+import { statePath } from "../../lib/states";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const cycle = Number(Astro.params.cycle);
+const b = Number.isInteger(cycle) ? await resultsBoard(cycle) : null;
+if (!b) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", `public, max-age=${b.live && !b.over ? 60 : 600}`);
+const origin = Astro.url.origin;
+const path = `/results/${cycle}/`;
+const STATUS: Record<Status, string> = { settled: "Settled", called: "Called by markets", likely: "Likely", lean: "Lean", tossup: "Toss-up" };
+const offices = [["senate", "Senate"], ["governor", "Governor"], ["house", "House"]] as const;
+const label = (r: RaceResult) => (r.race.kind === "house" ? r.race.label : r.race.state);
+const time = (t: number | null) => (t ? new Date(t * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "");
+const edayText = new Date(`${b.eday}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+const called = b.rows.filter((r) => r.status === "called" || r.status === "settled").sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+const sen = tally(b.rows, "senate"), house = tally(b.rows, "house");
+const lede = !b.live
+	? `Election Day is ${edayText}. Until then, this page shows what the prediction markets expect: ${b.control.map(({ race, c }) => `${PARTY_WORD[c.lead as "D" | "R"]}s are ${pct(c.lp)} favorites to control the ${race.label.startsWith("Senate") ? "Senate" : "House"}`).join(" and ")}. On election night, races move to "called" as the markets settle on a winner.`
+	: `${called.length} of ${b.rows.length} races have been called by the markets or settled by the exchanges. A race is called once Kalshi and Polymarket together price one side at ${Math.round(CALL * 100)}% or more after polls open and hold it there.`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Results", path]]), { "@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: `${cycle} election results by the markets`, description: lede, dateModified: b.generated });
+---
+<Base title={`${cycle} election results: races called by the markets | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`} modifiedTime={b.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:980px" data-live={b.live && !b.over ? "1" : undefined}>
+		<header class="dp-head">
+			<p class="eyebrow">{b.live ? (b.over ? "Results" : "Live · updates every minute") : "Election night"}</p>
+			<h1>{cycle} results by the markets</h1>
+			<p class="lede">{lede}</p>
+			<p class="sec-note">Updated {fmtDate(b.generated)}. Markets call races before official counts finish; official results come from each state's election office.</p>
+		</header>
+
+		<section class="rs-tally">
+			{b.control.map(({ race, c }) => (
+				<div class="panel">
+					<h2>{race.label.startsWith("Senate") ? "Senate" : "House"} control</h2>
+					<p class="rs-big"><span class={`rs-${c.lead}`}>{PARTY_WORD[c.lead as "D" | "R"]}s {pct(c.lp)}</span></p>
+					{(() => { const t = race.label.startsWith("Senate") ? sen : house; return (
+						<p class="sec-note">Races up this year: D {t.D.settled + t.D.called} won/called + {t.D.favored} favored · R {t.R.settled + t.R.called} won/called + {t.R.favored} favored · {t.tossup} toss-ups</p>
+					); })()}
+					<a href={race.path}>Odds history →</a>
+				</div>
+			))}
+		</section>
+
+		{called.length > 0 && (
+			<section class="panel">
+				<h2>Calls, in order</h2>
+				<ol class="rs-calls">{called.map((r) => <li><time>{time(r.at)}</time> <a href={r.race.path}>{r.race.kind === "house" ? `${r.race.label} House` : `${r.race.state} ${r.race.kind === "senate" ? "Senate" : "governor"}`}</a>: <b class={`rs-${r.party}`}>{r.name ?? PARTY_WORD[r.party]} ({r.party})</b> <span>{STATUS[r.status]}</span></li>)}</ol>
+			</section>
+		)}
+
+		{offices.map(([kind, name]) => {
+			const rs = b.rows.filter((r) => r.race.kind === kind).sort((a, b) => ["tossup", "lean", "likely", "called", "settled"].indexOf(a.status) - ["tossup", "lean", "likely", "called", "settled"].indexOf(b.status) || a.chance - b.chance);
+			return rs.length > 0 && (
+				<section class="panel">
+					<h2>{name} <span class="rs-n">{rs.length} races</span></h2>
+					<ul class="rs-grid">
+						{rs.map((r) => (
+							<li class={`rs-c rs-s-${r.status} rs-b-${r.party}`}>
+								<a href={r.race.path}><b>{label(r)}</b></a>
+								<span>{r.name ?? PARTY_WORD[r.party]} {r.status === "settled" ? "won" : pct(r.chance)}</span>
+								<small>{STATUS[r.status]}</small>
+							</li>
+						))}
+					</ul>
+				</section>
+			);
+		})}
+		<p class="sec-note" style="font-size:12.5px">Market calls are a forecast, not a count. Find each state's official results through its <a href="/states/">state page</a>. Research, not betting advice.</p>
+	</div>
+</Base>
+
+<script>
+	// election night: refresh the board every minute while the page is open
+	if (document.querySelector("[data-live]")) setInterval(() => { if (document.visibilityState === "visible") location.reload(); }, 60_000);
+</script>
+
+<style>
+	.rs-tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 14px; }
+	.rs-big { font: 800 30px var(--font-display); margin: 4px 0; }
+	.rs-D { color: var(--bt-d, #5e92ee); } .rs-R { color: var(--bt-r, #ef7b6f); } .rs-I { color: #b48cf2; }
+	.rs-calls { list-style: none; padding: 0; margin: 0; }
+	.rs-calls li { padding: 6px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.rs-calls time { font: 600 12.5px var(--font-mono), monospace; color: var(--color-muted); display: inline-block; min-width: 80px; }
+	.rs-calls a { color: var(--color-text); }
+	.rs-calls span { color: var(--color-muted); font-size: 12.5px; }
+	.rs-n { font: 600 13px var(--font-mono), monospace; color: var(--color-muted); }
+	.rs-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+	.rs-c { padding: 9px 10px; border-radius: 10px; border: 1px solid var(--color-border); display: grid; gap: 2px; font-size: 13px; border-left-width: 4px; }
+	.rs-c a { color: var(--color-text); text-decoration: none; }
+	.rs-c small { color: var(--color-muted); font: 600 10.5px var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .06em; }
+	.rs-b-D { border-left-color: var(--bt-d, #3b74e0); } .rs-b-R { border-left-color: var(--bt-r, #d8432f); } .rs-b-I { border-left-color: #b48cf2; }
+	.rs-s-tossup { border-left-color: #a07d1c; }
+	.rs-s-settled.rs-b-D, .rs-s-called.rs-b-D { background: color-mix(in srgb, var(--bt-d, #3b74e0) 18%, transparent); }
+	.rs-s-settled.rs-b-R, .rs-s-called.rs-b-R { background: color-mix(in srgb, var(--bt-r, #d8432f) 18%, transparent); }
+</style>
