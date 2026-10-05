@@ -1,0 +1,20 @@
+---
+/** Embeddable race card: /embed/race/2026-senate-maine/?theme=light|dark */
+import EmbedCard from "../../../components/EmbedCard.astro";
+import { getCycle, consensus, candidate, fmtDate, PARTY_WORD, officeTitle } from "../../../lib/markets";
+import { raceSpark } from "../../../lib/trends";
+
+const id = Astro.params.id ?? "";
+const m = /^(\d{4})-[a-z0-9-]{3,60}$/.exec(id);
+const data = m ? await getCycle(Number(m[1])) : null;
+const race = data?.races.find((r) => r.id === id);
+if (!data || !race) return new Response("Unknown race.", { status: 404 });
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const c = consensus(race);
+const name = (p: "D" | "R") => candidate(race, p) ? `${candidate(race, p)} (${p})` : race.kind === "control" ? (p === "D" ? "Democrats" : "Republicans") : `${PARTY_WORD[p]}`;
+const rows = [{ name: name("D"), p: c.D, color: "#3b74e0" }, { name: name("R"), p: c.R, color: "#d8432f" }].sort((a, b) => b.p - a.p);
+const lead = rows[0].color === "#3b74e0" ? "D" : "R";
+const spark = (await raceSpark(race.id, 1, lead)).map((p) => ({ ts: p.ts, v: p.v }));
+const t = Astro.url.searchParams.get("theme");
+---
+<EmbedCard title={`${race.cycle} ${officeTitle(race)}`} rows={rows} spark={spark} href={`${Astro.url.origin}${race.path}`} note={`Kalshi + Polymarket · ${fmtDate(data.meta.generated)}`} theme={t === "light" || t === "dark" ? t : "auto"} />

@@ -1,0 +1,27 @@
+---
+/** "Embed this" on race and market pages: the iframe code to paste, with a copy button. */
+interface Props { src: string; height?: number }
+const { src, height = 230 } = Astro.props;
+const code = `<iframe src="${src}" width="100%" height="${height}" style="border:0;max-width:420px" loading="lazy" title="Odds from Parlay the People"></iframe>`;
+---
+<details class="emb">
+	<summary>Embed these odds on your site</summary>
+	<p class="sec-note">Paste this into any page. It updates every 10 minutes and links back here. Add <code>?theme=light</code> or <code>?theme=dark</code> to the address to fix the colors.</p>
+	<div class="emb-row"><textarea readonly rows="3" aria-label="Embed code">{code}</textarea><button type="button" data-copy>Copy</button></div>
+	<iframe src={src} width="100%" height={height} style="border:0;max-width:420px" loading="lazy" title="Embed preview"></iframe>
+</details>
+<script>
+	document.querySelectorAll<HTMLButtonElement>(".emb [data-copy]").forEach((b) => b.addEventListener("click", async () => {
+		const t = b.parentElement!.querySelector("textarea")!;
+		try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand("copy"); }
+		b.textContent = "Copied";
+		setTimeout(() => (b.textContent = "Copy"), 1800);
+	}));
+</script>
+<style>
+	.emb { margin: 18px 0; }
+	.emb summary { cursor: pointer; font-weight: 600; }
+	.emb-row { display: flex; gap: 8px; margin: 8px 0 12px; }
+	.emb textarea { flex: 1; font: 12.5px var(--font-mono), monospace; padding: 8px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); resize: none; }
+	.emb button { padding: 0 14px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font-weight: 600; cursor: pointer; }
+</style>

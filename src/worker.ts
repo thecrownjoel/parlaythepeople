@@ -32,6 +32,15 @@ async function proJobs(at: Date) {
 
 export default {
 	...handler,
+	// /embed/ cards are made to be framed by other sites; everything else keeps EmDash's same-origin framing rule
+	async fetch(request, env, ctx) {
+		const res = await handler.fetch!(request, env, ctx);
+		if (!new URL(request.url).pathname.startsWith("/embed/")) return res;
+		const headers = new Headers(res.headers);
+		headers.delete("x-frame-options");
+		headers.set("content-security-policy", "frame-ancestors *");
+		return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+	},
 	async scheduled(controller, env, ctx) {
 		await emdashScheduled(controller, env, ctx);
 		ctx.waitUntil(proJobs(new Date(controller.scheduledTime)));

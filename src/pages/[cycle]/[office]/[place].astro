@@ -18,6 +18,7 @@ import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
 import RaceFinance from "../../../components/RaceFinance.astro";
+import EmbedCode from "../../../components/EmbedCode.astro";
 import { candidateLinks } from "../../../lib/candidates";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
@@ -317,6 +318,8 @@ import { parlayD } from "../../../lib/model";
 			<RaceMoney raceId={race.id} />
 			<RaceActivity race={race} kalshi={kalshiByTicker} kalshiTickers={kalshiTickers} />
 		</section>
+
+		<EmbedCode src={`${origin}/embed/race/${race.id}/`} height={race.kind === "control" ? 200 : 210} />
 
 		{race.kind !== "control" && <RaceFinance race={race} names={[candidate(race, "D"), candidate(race, "R"), candidate(race, "I")].filter((n): n is string => !!n)} />}
 

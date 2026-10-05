@@ -1,0 +1,16 @@
+---
+/** Embeddable politics market card: /embed/market/<k|p>-<id>/?theme=light|dark */
+import EmbedCard from "../../../components/EmbedCard.astro";
+import { getPolitics, findMarket, marketPath, marketSeries, exchangeName } from "../../../lib/politics";
+import { fmtDate } from "../../../lib/markets";
+
+const board = await getPolitics();
+const e = findMarket(board, Astro.params.key ?? "");
+if (!board || !e) return new Response("Unknown market.", { status: 404 });
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const colors = ["#5e92ee", "#e0b44f", "#4cc38a", "#b48cf2"];
+const rows = (e.multi ? e.o.slice(0, 4) : [{ n: "Yes", p: e.o[0].p }]).map((o, i) => ({ name: o.n, p: o.p, color: colors[i] }));
+const spark = await marketSeries(e, 86400);
+const t = Astro.url.searchParams.get("theme");
+---
+<EmbedCard title={e.title} rows={rows} spark={spark} href={`${Astro.url.origin}${marketPath(e)}`} note={`${exchangeName(e)} · ${fmtDate(board.generated)}`} theme={t === "light" || t === "dark" ? t : "auto"} />

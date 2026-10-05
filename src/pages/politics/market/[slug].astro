@@ -5,6 +5,7 @@
  */
 import Base from "../../../layouts/Base.astro";
 import JsonLd from "../../../components/JsonLd.astro";
+import EmbedCode from "../../../components/EmbedCode.astro";
 import {
 	getPolitics, findMarket, marketPath, marketSeries, marketChart, marketAnswer, relatedMarkets, exchangeName, money,
 	TOPIC_COLOR, TOPIC_SLUG, TOPIC_SEO,
@@ -89,6 +90,8 @@ const ld = graph(
 			</div>
 			<p class="sec-note">{e.multi ? `The line follows the current favorite, ${lead.n}.` : "The price of a Yes contract, read as the chance the market resolves Yes."} One reading an hour.</p>
 		</section>
+
+		<EmbedCode src={`${origin}/embed/market/${e.id.replace(":", "-").toLowerCase()}/`} height={e.multi ? 250 : 190} />
 
 		<p class="mk-cta"><a class="mk-ex" href={e.url} rel="noopener nofollow" target="_blank">See this market on {exchangeName(e)} →</a></p>
 
