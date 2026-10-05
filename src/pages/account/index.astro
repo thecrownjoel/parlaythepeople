@@ -81,6 +81,12 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 								<label>Move of <input type="number" name="move_pts" min="1" max="50" step="1" value={prefs.move_pts} /> points in 24 hours</label>
 								<label>Bets of $<input type="number" name="whale_usd" min="1000" step="1000" value={prefs.whale_usd} /> or more</label>
 							</div>
+							<label for="acct-hook">Also send alerts to Slack or Discord (optional)</label>
+							<div class="acct-row">
+								<input id="acct-hook" type="url" name="webhook" placeholder="https://hooks.slack.com/services/…" value={prefs.webhook ?? ""} style="flex:1;min-width:240px" />
+								<button type="button" class="acct-ghost" data-test-hook>Send a test</button>
+							</div>
+							<p class="acct-quiet" style="margin:0">Paste a Slack incoming-webhook or Discord webhook address; your team's channel gets each alert as it happens.</p>
 							<button type="submit" class="acct-ghost">Save</button>
 							<p class="acct-msg" data-msg aria-live="polite"></p>
 						</form>
@@ -189,8 +195,14 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 		e.preventDefault();
 		const f = e.currentTarget as HTMLFormElement;
 		const v = (n: string) => f.elements.namedItem(n) as HTMLInputElement;
-		const r = await post("/api/alerts", { briefing: v("briefing").checked, alerts: v("alerts").checked, move_pts: Number(v("move_pts").value), whale_usd: Number(v("whale_usd").value) }).catch(() => null);
-		say(f.querySelector("[data-msg]"), r?.ok ? "Saved." : "That didn't save. Please try again.", !r?.ok);
+		const r = await post("/api/alerts", { briefing: v("briefing").checked, alerts: v("alerts").checked, move_pts: Number(v("move_pts").value), whale_usd: Number(v("whale_usd").value), webhook: v("webhook").value }).catch(() => null);
+		say(f.querySelector("[data-msg]"), r?.ok ? "Saved." : "That didn't save. Check the webhook address and try again.", !r?.ok);
+	});
+	document.querySelector<HTMLButtonElement>("[data-test-hook]")?.addEventListener("click", async (e) => {
+		const f = (e.currentTarget as HTMLElement).closest("form")!;
+		const url = (f.elements.namedItem("webhook") as HTMLInputElement).value;
+		const r = await post("/api/alerts", { test_webhook: url }).catch(() => null);
+		say(f.querySelector("[data-msg]"), r?.ok ? "Test sent. Check the channel." : "The test didn't go through. Check the address.", !r?.ok);
 	});
 	document.querySelector("[data-logout]")?.addEventListener("click", async () => { await post("/api/auth/logout"); location.href = "/"; });
 </script>

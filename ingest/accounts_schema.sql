@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS alert_prefs (
   alerts INTEGER NOT NULL DEFAULT 1,       -- move and big-bet alerts on followed races
   move_pts REAL NOT NULL DEFAULT 5,        -- alert when Democratic odds move this many points in 24 hours
   whale_usd REAL NOT NULL DEFAULT 10000,   -- alert on a single trade this large
+  webhook TEXT,                            -- also post alerts to this Slack/Discord/JSON webhook (added Oct 2026: migrations/2026-10-05-alert-webhook.sql)
   updated INTEGER NOT NULL
 ) WITHOUT ROWID;
 

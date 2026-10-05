@@ -23,11 +23,24 @@ const db = () => env.ACCOUNTS;
 const ORIGIN = "https://parlaythepeople.com";
 const MAX_RACES = 12;
 
-export interface Prefs { briefing: number; alerts: number; move_pts: number; whale_usd: number }
-export const DEFAULT_PREFS: Prefs = { briefing: 1, alerts: 1, move_pts: 5, whale_usd: 10000 };
+export interface Prefs { briefing: number; alerts: number; move_pts: number; whale_usd: number; webhook?: string | null }
+export const DEFAULT_PREFS: Prefs = { briefing: 1, alerts: 1, move_pts: 5, whale_usd: 10000, webhook: null };
 
 export async function prefsFor(userId: string): Promise<Prefs> {
-	return (await db().prepare("SELECT briefing, alerts, move_pts, whale_usd FROM alert_prefs WHERE user_id = ?").bind(userId).first<Prefs>()) ?? DEFAULT_PREFS;
+	const q = (cols: string) => db().prepare(`SELECT ${cols} FROM alert_prefs WHERE user_id = ?`).bind(userId).first<Prefs>();
+	return (await q("briefing, alerts, move_pts, whale_usd, webhook").catch(() => q("briefing, alerts, move_pts, whale_usd"))) ?? DEFAULT_PREFS;
+}
+
+/** A webhook address readers may use: https, and Slack, Discord or any other host that takes a JSON post. */
+export const validWebhook = (u: string) => /^https:\/\/[^\s/]+\.[^\s]+$/.test(u) && u.length <= 500;
+
+/** Post alert lines (markdown, **bold**) to a reader's webhook: Slack's format, which Discord also takes at …/slack. */
+export async function postWebhook(url: string, title: string, lines: string[]) {
+	const discord = /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(url);
+	const target = discord && !url.endsWith("/slack") ? `${url}/slack` : url;
+	const text = `*${title}*\n${lines.map((l) => `• ${l.replace(/\*\*(.+?)\*\*/g, "*$1*")}`).join("\n")}\n<${ORIGIN}/account/|Your races on Parlay the People>`;
+	const res = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, alerts: lines.map((l) => l.replace(/\*\*/g, "")) }) });
+	if (!res.ok) throw new Error(`webhook ${res.status}`);
 }
 
 export async function watchlistFor(userId: string) {
@@ -191,6 +204,7 @@ export async function checkAlerts() {
 		}
 		if (!fresh.length) continue;
 		const body = fresh.map((l) => `- ${l.md}`).join("\n");
+		if (prefs.webhook) await postWebhook(prefs.webhook, fresh.length === 1 ? "Alert on your races" : `${fresh.length} alerts on your races`, fresh.map((l) => l.md)).catch((e) => console.error("alert webhook", userId, String(e)));
 		try {
 			await sendMail({
 				to: a.user.email, from: "alerts@parlaythepeople.com",
