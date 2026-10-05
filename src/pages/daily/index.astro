@@ -11,7 +11,7 @@ const days: string[] = [];
 for (let t = today; isoDate(t) >= DAILY_START && days.length < 120; t -= 86400) days.push(isoDate(t));
 const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 ---
-<Base title={`Daily election market report | ${SITE_NAME}`} description="What moved in the Kalshi and Polymarket election markets each day: control of Congress, the biggest moves, lead changes, money traded and the day's headlines." canonical={`${origin}/daily/`}>
+<Base title={`Daily election odds report: what moved today`} description="What moved in the Kalshi and Polymarket election markets each day: control of Congress, the biggest moves, lead changes, money traded and the day's headlines." canonical={`${origin}/daily/`}>
 	<div class="dp" style="max-width:900px">
 		<header class="dp-head">
 			<p class="eyebrow">Daily market report</p>

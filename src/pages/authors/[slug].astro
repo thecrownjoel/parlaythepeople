@@ -39,7 +39,7 @@ const ld = graph(
 	breadcrumbs(origin, [["Analysis", "/posts/"], [author.displayName, authorPath(author.slug)]]),
 );
 ---
-<Base title={`${author.displayName}: articles and bio`} description={summary.slice(0, 158)} image={avatar ? `${origin}${avatar}` : null} canonical={url}>
+<Base title={`${author.displayName}: articles and bio`} description={summary} image={avatar ? `${origin}${avatar}` : null} canonical={url}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp author">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/posts/">Analysis</a><span aria-hidden="true">/</span><span>{author.displayName}</span></nav>

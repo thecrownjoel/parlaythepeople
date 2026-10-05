@@ -79,7 +79,7 @@ const faqs: [string, string][] = [
 	[`When is the ${year} presidential election?`, `Election Day is ${fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}${days > 0 ? `, ${days} days away` : ""}.`],
 ];
 const crumbs: [string, string][] = [["Elections", "/elections/"], [String(year), `/${year}/`], ["President", path]];
-const title = `${year} presidential election odds: who will win? | Kalshi vs. Polymarket`;
+const title = `${year} presidential election odds: who will win?`;
 const ld = graph(
 	organization(origin),
 	{ "@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: title, description: lede, dateModified: data.meta.generated },

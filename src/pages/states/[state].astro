@@ -41,7 +41,7 @@ const lede = nextRaces.length
 		+ top.map((r) => `${label(r)}: ${favorite(r).text}`).join("; ") + "."
 		+ (tossups.length ? ` ${tossups.length} ${tossups.length === 1 ? "is" : "are"} rated a toss-up.` : "")
 	: `No ${v.name} races have live prediction-market odds right now.`;
-const title = `${v.name} elections ${next ?? ""}: odds for every race | ${SITE_NAME}`;
+const title = `${v.name} elections ${next ?? ""}: odds for every race`;
 const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
 const ld = graph(
 	organization(origin),

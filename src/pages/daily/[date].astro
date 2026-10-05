@@ -32,7 +32,7 @@ const ld = graph(organization(origin), {
 	author: { "@id": `${origin}/#org` }, publisher: { "@id": `${origin}/#org` }, url: `${origin}/daily/${date}/`, description: summary,
 }, breadcrumbs(origin, [["Daily market report", "/daily/"], [long, `/daily/${date}/`]]));
 ---
-<Base title={`Election markets on ${long}`} description={summary.slice(0, 158)} canonical={`${origin}/daily/${date}/`}>
+<Base title={`Election odds report, ${long}`} description={`${summary} Kalshi and Polymarket election odds, the biggest moves and money traded on ${long}.`} canonical={`${origin}/daily/${date}/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp daily">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/daily/">Daily market report</a><span aria-hidden="true">/</span><span>{date}</span></nav>

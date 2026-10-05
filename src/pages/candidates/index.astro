@@ -23,7 +23,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Candidates", "/can
 	mainEntity: { "@type": "ItemList", numberOfItems: list.length, itemListElement: list.slice(0, 100).map((c, i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${candidatePath(c)}`, name: c.name })) },
 });
 ---
-<Base title={`Candidates and their odds | ${SITE_NAME}`} description={description} canonical={`${origin}/candidates/`}>
+<Base title={`2026 candidates: odds to win every race`} description={description} canonical={`${origin}/candidates/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp" style="max-width:960px">
 		<header class="dp-head">

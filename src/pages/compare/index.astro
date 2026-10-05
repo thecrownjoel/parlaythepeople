@@ -50,7 +50,7 @@ const cols = await Promise.all(races.map(async (r, i) => {
 const options = all.filter((r) => r.cycle >= (index?.next ?? 0)).map((r) => ({ id: r.id, label: `${r.cycle} ${officeTitle(r)}` }));
 const title = races.length ? `Compare: ${races.map(short).join(" vs. ")}` : "Compare races";
 ---
-<Base title={`${title} | ${SITE_NAME}`} description="Compare election races side by side: odds on Kalshi and Polymarket, ratings, money traded, polls, campaign cash and outside spending." canonical={`${Astro.url.origin}/compare/`} robots={races.length ? "noindex, follow" : undefined}>
+<Base title={races.length ? title : "Compare election races side by side"} description="Compare election races side by side: odds on Kalshi and Polymarket, ratings, money traded, polls, campaign cash and outside spending." canonical={`${Astro.url.origin}/compare/`} robots={races.length ? "noindex, follow" : undefined}>
 	<div class="dp" style="max-width:1100px">
 		<header class="dp-head">
 			<p class="eyebrow">Compare</p>

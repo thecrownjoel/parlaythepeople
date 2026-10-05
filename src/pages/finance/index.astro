@@ -62,7 +62,7 @@ const ld = graph(
 	dataset(origin, { name: `${cycle} campaign finance (FEC)`, description: lede, path: "/finance/", json: "/api/v1/export/finance.csv", modified: new Date().toISOString().slice(0, 10), keywords: ["campaign finance", "FEC", "super PAC spending", "fundraising"] }),
 );
 ---
-<Base title={`Follow the money: ${cycle} campaign finance | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}/finance/`}>
+<Base title={`${cycle} campaign finance: follow the money`} description={lede} canonical={`${origin}/finance/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="fx">
 		<header class="fx-hero">

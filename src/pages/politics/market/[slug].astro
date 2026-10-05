@@ -37,7 +37,8 @@ const range = rangeOf(DEFAULT_RANGE);
 const chart = marketChart(lead.n, e.multi, await marketSeries(e, range.secs), range);
 const related = relatedMarkets(board, e);
 const question = e.title.trim().endsWith("?") ? e.title.trim() : `What are the odds for "${e.title.trim()}"?`;
-const title = `${e.title.replace(/\?$/, "")}: odds and chances | ${SITE_NAME}`;
+const q = e.title.replace(/\?$/, "").trim();
+const title = q.length <= 54 ? `${q}: odds` : q;
 const description = `${lede} Live ${exchangeName(e)} odds, updated every 10 minutes.`.slice(0, 300);
 const ld = graph(
 	organization(origin),

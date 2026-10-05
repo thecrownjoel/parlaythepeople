@@ -26,7 +26,7 @@ const lede = !b.live
 	: `${called.length} of ${b.rows.length} races have been called by the markets or settled by the exchanges. A race is called once Kalshi and Polymarket together price one side at ${Math.round(CALL * 100)}% or more after polls open and hold it there.`;
 const ld = graph(organization(origin), breadcrumbs(origin, [["Results", path]]), { "@type": "WebPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: `${cycle} election results by the markets`, description: lede, dateModified: b.generated });
 ---
-<Base title={`${cycle} election results: races called by the markets | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`} modifiedTime={b.generated}>
+<Base title={`${cycle} election results live: races called by the markets`} description={lede} canonical={`${origin}${path}`} modifiedTime={b.generated}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp" style="max-width:980px" data-live={b.live && !b.over ? "1" : undefined}>
 		<header class="dp-head">

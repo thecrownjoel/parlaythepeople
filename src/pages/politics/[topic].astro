@@ -16,11 +16,11 @@ const events = (board?.events ?? []).filter((e) => e.topic === topic);
 const seo = TOPIC_SEO[topic];
 const origin = Astro.url.origin;
 const path = `/politics/${Astro.params.topic}/`;
-const title = `${seo.title} on Kalshi and Polymarket`;
+const title = seo.title;
 const description = `${events.length} live prediction markets on ${seo.about}, with odds, 24-hour moves and money traded on Kalshi and Polymarket. Updated every 10 minutes.`;
 const ld = board ? politicsLd(origin, path, title, description, events, board.generated, [["Politics", "/politics/"], [info!.name, path]]) : null;
 ---
-<Base title={`${title} | ${SITE_NAME}`} description={description} canonical={`${origin}${path}`} modifiedTime={board?.generated}>
+<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={board?.generated}>
 	{ld && <JsonLd slot="head" data={ld} />}
 	<PoliticsBoard board={board} topic={topic} />
 </Base>

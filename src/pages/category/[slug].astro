@@ -1,4 +1,5 @@
 ---
+import { SITE_NAME } from "../../lib/site";
 import {
 	getTaxonomyTermsWithCacheHint,
 	getEmDashCollection,
@@ -50,7 +51,7 @@ const filteredPosts = posts.map((post) => ({
 }));
 ---
 
-<Base title={`${term.label} posts`} description={`All posts in ${term.label}`}>
+<Base title={`${term.label}: election analysis`} description={`Every ${SITE_NAME} article on ${term.label.toLowerCase()}: what the Kalshi and Polymarket odds say, the money and the polls, newest first.`}>
 	<section class="archive-section">
 		<header class="archive-header">
 			<span class="archive-label">Category</span>

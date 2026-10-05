@@ -74,11 +74,11 @@ export const TOPIC_SEO: Record<string, { title: string; about: string }> = {
 	trump: { title: "Trump and White House odds", about: "President Trump, the White House, executive actions and approval ratings" },
 	courts: { title: "Supreme Court and legal odds", about: "the Supreme Court, justices, trials, indictments and rulings" },
 	congress: { title: "Congress odds: bills, shutdowns and votes", about: "bills, shutdowns, leadership fights and votes in Congress" },
-	cabinet: { title: "Cabinet and appointment odds", about: "cabinet secretaries, nominees, confirmations and appointments" },
+	cabinet: { title: "Cabinet and nomination odds", about: "cabinet secretaries, nominees, confirmations and appointments" },
 	policy: { title: "Policy odds: tariffs, taxes, immigration and the economy", about: "tariffs, taxes, immigration, spending and the economy" },
-	parties: { title: "Party and 2028 odds", about: "party leadership, 2028 hopefuls and primaries" },
+	parties: { title: "2028 primary and party odds", about: "party leadership, 2028 hopefuls and primaries" },
 	elections: { title: "Mayor, governor and other election odds", about: "mayoral races, state offices, runoffs and referendums" },
-	more: { title: "More politics odds", about: "everything else in politics" },
+	more: { title: "More politics betting odds", about: "everything else in politics" },
 };
 export const topicFromSlug = (slug: string) => Object.entries(TOPIC_SLUG).find(([, s]) => s === slug)?.[0] ?? null;
 

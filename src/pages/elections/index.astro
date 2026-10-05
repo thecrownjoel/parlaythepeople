@@ -17,7 +17,7 @@ const lede = upcoming.length
 	: "Parlay the People tracks prediction-market odds for U.S. elections. New cycles are added automatically as Kalshi and Polymarket list them.";
 const ld = graph(organization(origin), { "@type": "CollectionPage", url: `${origin}/elections/`, name: "U.S. elections tracked by Parlay the People", description: lede }, breadcrumbs(origin, [["Elections", "/elections/"]]));
 ---
-<Base title="U.S. election odds by year" description={lede} canonical={`${origin}/elections/`}>
+<Base title="U.S. election odds by year: 2026, 2028 and beyond" description={lede} canonical={`${origin}/elections/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
 		<header class="dp-head">

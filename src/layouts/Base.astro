@@ -57,11 +57,22 @@ if (Astro.cache?.enabled) {
 const { siteTitle, siteTagline, siteLogo } = resolveBlogSiteIdentity(
 	settingsResult.data,
 );
-const titleIncludesSiteName =
-	title === siteTitle ||
-	title.endsWith(` | ${siteTitle}`) ||
-	title.endsWith(` — ${siteTitle}`);
-const fullTitle = titleIncludesSiteName ? title : `${title} — ${siteTitle}`;
+// Search titles: the page's own words first; the brand is added only when the whole title still fits in about
+// 60 characters (Google cuts longer titles and shows the site name separately anyway).
+const brandRx = new RegExp(`\\s*[|—–-]\\s*${siteTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+const coreTitle = title === siteTitle ? siteTitle : title.replace(brandRx, "").trim();
+const fullTitle = coreTitle === siteTitle || coreTitle.startsWith(`${siteTitle}:`) ? coreTitle
+	: coreTitle.length + siteTitle.length + 3 <= 62 ? `${coreTitle} | ${siteTitle}` : coreTitle;
+// Descriptions: 158 characters at most (longer ones are cut off in results), ended at a sentence or a word.
+function clipDescription(d: string | null | undefined) {
+	if (!d) return d;
+	const t = d.replace(/\s+/g, " ").trim();
+	if (t.length <= 158) return t;
+	const cut = t.slice(0, 158);
+	const sentence = cut.lastIndexOf(". ");
+	return sentence >= 100 ? cut.slice(0, sentence + 1) : cut.slice(0, cut.lastIndexOf(" ")).replace(/[,;:—-]$/, "") + "…";
+}
+const metaDescription = clipDescription(description);
 
 const menu = menuResult.data;
 // Header navigation is built here (not from the CMS menu): a "USA Elections" menu listing every cycle the
@@ -86,8 +97,8 @@ const pageCtx = createPublicPageContext({
 	kind: content ? "content" : "custom",
 	pageType: type,
 	title: fullTitle,
-	pageTitle: pageTitle ?? title,
-	description,
+	pageTitle: pageTitle ?? coreTitle,
+	description: metaDescription,
 	canonical,
 	image: shareImage,
 	content,

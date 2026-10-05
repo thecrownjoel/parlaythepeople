@@ -9,11 +9,11 @@ import { SITE_NAME } from "../../lib/site";
 Astro.response.headers.set("cache-control", "public, max-age=300");
 const board = await getPolitics();
 const origin = Astro.url.origin;
-const title = "Politics prediction markets: every Kalshi and Polymarket politics bet";
+const title = "Politics betting odds: every Kalshi and Polymarket market";
 const description = `${board?.totals.events ?? "Hundreds of"} politics markets beyond the races, live: the Supreme Court, the cabinet, Congress, Trump, world leaders, mayors and more, with odds and money traded on Kalshi and Polymarket.`;
 const ld = board ? politicsLd(origin, "/politics/", title, description, board.events, board.generated, [["Politics", "/politics/"]]) : null;
 ---
-<Base title={`${title} | ${SITE_NAME}`} description={description} canonical={`${origin}/politics/`} modifiedTime={board?.generated}>
+<Base title={title} description={description} canonical={`${origin}/politics/`} modifiedTime={board?.generated}>
 	{ld && <JsonLd slot="head" data={ld} />}
 	<PoliticsBoard board={board} />
 </Base>

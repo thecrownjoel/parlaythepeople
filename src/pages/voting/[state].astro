@@ -34,7 +34,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/
 		...(p24 ? [[`Who won ${name} in ${LATEST_PRES}?`, `${person(p24.D > p24.R ? p24.dn : p24.rn)} won ${name}'s ${LATEST_PRES} presidential vote, ${(Math.max(p24.D, p24.R) / p24.T * 100).toFixed(1)}% to ${(Math.min(p24.D, p24.R) / p24.T * 100).toFixed(1)}%.`] as [string, string]] : []),
 	]));
 ---
-<Base title={`${name} voting: how to vote and past election results | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`}>
+<Base title={`How to vote in ${name}, and past election results`} description={lede} canonical={`${origin}${path}`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="fx">
 		<nav class="fx-src" aria-label="Breadcrumb"><a href="/voting/">Voting</a> › <a href={statePath(st)}>{name} races and odds</a></nav>

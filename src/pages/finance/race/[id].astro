@@ -43,12 +43,12 @@ const through = asOfReport(market.map((x) => x.coverage_end).filter(Boolean).sor
 const total = nominees.reduce((a, n) => a + (n.c?.receipts ?? 0) + (n.c?.support ?? 0) + (n.c?.oppose ?? 0), 0);
 const lede = nominees.length
 	? nominees.map((n) => n.c ? `${n.name} (${n.p}) has raised ${money(n.c.receipts)} and has ${money(n.c.cash)} left` : `${n.name} (${n.p}) hasn't filed a financial report yet`).join("; ") + `, through ${through}.` + (total ? ` Outside groups have spent ${money(nominees.reduce((a, n) => a + (n.c?.support ?? 0) + (n.c?.oppose ?? 0), 0))} on the race.` : "")
-	: "No FEC filings for this race's nominees yet.";
-const title = `${race.cycle} ${raceShort(race)} race: campaign money and outside spending`;
+	: `Campaign finance for the ${race.cycle} ${raceShort(race)}${race.kind === "house" ? " House" : ""} race: what each candidate has raised and spent, cash on hand, and outside spending, from FEC filings updated daily.`;
+const title = `${raceShort(race)}${race.kind === "house" ? " House" : ""} ${race.cycle}: campaign money and super PACs`;
 const ld = graph(organization(origin), breadcrumbs(origin, [["Money", "/finance/"], [raceShort(race), path]]),
 	faq(nominees.filter((n) => n.c).map((n) => [`How much has ${n.name} raised?`, `${n.name} has raised ${money(n.c!.receipts)} for the ${race.cycle} ${raceShort(race)} race and has ${money(n.c!.cash)} cash on hand, through ${through}, according to the FEC.`] as [string, string])));
 ---
-<Base title={`${title} | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`}>
+<Base title={title} description={lede} canonical={`${origin}${path}`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="fx">
 		<nav class="fx-src" aria-label="Breadcrumb"><a href="/finance/">Money</a> › <a href={race.path}>{raceShort(race)} odds</a></nav>

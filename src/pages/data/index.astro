@@ -25,7 +25,7 @@ const feeds: [string, string, string][] = [
 ];
 const ld = graph(organization(origin), { "@type": "WebPage", url: `${origin}/data/`, name: "Parlay the People data and API" }, breadcrumbs(origin, [["Data & API", "/data/"]]));
 ---
-<Base title="Data & API: election odds feeds" description="Free JSON and CSV feeds of Kalshi and Polymarket election odds for every U.S. race, with price history." canonical={`${origin}/data/`}>
+<Base title="Election odds data and API: Kalshi and Polymarket" description="Free JSON and CSV feeds of Kalshi and Polymarket election odds for every U.S. race, with price history." canonical={`${origin}/data/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp" style="max-width:960px">
 		<header class="dp-head">

@@ -68,7 +68,7 @@ const home = await homeData();
 const isNext = home.nextYear === year;
 const pMovers = parsePeriod(SECTIONS.movers.def, SECTIONS.movers.def), pMoney = parsePeriod("7d", "7d");
 const h1 = `${year} election odds${midterm ? ": Senate, House and governors" : hasPres ? ": president, Senate and governors" : ""}`;
-const title = `${year} ${midterm ? "midterm" : ""} election odds: ${hasPres ? "president, " : ""}${officesHere.map((k) => officeNames[k]).join(", ")} | Kalshi vs. Polymarket`.replace("  ", " ");
+const title = `${year} ${midterm ? "midterm" : ""} election odds: ${hasPres ? "president, " : ""}${officesHere.map((k) => officeNames[k]).join(", ")}`.replace("  ", " ");
 
 const faqs: [string, string][] = [
 	...(senC ? [[`Who will win the Senate in ${year}?`, `${consensus(senC).lead === "D" ? "Democrats" : "Republicans"} are favored, at ${pct(consensus(senC).lp)} on average across Kalshi and Polymarket as of ${when}.`] as [string, string]] : []),

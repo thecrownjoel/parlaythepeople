@@ -19,7 +19,7 @@ const rows = views.map((v) => {
 const description = `Prediction-market odds for every Senate, governor and House race and ballot measure, state by state. ${rows.reduce((a, x) => a + x.close, 0)} races are toss-ups right now.`;
 const ld = graph(organization(origin), breadcrumbs(origin, [["States", "/states/"]]), { "@type": "CollectionPage", "@id": `${origin}/states/#page`, url: `${origin}/states/`, name: "Elections by state", description });
 ---
-<Base title={`Elections by state: odds for every race | ${SITE_NAME}`} description={description} canonical={`${origin}/states/`}>
+<Base title={`2026 elections by state: odds for every race`} description={description} canonical={`${origin}/states/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp" style="max-width:960px">
 		<header class="dp-head">

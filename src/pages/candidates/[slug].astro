@@ -48,7 +48,7 @@ try {
 const day = (t: number | null) => (t ? new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }) : "");
 const fin = finance.find(Boolean);
 
-const title = `${c.name} odds: chances of winning the ${entryLabel(main)} | ${SITE_NAME}`;
+const title = `${c.name} odds: ${entryLabel(main).replace(/ race$/, "")}`;
 const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
 const ld = graph(
 	organization(origin),

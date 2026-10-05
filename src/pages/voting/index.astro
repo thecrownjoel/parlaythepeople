@@ -16,7 +16,9 @@ Astro.response.headers.set("cache-control", "public, max-age=3600");
 const origin = Astro.url.origin;
 const [pres, seats] = await Promise.all([getPresident(), getHouseSeats()]);
 const next = (await calendar(undefined, 400)).find((e) => e.kind === "election");
-const nat = pres?.national[LATEST_PRES];
+// the national totals carry no names: take them from the largest state's result
+const big = pres ? Object.values(pres.states).map((s) => s[LATEST_PRES]).filter(Boolean).sort((a, b) => b.T - a.T)[0] : null;
+const nat = pres?.national[LATEST_PRES] ? { ...pres.national[LATEST_PRES], dn: big?.dn, rn: big?.rn } : null;
 const lede = `How to vote in your state, and how every state has voted since 1976.${nat ? ` In ${LATEST_PRES}, ${person(nat.rn)} won the popular vote ${marginWords(nat).replace("R+", "by ")} points.` : ""}${next ? ` The next Election Day is ${calDay(next.date)}.` : ""}`;
 const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/"]]),
 	faq([
@@ -24,7 +26,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Voting", "/voting/
 		...(next ? [["When is the next election?", `Election Day is ${calDay(next.date)}.`] as [string, string]] : []),
 	]));
 ---
-<Base title={`Voting: how to vote, and how every state has voted | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}/voting/`}>
+<Base title={`How to vote, and how every state has voted since 1976`} description={lede} canonical={`${origin}/voting/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="fx">
 		<header class="fx-hero">
