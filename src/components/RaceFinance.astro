@@ -18,7 +18,7 @@ const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open s
 		<p class="sec-note">No FEC filings for this seat yet.</p>
 	) : (
 		<>
-			<p class="sec-note">Money each campaign has raised and has left, through {asOfReport(latest)}, and outside spending by super PACs, parties and groups. From the FEC, updated daily.</p>
+			<p class="sec-note">Money each campaign has raised and has left, through {asOfReport(latest)}, and outside spending by super PACs, parties and groups. From the FEC, updated daily. {Astro.url.pathname.startsWith("/finance/") ? null : <a href={`/finance/race/${race.id}/`}>The full money breakdown →</a>}</p>
 			<div class="fin-scroll">
 				<table class="fin">
 					<thead><tr><th scope="col">Candidate</th><th scope="col">Raised</th><th scope="col">Spent</th><th scope="col">Cash on hand</th><th scope="col">Outside for</th><th scope="col">Outside against</th></tr></thead>

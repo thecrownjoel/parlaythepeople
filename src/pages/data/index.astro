@@ -15,7 +15,7 @@ const feeds: [string, string, string][] = [
 	["One cycle (CSV)", `/api/v1/${ex}/races.csv`, "One row per race: consensus odds, each exchange's odds, rating and page link."],
 	["Race history (JSON)", `/api/v1/history/${ex}-senate-control.json`, "Every recorded price point for one race over the last 90 days (full history back to Nov 2024 with Pro). Race ids look like 2026-senate-maine or 2026-house-ca-22."],
 	["Race history (CSV)", `/api/v1/history/${ex}-senate-control.json?format=csv`, "The same history as a spreadsheet-ready CSV."],
-	["Campaign finance (CSV)", `/api/v1/export/finance.csv?cycle=${ex}`, "Every House and Senate candidate's FEC totals: raised, spent, cash on hand, debts, sources, and outside spending for and against. Updated daily."],
+	["Campaign finance (CSV)", `/api/v1/export/finance.csv?cycle=${ex}`, "Pro. Every House and Senate candidate's FEC totals: raised, spent, cash on hand, debts, sources, and outside spending for and against. Updated daily."],
 	["Politics markets (CSV)", "/api/v1/export/politics.csv", "Every politics market on the board: leading outcome, price, 24-hour change, money traded, close date and page link."],
 	["Track record (JSON)", "/api/v1/track-record.json", "How often market favorites won in every decided 2024 and 2025 race, race by race."],
 	["Election calendar (iCal)", "/calendar.ics", "Election days, runoffs and FEC deadlines, for Google Calendar, Outlook or Apple Calendar."],

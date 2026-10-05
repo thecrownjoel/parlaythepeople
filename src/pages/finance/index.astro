@@ -1,0 +1,221 @@
+---
+/**
+ * Follow the money: /finance/. Campaign finance for the cycle from the FEC, made to read at a glance.
+ * Totals, the parties' war chests, outside money week by week, the most expensive races, who's spending,
+ * the top fundraisers, and money set against the markets' odds. Current-cycle figures are free (Pro gating rules).
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { totals, partyCommittees, outsideWeeks, topSpenders, topFundraisers, raceMoney, financeCycle, money, raceShort } from "../../lib/finance";
+import { fecName, partyLetter, asOfReport } from "../../lib/fec";
+import { organization, breadcrumbs, faq, dataset, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+import "../../styles/finance.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=900");
+const origin = Astro.url.origin;
+const cycle = await financeCycle();
+const [t, parties, weeks, spenders, raisers, races] = await Promise.all([totals(cycle), partyCommittees(cycle), outsideWeeks(cycle), topSpenders(cycle, 14), topFundraisers(cycle, 14), raceMoney(cycle)]);
+const through = asOfReport(t.through);
+const outside = t.outsideD + t.outsideR + t.outsideOther;
+
+// outside money by week: Democrats above the line, Republicans below
+const W = 1000, H = 260, mid = H / 2;
+// the election year so far, every week placed by its date (weeks with no spending are zero)
+const today = new Date().toISOString().slice(0, 10);
+const startDay = `${cycle}-01-05`;
+const byWeek = new Map(weeks.map((w) => [w.week, w]));
+const wk: { week: string; d: number; r: number }[] = [];
+// weeks that have ended (the current week is still filling in)
+for (let t = Date.parse(`${startDay}T12:00:00Z`); new Date(t + 6 * 864e5).toISOString().slice(0, 10) < today; t += 7 * 864e5) {
+	const d = new Date(t), mon = new Date(t - ((d.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10);
+	wk.push(byWeek.get(mon) ?? { week: mon, d: 0, r: 0 });
+}
+const wmax = Math.max(1, ...wk.map((w) => Math.max(w.d, w.r)));
+const wx = (i: number) => (wk.length > 1 ? (i / (wk.length - 1)) * W : W / 2);
+const area = (k: "d" | "r", sign: 1 | -1) => wk.length > 1 ? `M0,${mid} ` + wk.map((w, i) => `L${wx(i).toFixed(1)},${(mid - sign * (w[k] / wmax) * (mid - 12)).toFixed(1)}`).join(" ") + ` L${W},${mid} Z` : "";
+const line = (k: "d" | "r", sign: 1 | -1) => wk.map((w, i) => `${i ? "L" : "M"}${wx(i).toFixed(1)},${(mid - sign * (w[k] / wmax) * (mid - 12)).toFixed(1)}`).join(" ");
+const peak = wk.reduce((a, w) => (w.d + w.r > a.d + a.r ? w : a), wk[0] ?? { week: "", d: 0, r: 0 });
+const monthTicks = wk.map((w, i) => ({ w, i })).filter(({ w, i }) => i === 0 || w.week.slice(5, 7) !== wk[i - 1].week.slice(5, 7)).map(({ w, i }) => ({ x: wx(i), label: new Date(`${w.week}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) }));
+
+const expensive = races.slice(0, 12);
+const emax = Math.max(1, ...expensive.map((r) => r.total));
+const smax = Math.max(1, ...spenders.map((s) => Math.max(s.helps_d, s.helps_r) + s.other));
+const rmax = Math.max(1, ...raisers.map((c) => c.receipts));
+const raceOf = new Map(races.flatMap((r) => [r.d && [r.d.cand_id, r.race] as const, r.r && [r.r.cand_id, r.race] as const].filter(Boolean) as [string, typeof races[number]["race"]][]));
+
+// money vs. odds: every race where both nominees have filed
+const pts = races.filter((r) => r.dRaised > 0 && r.rRaised > 0 && r.oddsD > 0.1 && r.oddsD < 0.9); // competitive races only
+const SW = 640, SH = 420, pad = 44;
+const sx = (v: number) => pad + v * (SW - pad * 2), sy = (v: number) => SH - pad - v * (SH - pad * 2);
+const outraisedTrailing = pts.filter((r) => (r.dRaised > r.rRaised) !== (r.oddsD > 0.5)).length;
+
+const lede = `${SITE_NAME} tracks every dollar the FEC reports for the ${cycle} House and Senate races: ${money(t.raised)} raised by ${t.candidates.toLocaleString()} candidates and ${money(outside)} spent by outside groups, through ${through}.`;
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["Money", "/finance/"]]),
+	faq([
+		[`How much has been raised in the ${cycle} elections?`, `House and Senate candidates have raised ${money(t.raised)} for ${cycle} (Democrats ${money(t.raisedD)}, Republicans ${money(t.raisedR)}), and outside groups have spent ${money(outside)}, according to FEC filings through ${through}.`],
+		[`What is the most expensive race of ${cycle}?`, expensive[0] ? `The ${raceShort(expensive[0].race)} race, with ${money(expensive[0].total)} raised by the nominees and spent by outside groups.` : "Not enough filings yet."],
+		["What is outside spending?", "Money spent by super PACs, parties and other groups to support or oppose a candidate without coordinating with the campaign (independent expenditures), reported to the FEC within 24 or 48 hours near an election."],
+	]),
+	dataset(origin, { name: `${cycle} campaign finance (FEC)`, description: lede, path: "/finance/", json: "/api/v1/export/finance.csv", modified: new Date().toISOString().slice(0, 10), keywords: ["campaign finance", "FEC", "super PAC spending", "fundraising"] }),
+);
+---
+<Base title={`Follow the money: ${cycle} campaign finance | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}/finance/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="fx">
+		<header class="fx-hero">
+			<p class="eyebrow">Money · {cycle}</p>
+			<h1>Follow the money</h1>
+			<p class="fx-lede">{lede}</p>
+			<dl class="fx-big">
+				<div><dt>Raised by candidates</dt><dd data-count={t.raised} data-fmt="usd">{money(t.raised)}</dd><span><i class="d"></i>D {money(t.raisedD)} <i class="r"></i>R {money(t.raisedR)}</span></div>
+				<div><dt>Spent by outside groups</dt><dd data-count={outside} data-fmt="usd">{money(outside)}</dd><span><i class="d"></i>helping D {money(t.outsideD)} <i class="r"></i>helping R {money(t.outsideR)}</span></div>
+				<div><dt>Party committees' cash</dt><dd data-count={t.partyCash} data-fmt="usd">{money(t.partyCash)}</dd><span>the six national party committees</span></div>
+			</dl>
+		</header>
+
+		<section class="fx-sec">
+			<h2>The parties' war chests</h2>
+			<p class="fx-note">Each pair of committees raises for the same job. The bar shows each side's share of what the two raised; under it, what each raised and still has in the bank.</p>
+			<div class="fx-wars" data-pop>
+				{parties.map((p) => {
+					const dr = p.D.c?.receipts ?? 0, rr = p.R.c?.receipts ?? 0, tot = dr + rr || 1;
+					return (
+						<div class="fx-war">
+							<h3>{p.label}</h3>
+							<div class="fx-tug">
+								<span class="fx-tug-d" data-grow style={`width:${(dr / tot) * 100}%`}></span>
+								<span class="fx-tug-r" data-grow style={`width:${(rr / tot) * 100}%`}></span>
+							</div>
+							<div class="fx-war-row">
+								<span><b class="d">{p.D.name}</b> raised <b>{money(dr)}</b> · {money(p.D.c?.cash ?? 0)} cash</span>
+								<span><b class="r">{p.R.name}</b> raised <b>{money(rr)}</b> · {money(p.R.c?.cash ?? 0)} cash</span>
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+
+		{wk.length > 2 && (
+			<section class="fx-sec">
+				<h2>Outside money, week by week</h2>
+				<p class="fx-note">Super PAC and party spending for or against candidates in the general election, by the week it went out, since January. Above the line helped Democrats; below helped Republicans.{peak.week && ` The biggest week so far was ${new Date(`${peak.week}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })}: ${money(peak.d + peak.r)}.`}</p>
+				<figure class="fx-wk">
+					<svg viewBox={`0 0 ${W} ${H + 30}`} role="img" aria-label={`Outside spending by week: ${money(t.outsideD)} helped Democrats, ${money(t.outsideR)} helped Republicans`}>
+						<line x1="0" x2={W} y1={mid} y2={mid} class="fx-axis" />
+						<path d={area("d", 1)} class="fx-area-d" />
+						<path d={area("r", -1)} class="fx-area-r" />
+						<path d={line("d", 1)} class="fx-line-d" data-draw />
+						<path d={line("r", -1)} class="fx-line-r" data-draw />
+						{monthTicks.map((m) => <text x={m.x} y={H + 18} class="fx-tick">{m.label}</text>)}
+					</svg>
+					<figcaption><span><i class="d"></i>Helped Democrats {money(t.outsideD)}</span><span><i class="r"></i>Helped Republicans {money(t.outsideR)}</span></figcaption>
+				</figure>
+			</section>
+		)}
+
+		<section class="fx-sec">
+			<h2>The most expensive races</h2>
+			<p class="fx-note">Money raised by each party's nominee plus outside spending that helped them.</p>
+			<p class="fx-legend" style="margin:-8px 0 16px"><span><i style="background:var(--bt-d)"></i>Democrat raised</span><span><i class="fx-s-od"></i>Outside money for the Democrat</span><span><i class="fx-s-or"></i>Outside money for the Republican</span><span><i style="background:var(--bt-r)"></i>Republican raised</span></p>
+			<ol class="fx-races" data-pop>
+				{expensive.map((r, i) => (
+					<li>
+						<a href={`/finance/race/${r.race.id}/`}><b>{raceShort(r.race)}</b><span>{money(r.total)}</span></a>
+						<div class="fx-stack" style={`width:${(r.total / emax) * 100}%`} data-grow data-delay={i * 0.04}>
+							<i class="fx-s-d" style={`flex:${r.dRaised}`} title={`${r.dName ?? "Democrat"} raised ${money(r.dRaised)}`}></i>
+							<i class="fx-s-od" style={`flex:${r.outD}`} title={`Outside money helping ${r.dName ?? "the Democrat"}: ${money(r.outD)}`}></i>
+							<i class="fx-s-or" style={`flex:${r.outR}`} title={`Outside money helping ${r.rName ?? "the Republican"}: ${money(r.outR)}`}></i>
+							<i class="fx-s-r" style={`flex:${r.rRaised}`} title={`${r.rName ?? "Republican"} raised ${money(r.rRaised)}`}></i>
+						</div>
+						<small>{r.dName ?? "D"} {money(r.dRaised + r.outD)} · {r.rName ?? "R"} {money(r.rRaised + r.outR)}</small>
+					</li>
+				))}
+			</ol>
+		</section>
+
+		<div class="fx-two">
+			<section class="fx-sec">
+				<h2>Who's spending</h2>
+				<p class="fx-note">The biggest outside spenders. Blue helped Democrats, red helped Republicans, gray went to primaries.</p>
+				<ol class="fx-bars" data-pop>
+					{spenders.map((s) => (
+						<li>
+							<span class="fx-bl"><b>{s.name.length > 34 ? s.name.slice(0, 33) + "…" : s.name}</b>{s.targets.length > 0 && <small>{s.targets.join(", ")}</small>}</span>
+							<span class="fx-bt">
+								<i class="d" data-grow style={`width:${(s.helps_d / smax) * 100}%`}></i><i class="r" data-grow style={`width:${(s.helps_r / smax) * 100}%`}></i><i class="o" data-grow style={`width:${(s.other / smax) * 100}%`}></i>
+							</span>
+							<span class="fx-bv">{money(s.helps_d + s.helps_r + s.other)}</span>
+						</li>
+					))}
+				</ol>
+			</section>
+			<section class="fx-sec">
+				<h2>Top fundraisers</h2>
+				<p class="fx-note">Raised this cycle. The light part of each bar is cash still in the bank.</p>
+				<ol class="fx-bars" data-pop>
+					{raisers.map((c) => {
+						const race = raceOf.get(c.cand_id);
+						const p = partyLetter(c.party) ?? "I";
+						return (
+							<li>
+								<span class="fx-bl">{race ? <a href={`/finance/race/${race.id}/`}><b>{fecName(c.name)}</b></a> : <b>{fecName(c.name)}</b>}<small>{c.office === "S" ? `${c.state} Senate` : `${c.state}-${Number(c.district)} House`}</small></span>
+								<span class="fx-bt fx-bt-1"><i class={p === "D" ? "d" : p === "R" ? "r" : "o"} data-grow style={`width:${(c.receipts / rmax) * 100}%`}><u style={`width:${Math.min(100, (c.cash / (c.receipts || 1)) * 100)}%`}></u></i></span>
+								<span class="fx-bv">{money(c.receipts)}</span>
+							</li>
+						);
+					})}
+				</ol>
+			</section>
+		</div>
+
+		{pts.length > 4 && (
+			<section class="fx-sec">
+				<h2>Does money buy the odds?</h2>
+				<p class="fx-note">Each dot is a competitive race (neither side above 90%), sized by the money in it. Across: the Democrat's share of the money the two nominees raised. Up: the Democrat's chance in the prediction markets. In {outraisedTrailing} of {pts.length} races, the candidate who raised more is the underdog.</p>
+				<figure class="fx-sc">
+					<svg viewBox={`0 0 ${SW} ${SH}`} role="img" aria-label="Scatter plot of fundraising share against market odds for each race">
+						<rect x={sx(0.5)} y={sy(1)} width={sx(1) - sx(0.5)} height={sy(0.5) - sy(1)} class="fx-q" />
+						<rect x={sx(0)} y={sy(0.5)} width={sx(0.5) - sx(0)} height={sy(0) - sy(0.5)} class="fx-q" />
+						<line x1={sx(0)} x2={sx(1)} y1={sy(0.5)} y2={sy(0.5)} class="fx-axis" /><line x1={sx(0.5)} x2={sx(0.5)} y1={sy(0)} y2={sy(1)} class="fx-axis" />
+						<text x={sx(1) - 6} y={sy(1) + 16} class="fx-qt" text-anchor="end">D outraised, D favored</text>
+						<text x={sx(0) + 6} y={sy(0) - 8} class="fx-qt">R outraised, R favored</text>
+						<text x={sx(0) + 6} y={sy(1) + 16} class="fx-qt">R outraised, D favored</text>
+						<text x={sx(1) - 6} y={sy(0) - 8} class="fx-qt" text-anchor="end">D outraised, R favored</text>
+						<text x={SW / 2} y={SH - 8} class="fx-tick" text-anchor="middle">Democrat's share of the money →</text>
+						<text x="14" y={SH / 2} class="fx-tick" text-anchor="middle" transform={`rotate(-90 14 ${SH / 2})`}>Democrat's chance →</text>
+						<g data-pop>
+							{pts.map((r) => {
+								const share = r.dRaised / (r.dRaised + r.rRaised);
+								return (
+									<a href={`/finance/race/${r.race.id}/`}>
+										<circle cx={sx(share)} cy={sy(r.oddsD)} r={Math.max(4, Math.min(16, Math.sqrt(r.total / 1e6) * 2.4))} class={r.oddsD >= 0.5 ? "fx-dot-d" : "fx-dot-r"}>
+											<title>{raceShort(r.race)}: Democrat raised {Math.round(share * 100)}% of the money, has a {Math.round(r.oddsD * 100)}% chance</title>
+										</circle>
+									</a>
+								);
+							})}
+						</g>
+					</svg>
+				</figure>
+			</section>
+		)}
+
+		<section class="fx-sec fx-faq">
+			<h2>How to read the money</h2>
+			<details><summary>Where do these numbers come from?</summary><p>The Federal Election Commission. Campaigns report what they raise and spend every quarter (monthly near an election); outside groups report their spending within 24 or 48 hours. We load the FEC's files every morning. Figures run through each committee's latest report, {through} for most.</p></details>
+			<details><summary>What's the difference between raised and cash on hand?</summary><p>Raised is everything that came in this cycle; cash on hand is what's left after spending. A campaign with less cash late in the race has already spent on ads and staff, or is running low.</p></details>
+			<details><summary>What counts as outside spending?</summary><p>Independent expenditures: money a super PAC, party or group spends to support or oppose a candidate without coordinating with the campaign. We count general-election spending as helping a party when it supports that party's candidate or opposes the other party's; primary spending is shown separately.</p></details>
+			<details><summary>Why aren't governors here?</summary><p>Candidates for governor report to their states, not the FEC. Their races still have odds and polls on each race page.</p></details>
+		</section>
+		<p class="fx-src">Source: Federal Election Commission bulk data and OpenFEC API. Filings with impossible amounts are left out. <a href="/data/">Download the data</a>.</p>
+	</div>
+</Base>
+
+<script>
+	import { motion } from "../../scripts/motion";
+	motion();
+</script>

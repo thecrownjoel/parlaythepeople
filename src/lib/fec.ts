@@ -16,7 +16,12 @@ export interface FecCandidate {
 export function fecName(n: string) {
 	const [last, rest] = n.split(",").map((s) => s.trim());
 	const cap = (s: string) => s.toLowerCase().replace(/(^|[\s\-'.])([a-z])/g, (_, a, b) => a + b.toUpperCase()).replace(/\bMc([a-z])/g, (_, b) => "Mc" + b.toUpperCase());
-	return rest ? `${cap(rest.replace(/\b(MR|MRS|MS|DR|HON)\.?\s*$/i, ""))} ${cap(last)}`.trim() : cap(n);
+	if (!rest) return cap(n);
+	// "PAXTON, WARREN KENNETH JR." → "Warren Kenneth Paxton Jr."
+	const suffix = /\b(JR|SR|II|III|IV)\.?\s*$/i.exec(rest);
+	const first = rest.replace(/\b(MR|MRS|MS|DR|HON)\.?\s*$/i, "").replace(/\b(JR|SR|II|III|IV)\.?\s*$/i, "").trim();
+	const suf = suffix ? ` ${suffix[1].length > 2 ? suffix[1].toUpperCase() : cap(suffix[1])}${/^(JR|SR)$/i.test(suffix[1]) ? "." : ""}` : "";
+	return `${cap(first)} ${cap(last)}${suf}`.trim();
 }
 export const fecUrl = (id: string) => `https://www.fec.gov/data/candidate/${id}/`;
 export const partyLetter = (p: string | null) => (p === "DEM" || p === "DFL" ? "D" : p === "REP" ? "R" : p ? "I" : null);

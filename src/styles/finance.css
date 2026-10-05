@@ -1,0 +1,116 @@
+/* The money and voting sections (/finance/, /voting/): big numbers, bars, charts and maps that read at a glance. */
+.fx { max-width: 1120px; margin: 0 auto; padding: 28px 20px 60px; }
+.fx-hero { position: relative; padding: 40px 32px 32px; border-radius: 24px; overflow: hidden; margin-bottom: 28px;
+	background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--bt-d) 22%, transparent), transparent 55%),
+		radial-gradient(120% 140% at 100% 100%, color-mix(in srgb, var(--bt-r) 20%, transparent), transparent 55%), var(--color-surface);
+	border: 1px solid var(--color-border); }
+.fx-hero h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(38px, 6vw, 68px); line-height: 1; margin: 8px 0 14px; }
+.fx-lede { font-size: 18px; max-width: 760px; color: var(--color-text-secondary); margin: 0 0 24px; }
+.fx-big { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 0; }
+.fx-big > div { padding: 16px 18px; border-radius: 16px; background: color-mix(in srgb, var(--color-bg) 55%, transparent); border: 1px solid var(--color-border); backdrop-filter: blur(6px); }
+.fx-big dt { font: 600 11.5px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+.fx-big dd { margin: 8px 0 6px; font: 800 clamp(30px, 4vw, 44px)/1 var(--font-display); font-variant-numeric: tabular-nums; color: #3fb68b; }
+.fx-big > div > span { font-size: 13px; color: var(--color-text-secondary); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+i.d, i.r, i.o { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--bt-d); }
+i.r { background: var(--bt-r); } i.o { background: var(--bt-oth); }
+b.d { color: var(--bt-d); } b.r { color: var(--bt-r); }
+
+.fx-sec { margin: 0 0 22px; padding: 24px; border-radius: 20px; border: 1px solid var(--color-border); background: var(--color-surface); }
+.fx-sec h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(22px, 2.6vw, 30px); margin: 0 0 6px; }
+.fx-note { color: var(--color-text-secondary); margin: 0 0 18px; max-width: 760px; font-size: 15px; }
+.fx-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 22px; }
+.fx-two .fx-sec { margin: 0 0 22px; }
+
+/* war chests: a tug of war per pair of committees */
+.fx-wars { display: grid; gap: 18px; }
+.fx-war h3 { margin: 0 0 8px; font-size: 15px; }
+.fx-tug { display: flex; height: 22px; border-radius: 11px; overflow: hidden; background: rgb(127 127 127 / .12); }
+.fx-tug span { display: block; height: 100%; }
+.fx-tug-d { background: linear-gradient(90deg, color-mix(in srgb, var(--bt-d) 75%, #000), var(--bt-d)); }
+.fx-tug-r { background: linear-gradient(90deg, var(--bt-r), color-mix(in srgb, var(--bt-r) 75%, #000)); margin-left: auto; }
+.fx-war-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 7px; font-size: 14px; color: var(--color-text-secondary); }
+
+/* outside money by week */
+.fx-wk { margin: 0; }
+.fx-wk svg { width: 100%; height: auto; display: block; overflow: visible; }
+.fx-axis { stroke: var(--color-border); stroke-width: 1.5; }
+.fx-area-d { fill: color-mix(in srgb, var(--bt-d) 30%, transparent); } .fx-area-r { fill: color-mix(in srgb, var(--bt-r) 30%, transparent); }
+.fx-line-d, .fx-line-r { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.fx-line-d { stroke: var(--bt-d); } .fx-line-r { stroke: var(--bt-r); }
+.fx-tick { font: 12px var(--font-mono), monospace; fill: var(--color-muted); }
+.fx-wk figcaption { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 14px; }
+.fx-wk figcaption span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* most expensive races */
+.fx-races { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.fx-races a { display: flex; justify-content: space-between; color: var(--color-text); text-decoration: none; margin-bottom: 5px; }
+.fx-races a:hover b { text-decoration: underline; }
+.fx-races a span { font: 700 14px var(--font-mono), monospace; }
+.fx-stack { display: flex; height: 16px; border-radius: 8px; overflow: hidden; min-width: 4px; }
+.fx-stack i { display: block; height: 100%; }
+.fx-s-d { background: var(--bt-d); } .fx-s-od { background: color-mix(in srgb, var(--bt-d) 55%, white); }
+.fx-s-r { background: var(--bt-r); } .fx-s-or { background: color-mix(in srgb, var(--bt-r) 55%, white); }
+.fx-races small { display: block; margin-top: 4px; color: var(--color-muted); font-size: 12.5px; }
+
+/* bar lists */
+.fx-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fx-bars li { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 70px; gap: 10px; align-items: center; }
+.fx-bl { display: grid; font-size: 14px; min-width: 0; }
+.fx-bl b, .fx-bl a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); }
+.fx-bl small { color: var(--color-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-bt { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: rgb(127 127 127 / .1); }
+.fx-bt i { display: block; height: 100%; width: 0; border-radius: 0; }
+.fx-bt i.d { background: var(--bt-d); } .fx-bt i.r { background: var(--bt-r); } .fx-bt i.o { background: var(--bt-oth); }
+.fx-bt-1 i { position: relative; border-radius: 6px; }
+.fx-bt-1 i u { position: absolute; right: 0; top: 0; bottom: 0; background: rgb(255 255 255 / .35); }
+.fx-bv { font: 700 13px var(--font-mono), monospace; text-align: right; }
+
+/* money vs. odds */
+.fx-sc { margin: 0; max-width: 760px; }
+.fx-sc svg { width: 100%; height: auto; display: block; }
+.fx-q { fill: rgb(127 127 127 / .06); }
+.fx-qt { font: 600 11.5px var(--font-mono), monospace; fill: var(--color-muted); paint-order: stroke; stroke: var(--color-surface); stroke-width: 4px; }
+.fx-dot-d, .fx-dot-r { stroke: var(--color-surface); stroke-width: 1.5; transition: r .2s; }
+.fx-dot-d { fill: color-mix(in srgb, var(--bt-d) 85%, transparent); } .fx-dot-r { fill: color-mix(in srgb, var(--bt-r) 85%, transparent); }
+.fx-sc a:hover circle { stroke: var(--color-text); stroke-width: 2.5; }
+
+.fx-faq details { border-top: 1px solid var(--color-border-subtle); padding: 12px 0; }
+.fx-faq summary { cursor: pointer; font-weight: 600; }
+.fx-faq p { margin: 8px 0 0; color: var(--color-text-secondary); max-width: 760px; }
+.fx-src { font-size: 12.5px; color: var(--color-muted); }
+
+/* candidate cards on race money pages */
+.fx-duel { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.fx-cand { padding: 18px; border-radius: 16px; border: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-bg) 40%, var(--color-surface)); border-top: 4px solid var(--bt-oth); }
+.fx-cand.D { border-top-color: var(--bt-d); } .fx-cand.R { border-top-color: var(--bt-r); }
+.fx-cand h3 { margin: 0; font: 800 22px var(--font-display); }
+.fx-cand .fx-sub { color: var(--color-muted); font-size: 13px; margin: 2px 0 12px; }
+.fx-kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 14px; }
+.fx-kv dt { font: 600 10.5px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+.fx-kv dd { margin: 3px 0 0; font: 800 20px var(--font-display); font-variant-numeric: tabular-nums; }
+.fx-src-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 6px 0; }
+.fx-src-bar i { display: block; height: 100%; }
+.fx-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--color-text-secondary); }
+.fx-legend span { display: inline-flex; gap: 5px; align-items: center; }
+.fx-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* maps */
+.fx-map svg { width: 100%; height: auto; display: block; }
+.fx-map path { stroke: var(--color-surface); stroke-width: .5; vector-effect: non-scaling-stroke; }
+.fx-map path:hover { stroke: var(--color-text); stroke-width: 1.5; }
+
+/* year scrubber (voting) */
+.vx-years { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.vx-years button { all: unset; cursor: pointer; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--color-border); font: 600 13px var(--font-mono), monospace; color: var(--color-text-secondary); }
+.vx-years button[aria-pressed="true"] { background: var(--color-text); color: var(--color-bg); border-color: var(--color-text); }
+.vx-years button:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+	.fx { padding: 16px 12px 40px; }
+	.fx-hero { padding: 26px 18px; }
+	.fx-sec { padding: 18px 14px; }
+	.fx-two { grid-template-columns: 1fr; }
+	.fx-bars li { grid-template-columns: minmax(0, 1fr) 64px; }
+	.fx-bars .fx-bt { grid-column: 1 / -1; grid-row: 2; }
+	.fx-kv dd { font-size: 17px; }
+}

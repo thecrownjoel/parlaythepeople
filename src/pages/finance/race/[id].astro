@@ -1,0 +1,140 @@
+---
+/**
+ * One race's money: /finance/race/2026-senate-maine/. Each nominee's money and where it came from (donor size,
+ * home state vs. out of state), outside spending for and against them, the rest of the field, and (Pro) fundraising
+ * report by report. FEC bulk data for everyone; OpenFEC detail for candidates in competitive races.
+ */
+import Base from "../../../layouts/Base.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import RaceFinance from "../../../components/RaceFinance.astro";
+import { getIndex, getCycle, candidate, consensus, pct, type Race } from "../../../lib/markets";
+import { raceFinance, financeRows, fecName, fecUrl, asOfReport, type FecCandidate } from "../../../lib/fec";
+import { details, money, raceShort, type Detail } from "../../../lib/finance";
+import { statePaths } from "../../../lib/usmap";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../../lib/site";
+import "../../../styles/data.css";
+import "../../../styles/finance.css";
+
+const id = Astro.params.id ?? "";
+const m = /^(\d{4})-[a-z0-9-]{3,60}$/.exec(id);
+const data = m ? await getCycle(Number(m[1])) : null;
+const race = data?.races.find((r) => r.id === id) as Race | undefined;
+if (!data || !race || (race.kind !== "senate" && race.kind !== "house")) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=900");
+const origin = Astro.url.origin;
+const path = `/finance/race/${race.id}/`;
+const c = consensus(race);
+const names = { D: candidate(race, "D"), R: candidate(race, "R") };
+const field = await raceFinance(race);
+const { market, missing } = financeRows(field, [names.D, names.R].filter((n): n is string => !!n));
+const pick = (p: "D" | "R") => market.find((x) => (p === "D" ? x.party === "DEM" || x.party === "DFL" : x.party === "REP")) ?? null;
+const nominees = (["D", "R"] as const).map((p) => ({ p, name: names[p], c: pick(p) })).filter((x) => x.name);
+const det = await details(nominees.map((x) => x.c?.cand_id).filter((x): x is string => !!x), race.cycle);
+const states = statePaths();
+const homeShare = (d: Detail | undefined, st: string) => {
+	if (!d) return null;
+	const tot = Object.values(d.by_state).reduce((a, b) => a + b, 0);
+	return tot ? (d.by_state[st] ?? 0) / tot : null;
+};
+const sources = (x: FecCandidate, d?: Detail) => d
+	? [["Small donors (under $200)", d.small, "#3fb68b"], ["Larger donors", d.large, "#5e92ee"], ["PACs", d.pac, "#e0b44f"], ["Party", d.party, "#b48cf2"], ["The candidate", d.self_funding, "#9aa1ad"]] as const
+	: [["Individual donors", x.indiv, "#5e92ee"], ["PACs", x.pac, "#e0b44f"], ["Party", x.party_contrib, "#b48cf2"], ["The candidate", x.self_funding, "#9aa1ad"]] as const;
+const through = asOfReport(market.map((x) => x.coverage_end).filter(Boolean).sort().pop() ?? null);
+const total = nominees.reduce((a, n) => a + (n.c?.receipts ?? 0) + (n.c?.support ?? 0) + (n.c?.oppose ?? 0), 0);
+const lede = nominees.length
+	? nominees.map((n) => n.c ? `${n.name} (${n.p}) has raised ${money(n.c.receipts)} and has ${money(n.c.cash)} left` : `${n.name} (${n.p}) hasn't filed a financial report yet`).join("; ") + `, through ${through}.` + (total ? ` Outside groups have spent ${money(nominees.reduce((a, n) => a + (n.c?.support ?? 0) + (n.c?.oppose ?? 0), 0))} on the race.` : "")
+	: "No FEC filings for this race's nominees yet.";
+const title = `${race.cycle} ${raceShort(race)} race: campaign money and outside spending`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Money", "/finance/"], [raceShort(race), path]]),
+	faq(nominees.filter((n) => n.c).map((n) => [`How much has ${n.name} raised?`, `${n.name} has raised ${money(n.c!.receipts)} for the ${race.cycle} ${raceShort(race)} race and has ${money(n.c!.cash)} cash on hand, through ${through}, according to the FEC.`] as [string, string])));
+---
+<Base title={`${title} | ${SITE_NAME}`} description={lede.slice(0, 158)} canonical={`${origin}${path}`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="fx">
+		<nav class="fx-src" aria-label="Breadcrumb"><a href="/finance/">Money</a> › <a href={race.path}>{raceShort(race)} odds</a></nav>
+		<header class="fx-hero">
+			<p class="eyebrow">{race.cycle} · {raceShort(race)} · {pct(Math.max(c.D, c.R) / ((c.D + c.R) || 1))} {c.D >= c.R ? names.D ?? "Democrat" : names.R ?? "Republican"} in the markets</p>
+			<h1>The money in {raceShort(race)}</h1>
+			<p class="fx-lede">{lede}</p>
+		</header>
+
+		<section class="fx-sec">
+			<h2>The nominees</h2>
+			<div class="fx-duel" data-pop>
+				{nominees.map(({ p, name, c: x }) => {
+					const d = x ? det.get(x.cand_id) : undefined;
+					const src = x ? sources(x, d).filter(([, v]) => v > 0) : [];
+					const srcTot = src.reduce((a, [, v]) => a + v, 0) || 1;
+					const home = homeShare(d, race.st);
+					return (
+						<article class={`fx-cand ${p}`}>
+							<h3>{name}</h3>
+							<p class="fx-sub">{p === "D" ? "Democrat" : "Republican"}{x ? <> · <a href={fecUrl(x.cand_id)} rel="noopener" target="_blank">FEC filings</a></> : ""}</p>
+							{x ? (
+								<>
+									<dl class="fx-kv">
+										<div><dt>Raised</dt><dd data-count={x.receipts} data-fmt="usd">{money(x.receipts)}</dd></div>
+										<div><dt>Spent</dt><dd data-count={x.disbursements} data-fmt="usd">{money(x.disbursements)}</dd></div>
+										<div><dt>Cash</dt><dd data-count={x.cash} data-fmt="usd">{money(x.cash)}</dd></div>
+									</dl>
+									<p class="fx-sub" style="margin:0">Where the money came from</p>
+									<div class="fx-src-bar">{src.map(([, v, col]) => <i data-grow style={`width:${(v / srcTot) * 100}%;background:${col}`}></i>)}</div>
+									<p class="fx-legend">{src.map(([label, v, col]) => <span><i style={`background:${col}`}></i>{label} {Math.round((v / srcTot) * 100)}%</span>)}</p>
+									{home != null && <p class="fx-sub" style="margin-top:10px">{Math.round(home * 100)}% of itemized donations came from {race.state}; {Math.round((1 - home) * 100)}% from other states.</p>}
+									<p class="fx-sub" style="margin-top:12px">Outside spending</p>
+									<div class="fx-war-row" style="margin:0"><span><b class="d">For</b> {money(x.support ?? 0)}</span><span><b class="r">Against</b> {money(x.oppose ?? 0)}</span></div>
+									{x.spenders.length > 0 && <ul class="fx-sub" style="padding-left:16px;margin:8px 0 0">{x.spenders.slice(0, 4).map((s) => <li>{s.name}: {s.support ? `${money(s.support)} for` : ""}{s.support && s.oppose ? ", " : ""}{s.oppose ? `${money(s.oppose)} against` : ""}</li>)}</ul>}
+								</>
+							) : <p class="fx-note">No FEC financial report filed yet. New and replacement nominees appear after their first report.</p>}
+						</article>
+					);
+				})}
+			</div>
+		</section>
+
+		{nominees.some((n) => n.c && det.get(n.c.cand_id)) && (
+			<section class="fx-sec">
+				<h2>Where the donors live</h2>
+				<p class="fx-note">Itemized individual donations (over $200) by the donor's state. Darker means more money.</p>
+				<div class="fx-two" style="gap:16px">
+					{nominees.filter((n) => n.c && det.get(n.c.cand_id)).map(({ p, name, c: x }) => {
+						const d = det.get(x!.cand_id)!;
+						const max = Math.max(1, ...Object.values(d.by_state));
+						const top = Object.entries(d.by_state).sort((a, b) => b[1] - a[1]).slice(0, 5);
+						return (
+							<figure class="fx-map" style="margin:0">
+								<figcaption style="font-weight:700;margin-bottom:6px">{name}</figcaption>
+								<svg viewBox="0 0 975 610" role="img" aria-label={`Where ${name}'s donors live: ${top.map(([s, v]) => `${s} ${money(v)}`).join(", ")}`}>
+									<g data-pop>{states.map((s) => <path d={s.d} style={`fill:${d.by_state[s.st] ? `color-mix(in srgb, var(--bt-${p.toLowerCase()}) ${Math.round(12 + Math.sqrt(d.by_state[s.st] / max) * 85)}%, var(--color-surface))` : "rgb(127 127 127 / .12)"}`}><title>{s.name}: {money(d.by_state[s.st] ?? 0)}</title></path>)}</g>
+								</svg>
+								<p class="fx-legend">{top.map(([s, v]) => <span>{s} {money(v)}</span>)}</p>
+							</figure>
+						);
+					})}
+				</div>
+			</section>
+		)}
+
+		<section class="fx-sec">
+			<h2>Fundraising, report by report</h2>
+			<p class="fx-note">What each nominee raised in every FEC report this cycle, and the cash they had at the end of it.</p>
+			<div data-fin-hist={race.id}><p class="fx-note">Loading…</p></div>
+		</section>
+
+		<section class="fx-sec">
+			<RaceFinance race={race} names={[names.D, names.R].filter((n): n is string => !!n)} />
+		</section>
+		<p class="fx-src">Source: FEC bulk data (daily) and the OpenFEC API. <a href={race.path}>Odds, polls and buzz for this race →</a></p>
+	</div>
+</Base>
+
+<script>
+	import { motion } from "../../../scripts/motion";
+	motion();
+	for (const el of document.querySelectorAll<HTMLElement>("[data-fin-hist]")) {
+		fetch(`/api/v1/finance-history/${el.dataset.finHist}?from=${encodeURIComponent(location.pathname)}`)
+			.then((r) => (r.ok ? r.text() : Promise.reject()))
+			.then((html) => { el.innerHTML = html; motion(el); })
+			.catch(() => (el.innerHTML = `<p class="fx-note">Couldn't load the reports. Try again in a moment.</p>`));
+	}
+</script>
