@@ -1,0 +1,160 @@
+---
+/**
+ * One candidate: /candidates/susan-collins/. Their odds in every race and presidential market, the money (FEC),
+ * polls, social buzz (LunarCrush) and headlines that name them. Answer first.
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { findCandidate, allCandidates, candidatePath, entryLabel, entryPath, type CandidateEntry } from "../../lib/candidates";
+import { getIndex, pct, PARTY_WORD, candidate as raceCandidate } from "../../lib/markets";
+import { raceFinance, matchFec, fecName, fecUrl, usd, asOfReport } from "../../lib/fec";
+import { pollAverage } from "../../lib/polls";
+import { getSocial, pulseIndex, compact } from "../../lib/social";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import { env } from "cloudflare:workers";
+import "../../styles/data.css";
+
+const c = await findCandidate(Astro.params.slug ?? "");
+if (!c) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const origin = Astro.url.origin;
+const path = candidatePath(c);
+const index = await getIndex();
+const asOf = new Date(index?.generated ?? Date.now()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+const party = c.party ? PARTY_WORD[c.party as "D" | "R" | "I"] ?? null : null;
+const main = c.entries[0];
+const last = c.name.trim().split(/\s+/).pop()!;
+const srcs = (e: CandidateEntry) => [e.k != null && `Kalshi ${pct(e.k)}`, e.p != null && `Polymarket ${pct(e.p)}`].filter(Boolean).join(", ");
+const lede = `As of ${asOf}, prediction markets give ${c.name}${party ? ` (${party})` : ""} a ${pct(main.chance)} chance of winning the ${entryLabel(main)} (${srcs(main)}).`
+	+ (c.entries.length > 1 ? ` ${c.name} also appears in ${c.entries.length - 1} other market${c.entries.length > 2 ? "s" : ""} below.` : "");
+
+// money, polls and opponents for each race this candidate is in
+const raceEntries = c.entries.filter((e) => e.kind === "race");
+const finance = await Promise.all(raceEntries.map(async (e) => matchFec((await raceFinance(e.race!)) ?? [], c.name)));
+const polls = await Promise.all(raceEntries.map(async (e) => {
+	const a = await pollAverage(e.race!.id);
+	if (!a) return null;
+	const mine = a.d_name.toLowerCase().includes(last.toLowerCase()) ? "d" : a.r_name.toLowerCase().includes(last.toLowerCase()) ? "r" : null;
+	return mine ? { a, mine: mine as "d" | "r" } : null;
+}));
+const all = await allCandidates();
+const opponents = raceEntries.flatMap((e) => all.filter((o) => o.key !== c.key && o.entries.some((x) => x.race?.id === e.race!.id)).map((o) => ({ o, race: e.race! })));
+const pulse = pulseIndex(await getSocial())(c.name);
+let news: { title: string; source: string | null; url: string; published: number | null }[] = [];
+try {
+	news = (await env.MARKETS.prepare("SELECT title, source, url, published FROM news WHERE title LIKE ? ORDER BY COALESCE(published, first_seen) DESC LIMIT 8").bind(`%${last}%`).all<any>()).results ?? [];
+	news = news.filter((n) => new RegExp(`\\b${last.replace(/[^A-Za-z-]/g, "")}\\b`).test(n.title));
+} catch { /* no headline archive */ }
+const day = (t: number | null) => (t ? new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }) : "");
+const fin = finance.find(Boolean);
+
+const title = `${c.name} odds: chances of winning the ${entryLabel(main)} | ${SITE_NAME}`;
+const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["Candidates", "/candidates/"], [c.name, path]]),
+	{ "@type": "Person", "@id": `${origin}${path}#person`, name: c.name, url: `${origin}${path}`, ...(party ? { affiliation: { "@type": "PoliticalParty", name: `${party === "independent" ? "Independent" : party === "Democrat" ? "Democratic Party" : "Republican Party"}` } } : {}) },
+	faq(c.entries.slice(0, 4).map((e) => [`What are ${c.name}'s chances of winning the ${entryLabel(e)}?`, `As of ${asOf}, prediction markets give ${c.name} a ${pct(e.chance)} chance (${srcs(e)}).`] as [string, string])
+		.concat(fin ? [[`How much money has ${c.name} raised?`, `${c.name}'s campaign has raised ${usd(fin.receipts)} and has ${usd(fin.cash)} cash on hand, through ${asOfReport(fin.coverage_end)}, according to the FEC.`]] : [])),
+);
+---
+<Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={index?.generated}>
+	<JsonLd slot="head" data={ld} />
+	<article class="dp cand">
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href="/candidates/">Candidates</a></nav>
+		<header class="dp-head">
+			<p class="eyebrow">{party ?? "Candidate"}{c.state ? ` · ${c.state}` : ""}</p>
+			<h1>{c.name}</h1>
+			<p class="lede">{lede}</p>
+		</header>
+
+		<section class="panel">
+			<h2>Odds in every market</h2>
+			<div class="fin-scroll">
+				<table class="cd-t">
+					<thead><tr><th scope="col">Market</th><th scope="col">Chance</th><th scope="col">Kalshi</th><th scope="col">Polymarket</th><th scope="col">24h</th></tr></thead>
+					<tbody>
+						{c.entries.map((e) => (
+							<tr>
+								<th scope="row"><a href={entryPath(e)}>{entryLabel(e)}</a></th>
+								<td><b>{pct(e.chance)}</b></td><td>{e.k == null ? "—" : pct(e.k)}</td><td>{e.p == null ? "—" : pct(e.p)}</td>
+								<td>{e.d == null || Math.abs(e.d) < 0.005 ? "—" : `${e.d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(e.d * 100))}¢`}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<p class="sec-note">Chance = this candidate's share of each market's prices, averaged across the exchanges that list it.</p>
+		</section>
+
+		{fin && (
+			<section class="panel">
+				<h2>Campaign money</h2>
+				<dl class="mk-stats">
+					<div><dt>Raised</dt><dd>{usd(fin.receipts)}</dd></div>
+					<div><dt>Spent</dt><dd>{usd(fin.disbursements)}</dd></div>
+					<div><dt>Cash on hand</dt><dd><b>{usd(fin.cash)}</b></dd></div>
+					<div><dt>Outside groups for</dt><dd>{usd(fin.support ?? 0)}</dd></div>
+					<div><dt>Outside groups against</dt><dd>{usd(fin.oppose ?? 0)}</dd></div>
+				</dl>
+				<p class="sec-note">Through {asOfReport(fin.coverage_end)}. {usd(fin.indiv)} from individuals, {usd(fin.pac)} from PACs{fin.self_funding >= 1000 ? `, ${usd(fin.self_funding)} of the candidate's own money` : ""}. <a href={fecUrl(fin.cand_id)} rel="noopener" target="_blank">FEC filings for {fecName(fin.name)} →</a></p>
+			</section>
+		)}
+
+		{polls.some(Boolean) && (
+			<section class="panel">
+				<h2>Polls</h2>
+				{polls.map((x, i) => x && (
+					<p>In the <a href={raceEntries[i].race!.path}>{entryLabel(raceEntries[i])}</a>, the Parlay polling average has {c.name} at <b>{pct(x.mine === "d" ? x.a.d : x.a.r)}</b> against {x.mine === "d" ? x.a.r_name : x.a.d_name} at {pct(x.mine === "d" ? x.a.r : x.a.d)}, from {x.a.used} polls (newest ended {x.a.latest}).</p>
+				))}
+			</section>
+		)}
+
+		{pulse && (
+			<section class="panel">
+				<h2>Social buzz</h2>
+				<p>{compact(pulse.i24)} interactions with posts about {c.name} in the last 24 hours from {compact(pulse.contributors)} people{pulse.sentiment != null ? `; ${Math.round(pulse.sentiment)}% of posts read as positive` : ""}{pulse.wow != null ? `, ${pulse.wow >= 0 ? "up" : "down"} ${Math.abs(Math.round(pulse.wow * 100))}% on last week` : ""}.</p>
+				{(pulse.top ?? []).length > 0 && <ul class="cd-posts">{pulse.top.slice(0, 3).map((p) => <li><a href={p.u} rel="noopener nofollow" target="_blank">{p.t}</a> <span>{p.by ?? ""}{p.net ? ` · ${p.net}` : ""}</span></li>)}</ul>}
+				<p class="sec-note">Social data from <a href="https://lunarcrush.com/?utm_source=parlaythepeople&utm_medium=referral&utm_campaign=data_partner" rel="noopener" target="_blank">LunarCrush</a>. Posts are what people are saying, not verified facts.</p>
+			</section>
+		)}
+
+		{news.length > 0 && (
+			<section class="panel">
+				<h2>Recent headlines</h2>
+				<ul class="cd-posts">{news.map((n) => <li><a href={n.url} rel="noopener nofollow" target="_blank">{n.title}</a> <span>{n.source ?? ""}{n.published ? ` · ${day(n.published)}` : ""}</span></li>)}</ul>
+			</section>
+		)}
+
+		{opponents.length > 0 && (
+			<section class="panel">
+				<h2>Running against</h2>
+				<ul class="mk-rel">{opponents.map(({ o, race }) => <li><a href={candidatePath(o)}>{o.name}</a><b>{pct(o.entries.find((x) => x.race?.id === race.id)!.chance)}</b></li>)}</ul>
+			</section>
+		)}
+		<p class="sec-note" style="font-size:12.5px">Market prices from Kalshi and Polymarket, collected every 10 minutes. Research, not betting advice.</p>
+	</article>
+</Base>
+
+<style>
+	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
+	.mk-crumbs a { color: var(--color-text-secondary); }
+	.fin-scroll { overflow-x: auto; }
+	.cd-t { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 480px; }
+	.cd-t th, .cd-t td { padding: 9px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: right; }
+	.cd-t th:first-child { text-align: left; font-weight: 500; }
+	.cd-t thead th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+	.cd-t a { color: var(--color-text); }
+	.mk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 12px; }
+	.mk-stats > div { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); }
+	.mk-stats dt { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.mk-stats dd { margin: 6px 0 0; font-size: 18px; }
+	.cd-posts { padding-left: 18px; margin: 8px 0; }
+	.cd-posts li { margin: 6px 0; }
+	.cd-posts a { color: var(--color-text); }
+	.cd-posts span { color: var(--color-muted); font-size: 12.5px; }
+	.mk-rel { list-style: none; padding: 0; margin: 0; }
+	.mk-rel li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.mk-rel a { color: var(--color-text); }
+	.mk-rel b { font-family: var(--font-mono), monospace; }
+</style>

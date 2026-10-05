@@ -1,0 +1,74 @@
+---
+/** Every candidate with a page: presidential hopefuls, then Senate, governor and House candidates, by chance. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { allCandidates, candidatePath, entryLabel, type Candidate } from "../../lib/candidates";
+import { pct } from "../../lib/markets";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const list = await allCandidates();
+const origin = Astro.url.origin;
+const top = (c: Candidate) => c.entries[0];
+const groups: [string, Candidate[]][] = [
+	["Presidential hopefuls", list.filter((c) => top(c).kind === "pres")],
+	["Senate", list.filter((c) => top(c).race?.kind === "senate")],
+	["Governor", list.filter((c) => top(c).race?.kind === "governor")],
+	["House", list.filter((c) => top(c).race?.kind === "house")],
+];
+const description = `Odds for ${list.length.toLocaleString()} candidates for president, Senate, governor and the House, from Kalshi and Polymarket, with campaign money, polls and social buzz.`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Candidates", "/candidates/"]]), {
+	"@type": "CollectionPage", "@id": `${origin}/candidates/#page`, url: `${origin}/candidates/`, name: "Candidates and their odds", description,
+	mainEntity: { "@type": "ItemList", numberOfItems: list.length, itemListElement: list.slice(0, 100).map((c, i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${candidatePath(c)}`, name: c.name })) },
+});
+---
+<Base title={`Candidates and their odds | ${SITE_NAME}`} description={description} canonical={`${origin}/candidates/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:960px">
+		<header class="dp-head">
+			<p class="eyebrow">Candidates</p>
+			<h1>Every candidate, by their odds</h1>
+			<p class="lede">{description}</p>
+			<input class="cl-filter" type="search" placeholder="Find a candidate or state" aria-label="Find a candidate or state" data-cl-filter />
+		</header>
+		{groups.filter(([, g]) => g.length).map(([name, g]) => (
+			<section class="panel" data-cl-group>
+				<h2>{name} <span class="cl-n">{g.length}</span></h2>
+				<ol class="cl">
+					{g.map((c) => (
+						<li data-cl={`${c.name} ${c.state ?? ""} ${entryLabel(top(c))}`.toLowerCase()}>
+							<a href={candidatePath(c)}>{c.name}</a>
+							<span class={`fin-p fin-${c.party ?? "o"}`}>{c.party ?? "–"}</span>
+							<span class="cl-r">{entryLabel(top(c))}</span>
+							<b>{pct(top(c).chance)}</b>
+						</li>
+					))}
+				</ol>
+			</section>
+		))}
+	</div>
+</Base>
+
+<script>
+	const f = document.querySelector<HTMLInputElement>("[data-cl-filter]");
+	const rows = [...document.querySelectorAll<HTMLElement>("[data-cl]")];
+	f?.addEventListener("input", () => {
+		const q = f.value.trim().toLowerCase();
+		rows.forEach((r) => (r.hidden = !!q && !r.dataset.cl!.includes(q)));
+		document.querySelectorAll<HTMLElement>("[data-cl-group]").forEach((g) => (g.hidden = !g.querySelector("[data-cl]:not([hidden])")));
+	});
+</script>
+
+<style>
+	.cl-filter { margin-top: 12px; width: min(100%, 340px); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; }
+	.cl-n { font: 600 13px var(--font-mono), monospace; color: var(--color-muted); }
+	.cl { list-style: none; padding: 0; margin: 0; }
+	.cl li { display: grid; grid-template-columns: minmax(0, 1.2fr) 30px minmax(0, 1.4fr) 56px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
+	.cl a { color: var(--color-text); font-weight: 600; }
+	.cl-r { color: var(--color-muted); font-size: 13px; }
+	.cl b { font-family: var(--font-mono), monospace; text-align: right; }
+	.fin-p { font: 700 10.5px var(--font-mono), monospace; padding: 1px 6px; border-radius: 6px; text-align: center; }
+	.fin-D { color: #fff; background: var(--bt-d, #2f6bd8); } .fin-R { color: #fff; background: var(--bt-r, #d8432f); } .fin-I, .fin-o, .fin-null { background: var(--color-border); }
+	@media (max-width: 560px) { .cl li { grid-template-columns: minmax(0, 1fr) 30px 52px; } .cl-r { grid-column: 1 / -1; grid-row: 2; } }
+</style>

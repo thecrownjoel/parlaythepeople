@@ -18,6 +18,7 @@ import { getSocial, pulseIndex, racePulse, compact } from "../../../lib/social";
 import RaceActivity from "../../../components/RaceActivity.astro";
 import RaceMoney from "../../../components/RaceMoney.astro";
 import RaceFinance from "../../../components/RaceFinance.astro";
+import { candidateLinks } from "../../../lib/candidates";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
 import { pollAverage, marginText, RCP_URL } from "../../../lib/polls";
@@ -79,6 +80,7 @@ const ago = (t: number | null) => {
 	return h < 1 ? "just now" : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 };
 const history = await getHistory(race.id);
+const candLink = await candidateLinks();
 const ks = shares(race.k), ps = shares(race.p);
 const dName = candidate(race, "D"), rName = candidate(race, "R"), iName = candidate(race, "I");
 const lede = answer(race, data.meta.generated);
@@ -408,7 +410,7 @@ import { parlayD } from "../../../lib/model";
 									<tbody>
 										{rows(s).map((o) => (
 											<tr>
-												<td><span class="cand"><span class={`sw ${o.pa ?? "O"}`}></span>{generic(o.n) ? partyName(o.pa) + " candidate" : o.n}{o.pa && !generic(o.n) && <span style="color:var(--color-muted)"> ({o.pa})</span>}</span></td>
+												<td><span class="cand"><span class={`sw ${o.pa ?? "O"}`}></span>{generic(o.n) ? partyName(o.pa) + " candidate" : candLink(o.n, race.st) ? <a href={candLink(o.n, race.st)!}>{o.n}</a> : o.n}{o.pa && !generic(o.n) && <span style="color:var(--color-muted)"> ({o.pa})</span>}</span></td>
 												<td class="r num">{pct(o.share, 1)}</td>
 												<td class="r num">{fmtVol(o.v)}</td>
 											</tr>
