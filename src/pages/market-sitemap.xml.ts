@@ -1,5 +1,6 @@
 import { TOPIC_SLUG, getPolitics, marketPath } from "../lib/politics";
 import { allCandidates, candidatePath } from "../lib/candidates";
+import { STATES, statePath } from "../lib/states";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { getIndex, getCycle } from "../lib/markets";
@@ -13,7 +14,8 @@ export const GET: APIRoute = async ({ url }) => {
 	// daily market reports since money and headlines began, plus the archive page
 	urls.push([`${o}/daily/`, ""], [`${o}/politics/`, index?.generated ?? ""]);
 	for (const slug of Object.values(TOPIC_SLUG)) urls.push([`${o}/politics/${slug}/`, index?.generated ?? ""]);
-	urls.push([`${o}/candidates/`, index?.generated ?? ""]);
+	urls.push([`${o}/states/`, index?.generated ?? ""], [`${o}/candidates/`, index?.generated ?? ""]);
+	for (const st of Object.keys(STATES)) urls.push([`${o}${statePath(st)}`, index?.generated ?? ""]);
 	for (const c of await allCandidates()) urls.push([`${o}${candidatePath(c)}`, index?.generated ?? ""]);
 	// one page per politics market
 	const board = await getPolitics();

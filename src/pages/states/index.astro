@@ -1,0 +1,47 @@
+---
+/** Every state, with its races and the closest one. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { STATES, statePath, stateView } from "../../lib/states";
+import { consensus, pct } from "../../lib/markets";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const origin = Astro.url.origin;
+const views = await Promise.all(Object.keys(STATES).map((st) => stateView(st)));
+const year = new Date().getUTCFullYear();
+const rows = views.map((v) => {
+	const now = v.races.filter((r) => r.cycle >= year);
+	const close = now.filter((r) => consensus(r).lp < 0.6);
+	return { v, n: now.length, close: close.length, ballots: v.ballots.length };
+}).filter((x) => x.n || x.ballots);
+const description = `Prediction-market odds for every Senate, governor and House race and ballot measure, state by state. ${rows.reduce((a, x) => a + x.close, 0)} races are toss-ups right now.`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["States", "/states/"]]), { "@type": "CollectionPage", "@id": `${origin}/states/#page`, url: `${origin}/states/`, name: "Elections by state", description });
+---
+<Base title={`Elections by state: odds for every race | ${SITE_NAME}`} description={description} canonical={`${origin}/states/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:960px">
+		<header class="dp-head">
+			<p class="eyebrow">States</p>
+			<h1>Elections by state</h1>
+			<p class="lede">{description}</p>
+		</header>
+		<ul class="sx">
+			{rows.map((x) => (
+				<li>
+					<a href={statePath(x.v.st)}><b>{x.v.name}</b></a>
+					<span>{x.n} {x.n === 1 ? "race" : "races"}{x.close ? ` · ${x.close} toss-up${x.close > 1 ? "s" : ""}` : ""}{x.ballots ? ` · ${x.ballots} ballot ${x.ballots > 1 ? "measures" : "measure"}` : ""}</span>
+				</li>
+			))}
+		</ul>
+	</div>
+</Base>
+
+<style>
+	.sx { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+	.sx li { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); display: grid; gap: 4px; }
+	.sx a { color: var(--color-text); text-decoration: none; }
+	.sx a:hover b { text-decoration: underline; }
+	.sx span { font-size: 13px; color: var(--color-muted); }
+</style>

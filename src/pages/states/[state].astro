@@ -1,0 +1,147 @@
+---
+/** One state: /states/maine/. Every race with odds, ballot measures, candidates, money and the state's other politics markets. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { stateFromSlug, stateView, stateMoney, statePath } from "../../lib/states";
+import { consensus, candidate, pct, fmtVol, daysUntil, RATING_LABEL, PARTY_WORD, officeTitle } from "../../lib/markets";
+import { allCandidates, candidatePath } from "../../lib/candidates";
+import { getPolitics, marketPath } from "../../lib/politics";
+import { usd } from "../../lib/fec";
+import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+const st = stateFromSlug(Astro.params.state ?? "");
+if (!st) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const v = await stateView(st);
+const origin = Astro.url.origin;
+const path = statePath(st);
+const cycles = [...new Set([...v.races.map((r) => r.cycle), ...v.ballots.map((b) => b.cycle)])].sort();
+const next = cycles.find((c) => (v.electionDays.get(c) ?? "") >= new Date().toISOString().slice(0, 10)) ?? cycles[cycles.length - 1];
+const nextRaces = v.races.filter((r) => r.cycle === next);
+const money = next ? await stateMoney(st, next) : null;
+const people = (await allCandidates()).filter((c) => c.entries.some((e) => e.race?.st === st));
+const board = await getPolitics();
+const nameRx = new RegExp(`\\b${v.name}\\b`, "i");
+const local = (board?.events ?? []).filter((e) => nameRx.test(e.title) && !(st === "NM" ? false : /new mexico/i.test(e.title) && v.name === "Mexico")).sort((a, b) => b.vol24 - a.vol24).slice(0, 12);
+const favorite = (r: (typeof v.races)[number]) => {
+	const c = consensus(r);
+	const who = candidate(r, c.lead);
+	return { c, text: `${who ?? `the ${PARTY_WORD[c.lead]}`}${who ? ` (${c.lead})` : ""} ${pct(c.lp)}` };
+};
+const label = (r: (typeof v.races)[number]) => (r.kind === "house" ? `${r.label} House` : r.kind === "senate" ? `Senate${r.special ? " (special)" : ""}` : "Governor");
+const eday = next ? v.electionDays.get(next) : null;
+const days = eday ? daysUntil(eday) : null;
+const tossups = nextRaces.filter((r) => consensus(r).lp < 0.6);
+const top = nextRaces.filter((r) => r.kind !== "house").concat(nextRaces.filter((r) => r.kind === "house").sort((a, b) => consensus(a).lp - consensus(b).lp)).slice(0, 3);
+const lede = nextRaces.length
+	? `${v.name} has ${nextRaces.length} ${nextRaces.length === 1 ? "race" : "races"} with live prediction-market odds in ${next}${days != null && days >= 0 ? `, ${days} days before Election Day (${new Date(`${eday}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })})` : ""}. `
+		+ top.map((r) => `${label(r)}: ${favorite(r).text}`).join("; ") + "."
+		+ (tossups.length ? ` ${tossups.length} ${tossups.length === 1 ? "is" : "are"} rated a toss-up.` : "")
+	: `No ${v.name} races have live prediction-market odds right now.`;
+const title = `${v.name} elections ${next ?? ""}: odds for every race | ${SITE_NAME}`;
+const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["States", "/states/"], [v.name, path]]),
+	faq(nextRaces.filter((r) => r.kind !== "house").slice(0, 4).map((r) => [`Who is favored in the ${next} ${v.name} ${r.kind === "senate" ? "Senate" : "governor"} race?`, `Prediction markets favor ${favorite(r).text}. Rating: ${RATING_LABEL[favorite(r).c.rating]}.`] as [string, string])),
+	{ "@type": "CollectionPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: `${v.name} elections`, description, about: { "@type": "State", name: v.name } },
+);
+---
+<Base title={title} description={description} canonical={`${origin}${path}`}>
+	<JsonLd slot="head" data={ld} />
+	<article class="dp" style="max-width:960px">
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href="/states/">States</a></nav>
+		<header class="dp-head">
+			<p class="eyebrow">{st}</p>
+			<h1>{v.name} elections</h1>
+			<p class="lede">{lede}</p>
+		</header>
+
+		{cycles.map((cy) => {
+			const rs = v.races.filter((r) => r.cycle === cy);
+			return rs.length > 0 && (
+				<section class="panel">
+					<h2>{cy} races</h2>
+					<div class="fin-scroll">
+						<table class="st-t">
+							<thead><tr><th scope="col">Race</th><th scope="col">Favorite</th><th scope="col">Rating</th><th scope="col">Traded</th></tr></thead>
+							<tbody>
+								{rs.map((r) => (
+									<tr>
+										<th scope="row"><a href={r.path}>{label(r)}</a></th>
+										<td>{favorite(r).text}</td>
+										<td><span class={`st-rt st-${favorite(r).c.rating}`}>{RATING_LABEL[favorite(r).c.rating]}</span></td>
+										<td>{fmtVol((r.k?.v ?? 0) + (r.p?.v ?? 0))}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			);
+		})}
+
+		{v.ballots.length > 0 && (
+			<section class="panel">
+				<h2>Ballot measures</h2>
+				<ul class="mk-rel">{v.ballots.map((b) => <li><a href={b.url} rel="noopener nofollow" target="_blank">{b.n} ({b.cycle})</a><b>{pct(b.p)} pass</b></li>)}</ul>
+				<p class="sec-note">The chance each measure passes, from {v.ballots.some((b) => b.src === "p") ? "Kalshi and Polymarket" : "Kalshi"}.</p>
+			</section>
+		)}
+
+		{money && money.byOffice.size > 0 && (
+			<section class="panel">
+				<h2>Campaign money in {next}</h2>
+				<dl class="mk-stats">
+					{money.byOffice.get("S") && <div><dt>Senate candidates raised</dt><dd>{usd(money.byOffice.get("S")!.raised)}</dd></div>}
+					{money.byOffice.get("H") && <div><dt>House candidates raised</dt><dd>{usd(money.byOffice.get("H")!.raised)}</dd></div>}
+					{money.outside > 0 && <div><dt>Outside spending</dt><dd>{usd(money.outside)}</dd></div>}
+				</dl>
+				<p class="sec-note">Every federal candidate running in {v.name}, from FEC filings. Each race page breaks it down by candidate.</p>
+			</section>
+		)}
+
+		{people.length > 0 && (
+			<section class="panel">
+				<h2>Candidates</h2>
+				<ul class="st-people">{people.map((c) => <li><a href={candidatePath(c)}>{c.name}</a> <span>{c.party ?? ""}</span></li>)}</ul>
+			</section>
+		)}
+
+		{local.length > 0 && (
+			<section class="panel">
+				<h2>Other {v.name} markets</h2>
+				<ul class="mk-rel">{local.map((e) => <li><a href={marketPath(e)}>{e.title}</a><b>{e.multi ? `${e.o[0].n} ` : ""}{pct(e.o[0].p)}</b></li>)}</ul>
+			</section>
+		)}
+		<p class="sec-note" style="font-size:12.5px">Odds from Kalshi and Polymarket, collected every 10 minutes; campaign money from the FEC, daily. Research, not betting advice.</p>
+	</article>
+</Base>
+
+<style>
+	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
+	.mk-crumbs a { color: var(--color-text-secondary); }
+	.fin-scroll { overflow-x: auto; }
+	.st-t { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 520px; }
+	.st-t th, .st-t td { padding: 9px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: left; }
+	.st-t td:last-child { text-align: right; }
+	.st-t thead th { font: 600 11px var(--font-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+	.st-t a { color: var(--color-text); font-weight: 600; }
+	.st-rt { font: 600 12px var(--font-mono), monospace; padding: 2px 8px; border-radius: 999px; background: var(--color-border); white-space: nowrap; }
+	.st-SD, .st-LD, .st-lD { color: #fff; background: color-mix(in srgb, var(--bt-d, #2f6bd8) 85%, transparent); }
+	.st-SR, .st-LR, .st-lR { color: #fff; background: color-mix(in srgb, var(--bt-r, #d8432f) 85%, transparent); }
+	.st-T { background: #a07d1c; color: #fff; }
+	.mk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0 0 12px; }
+	.mk-stats > div { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); }
+	.mk-stats dt { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.mk-stats dd { margin: 6px 0 0; font-size: 20px; }
+	.mk-rel { list-style: none; padding: 0; margin: 0; }
+	.mk-rel li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
+	.mk-rel a { color: var(--color-text); }
+	.mk-rel b { font-family: var(--font-mono), monospace; white-space: nowrap; }
+	.st-people { list-style: none; padding: 0; margin: 0; columns: 3 200px; }
+	.st-people li { padding: 4px 0; break-inside: avoid; }
+	.st-people a { color: var(--color-text); }
+	.st-people span { font: 600 11px var(--font-mono), monospace; color: var(--color-muted); }
+</style>
