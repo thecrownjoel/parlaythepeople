@@ -1,0 +1,78 @@
+---
+/** The election calendar: election days, runoffs, FEC deadlines and the markets closing each day, for the next 120 days. */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { calendar, calDay, marketPath } from "../../lib/calendar";
+import { statePath, STATES } from "../../lib/states";
+import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=900");
+const origin = Astro.url.origin;
+const events = await calendar();
+const fixed = events.filter((e) => e.kind !== "markets");
+const months = [...new Set(events.map((e) => e.date.slice(0, 7)))];
+const monthName = (m: string) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+const KIND = { election: "Election", runoff: "Runoff", deadline: "Deadline", debate: "Debate", report: "FEC report", markets: "Markets" } as const;
+const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`);
+const description = `Election dates, runoffs, FEC deadlines and the prediction markets closing each day for the next four months. ${fixed[0] ? `Next: ${fixed[0].title}, ${calDay(fixed[0].date)}.` : ""}`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Calendar", "/calendar/"]]),
+	...fixed.filter((e) => e.kind === "election" || e.kind === "runoff").map((e) => ({
+		"@type": "Event", name: e.title, startDate: e.date, eventStatus: "https://schema.org/EventScheduled", eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+		location: { "@type": "Place", name: e.st ? STATES[e.st] : "United States", address: { "@type": "PostalAddress", addressCountry: "US", ...(e.st ? { addressRegion: e.st } : {}) } },
+		description: e.note ?? e.title, url: `${origin}/calendar/`, organizer: { "@type": "Organization", name: e.st ? `${STATES[e.st]} election officials` : "State election officials" },
+	})),
+);
+---
+<Base title={`Election calendar 2026: key dates and market deadlines | ${SITE_NAME}`} description={description} canonical={`${origin}/calendar/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:860px">
+		<header class="dp-head">
+			<p class="eyebrow">Calendar</p>
+			<h1>Election calendar</h1>
+			<p class="lede">{description}</p>
+			<p><a class="cal-sub" href="/calendar.ics">Add to your calendar (iCal feed)</a></p>
+		</header>
+		{months.map((m) => (
+			<section class="panel">
+				<h2>{monthName(m)}</h2>
+				<ol class="cal">
+					{events.filter((e) => e.date.startsWith(m)).map((e) => (
+						<li class={`cal-${e.kind}`}>
+							<time datetime={e.date}>{calDay(e.date)}</time>
+							<div>
+								<span class="cal-k">{KIND[e.kind]}{e.st ? ` · ${STATES[e.st]}` : ""}</span>
+								<b>{e.url && e.kind !== "markets" ? <a href={e.url} rel={e.url.startsWith("http") ? "noopener" : undefined}>{e.title}</a> : e.title}</b>
+								{e.note && <p>{e.note}{e.st && <> <a href={statePath(e.st)}>{STATES[e.st]} races →</a></>}</p>}
+								{e.markets && (
+									<ul>{e.markets.map((x) => <li><a href={marketPath(x)}>{x.title}</a> <span>{x.multi ? `${x.o[0].n} ` : ""}{pct(x.o[0].p)}</span></li>)}</ul>
+								)}
+								{e.count && e.count > (e.markets?.length ?? 0) && <p class="cal-more">and {e.count - e.markets!.length} more</p>}
+							</div>
+						</li>
+					))}
+				</ol>
+			</section>
+		))}
+		<p class="sec-note" style="font-size:12.5px">Election days from the cycle data; other dates from the FEC and state sources linked on each entry. Market close dates are each exchange's own and can change.</p>
+	</div>
+</Base>
+
+<style>
+	.cal-sub { display: inline-block; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--color-border); color: var(--color-text); font-weight: 600; text-decoration: none; }
+	.cal { list-style: none; padding: 0; margin: 0; }
+	.cal > li { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.cal time { font: 600 13px var(--font-mono), monospace; color: var(--color-text-secondary); padding-top: 2px; }
+	.cal-k { display: block; font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.cal-election .cal-k, .cal-runoff .cal-k { color: #f08a7e; }
+	.cal-report .cal-k { color: #3fb68b; }
+	.cal b { font-size: 15.5px; }
+	.cal b a { color: var(--color-text); }
+	.cal p { margin: 4px 0 0; font-size: 14px; color: var(--color-text-secondary); }
+	.cal ul { list-style: none; padding: 0; margin: 6px 0 0; font-size: 14px; }
+	.cal ul li { padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; }
+	.cal ul a { color: var(--color-text); }
+	.cal ul span { font: 600 12.5px var(--font-mono), monospace; white-space: nowrap; }
+	.cal-more { font-size: 13px !important; color: var(--color-muted) !important; }
+	@media (max-width: 560px) { .cal > li { grid-template-columns: 1fr; gap: 4px; } }
+</style>

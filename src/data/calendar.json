@@ -1,0 +1,8 @@
+{
+	"_note": "Hand-kept dates for /calendar/ (election days come from the cycle data; market close dates from the politics board). Add a date only with a source; kind: election | runoff | deadline | debate | report.",
+	"events": [
+		{ "date": "2026-10-14", "title": "FEC pre-general report: books close", "kind": "report", "note": "Fundraising through this date is due in the pre-general report.", "url": "https://www.fec.gov/help-candidates-and-committees/dates-and-deadlines/2026-reporting-dates/congressional-pre-election-reporting-dates-2026/" },
+		{ "date": "2026-10-22", "title": "FEC pre-general reports due", "kind": "report", "note": "House and Senate campaigns file their last full report before Election Day.", "url": "https://www.fec.gov/help-candidates-and-committees/dates-and-deadlines/2026-reporting-dates/congressional-pre-election-reporting-dates-2026/" },
+		{ "date": "2026-12-01", "title": "Georgia general election runoff (if needed)", "kind": "runoff", "st": "GA", "note": "Georgia requires a majority; races under 50% go to a runoff.", "url": "https://www.thegreenpapers.com/G26/GA" }
+	]
+}

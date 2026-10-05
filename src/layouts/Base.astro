@@ -155,6 +155,7 @@ const isLoggedIn = !!Astro.locals.user;
 							<div class="nav-dd-menu" id="nav-elections">
 								{electionLinks.map((l) => <a href={l.href}><b>{l.label}</b><span>{l.note}</span></a>)}
 								<a href="/elections/"><b>All elections</b><span>Every cycle, office and race</span></a>
+								<a href="/calendar/"><b>Calendar</b><span>Election days, runoffs and deadlines</span></a>
 								<a href="/states/"><b>States</b><span>Every race and ballot measure, by state</span></a>
 								<a href="/candidates/"><b>Candidates</b><span>Every candidate's odds, money and buzz</span></a>
 								<a href="/daily/"><b>Daily market report</b><span>What moved the election markets today</span></a>
