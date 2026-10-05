@@ -8,13 +8,14 @@ const { board, topic } = Astro.props;
 // on a topic page, the board is that topic's markets only
 const events = (board?.events ?? []).filter((e) => !topic || e.topic === topic);
 const topicInfo = topic ? board?.topics.find((t) => t.key === topic) : null;
-const sparks = await politicsSparks(events.map((e) => e.id));
 const fresh = board ? (await newListings(board)).filter((e) => !topic || e.topic === topic) : [];
+// cards for each topic's busiest markets; on a topic page every other market follows in a compact list
 const SHOW = topic ? 60 : 24;
 const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`);
 const pts = (d: number | null) => (d == null || Math.abs(d) < 0.005 ? "" : `${d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(d * 100))}`);
 const ends = (iso: string | null) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) && iso < "9999" ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : null);
 const byTopic = (board?.topics ?? []).filter((t) => !topic || t.key === topic).map((t) => ({ ...t, color: TOPIC_COLOR[t.key] ?? "#9aa1ad", events: events.filter((e) => e.topic === t.key) }));
+const sparks = await politicsSparks(byTopic.flatMap((t) => t.events.slice(0, SHOW).map((e) => e.id)));
 const topicName = new Map((board?.topics ?? []).map((t) => [t.key, t.name]));
 // the ticker: biggest 24-hour moves in a leading outcome
 const movers = [...events].filter((e) => e.o[0].d != null && Math.abs(e.o[0].d!) >= 0.02 && e.vol24 > 2000).sort((a, b) => Math.abs(b.o[0].d!) - Math.abs(a.o[0].d!)).slice(0, 16);
@@ -116,11 +117,11 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 						<p>{t.count} markets · {money(t.events.reduce((a, e) => a + e.vol24, 0))} today{!topic && <> · <a href={`/politics/${TOPIC_SLUG[t.key] ?? t.key}/`}>Open the {t.name.toLowerCase()} page →</a></>}</p>
 					</div>
 					<div class="pol-grid">
-						{t.events.map((e, i) => {
+						{t.events.slice(0, SHOW).map((e) => {
 							const sp = sparks.get(e.id) ?? [];
 							const lead = e.o[0];
 							return (
-								<article class="pc" id={`e-${e.id.replace(/[^a-z0-9]/gi, "-")}`} hidden={i >= SHOW} data-more={i >= SHOW ? "1" : undefined}>
+								<article class="pc" id={`e-${e.id.replace(/[^a-z0-9]/gi, "-")}`}>
 									<div class="pc-top">
 										<span class={`pc-src pc-${e.src}`}>{e.src === "k" ? "Kalshi" : "Polymarket"}</span>
 										{lead.d != null && Math.abs(lead.d) >= 0.005 && <span class={`pc-move ${lead.d > 0 ? "up" : "down"}`}>{pts(lead.d)} pts</span>}
@@ -146,11 +147,32 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 							);
 						})}
 					</div>
-					{t.count > SHOW && <button type="button" class="pol-more" data-more-btn>Show all {t.count} {t.name.toLowerCase()} markets</button>}
+					{t.count > SHOW && !topic && <a class="pol-more" href={`/politics/${TOPIC_SLUG[t.key] ?? t.key}/`}>See all {t.count} {t.name.toLowerCase()} markets</a>}
+					{t.count > SHOW && topic && (
+						<div class="pol-rest" data-rest>
+							<div class="pol-rest-head">
+								<h3>Every other {t.name.toLowerCase()} market <span>{t.count - SHOW}</span></h3>
+								<input type="search" placeholder="Filter by name" aria-label={`Filter ${t.name.toLowerCase()} markets`} data-rest-filter />
+							</div>
+							<ol class="pol-list">
+								{t.events.slice(SHOW).map((e) => {
+									const lead = e.o[0];
+									return (
+										<li id={`e-${e.id.replace(/[^a-z0-9]/gi, "-")}`}>
+											<span class={`pc-src pc-${e.src}`}>{e.src === "k" ? "K" : "P"}</span>
+											<a href={e.url} rel="noopener nofollow" target="_blank">{e.title}</a>
+											<b>{e.multi ? `${lead.n}: ` : ""}{pct(lead.p)}{e.n_out > 1 ? <span> of {e.n_out}</span> : null}</b>
+											<span class="pol-list-vol">{e.vol24 ? `${money(e.vol24)} today · ` : ""}{money(e.vol)} traded</span>
+										</li>
+									);
+								})}
+							</ol>
+						</div>
+					)}
 				</section>
 			))}
 		</div>
-		<p class="sec-note" style="font-size:12.5px">Markets in Kalshi's Politics and Elections categories and Polymarket's politics tags with at least $1,000 traded, except the races covered on our race pages. Prices are each exchange's own (bid/ask midpoint on Kalshi, displayed price on Polymarket). Research, not betting advice.</p>
+		<p class="sec-note" style="font-size:12.5px">Every open market in Kalshi's Politics and Elections categories and Polymarket's politics and elections tags, however thinly traded, except the races covered on our race pages. Prices are each exchange's own (bid/ask midpoint on Kalshi, displayed price on Polymarket). Research, not betting advice.</p>
 	</div>
 
 <script>
@@ -162,15 +184,16 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 	const fmtMoney = (x: number) => (x >= 1e9 ? `$${(x / 1e9).toFixed(1)}B` : x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}K` : `$${Math.round(x)}`);
 
-	// "Show all" in a topic
-	document.querySelectorAll<HTMLButtonElement>("[data-more-btn]").forEach((b) => b.addEventListener("click", () => {
-		const cards = [...b.closest(".pol-topic")!.querySelectorAll<HTMLElement>("[data-more]")];
-		cards.forEach((c) => (c.hidden = false));
-		b.remove();
-		if (!reduce) gsap.from(cards.slice(0, 30), { y: 30, opacity: 0, duration: 0.5, stagger: 0.03, ease: "power2.out", clearProps: "transform,opacity" });
-		cards.forEach((c) => c.classList.add("in"));
-		ScrollTrigger.refresh();
-	}));
+	// topic pages: filter the full list by name
+	document.querySelectorAll<HTMLInputElement>("[data-rest-filter]").forEach((f) => {
+		const rows = [...f.closest("[data-rest]")!.querySelectorAll<HTMLElement>(".pol-list li")];
+		const text = rows.map((r) => r.textContent!.toLowerCase());
+		f.addEventListener("input", () => {
+			const q = f.value.trim().toLowerCase();
+			rows.forEach((r, i) => (r.hidden = !!q && !text[i].includes(q)));
+			ScrollTrigger.refresh();
+		});
+	});
 
 	// topic filter, animated with Flip
 	const chips = document.querySelector("[data-chips]");
@@ -327,5 +350,26 @@ const updated = board ? new Date(board.generated).toLocaleString("en-US", { mont
 	.pc-vol span { font-weight: 400; color: var(--color-muted); font-size: 11.5px; }
 	.pol-more { all: unset; cursor: pointer; display: block; margin: 16px auto 0; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--tc); color: var(--color-text); font-weight: 600; font-size: 14px; }
 	.pol-more:hover { background: color-mix(in srgb, var(--tc) 14%, transparent); }
+	.pol-rest { margin-top: 28px; }
+	.pol-rest-head { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+	.pol-rest-head h3 { margin: 0; font-size: 18px; }
+	.pol-rest-head h3 span { font: 600 12.5px var(--font-mono), monospace; color: var(--color-muted); margin-left: 6px; }
+	.pol-rest-head input { width: min(100%, 280px); padding: 8px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; }
+	.pol-rest-head input:focus-visible { outline: 2px solid var(--tc); outline-offset: 1px; }
+	.pol-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-border); }
+	.pol-list li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--color-border-subtle); font-size: 14px; scroll-margin-top: 150px; }
+	.pol-list li:target { background: color-mix(in srgb, var(--tc) 12%, transparent); }
+	.pol-list .pc-src { padding: 2px 0; text-align: center; }
+	.pol-list a { color: var(--color-text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.pol-list a:hover { text-decoration: underline; }
+	.pol-list b { font: 600 13px var(--font-mono), monospace; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+	.pol-list b span { font-weight: 400; color: var(--color-muted); }
+	.pol-list-vol { font-size: 12.5px; color: var(--color-muted); white-space: nowrap; text-align: right; min-width: 120px; }
+	@media (max-width: 640px) {
+		.pol-list li { grid-template-columns: 26px minmax(0, 1fr); }
+		.pol-list a { white-space: normal; }
+		.pol-list b { grid-column: 2; max-width: none; white-space: normal; }
+		.pol-list-vol { grid-column: 2; text-align: left; min-width: 0; }
+	}
 	@media (prefers-reduced-motion: reduce) { .pc-bar i, .pc-g-fg, .pc-spark path { transition: none; } }
 </style>

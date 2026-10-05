@@ -23,10 +23,9 @@ import ingest  # noqa: E402  (its top level only sets up constants; main() doesn
 OUT = os.path.join(HERE, "out")
 RAW = os.path.join(OUT, "raw")
 NOW = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
-POLY_TAGS = ["politics", "geopolitics"]
-MIN_VOLUME = 1000          # dollars traded, to keep the board to markets people actually trade
-MAX_EVENTS = 900
-MAX_OUTCOMES = 6
+# Polymarket's Politics and Elections categories (and their sub-tags, which don't always carry the parent tag)
+POLY_TAGS = ["politics", "geopolitics", "elections", "global-elections", "world-elections", "trump", "courts", "congress"]
+MAX_OUTCOMES = 6           # outcomes kept per event on the board (n_out has the full count)
 
 # Topics, checked in order; the first whose words appear in the title (or Polymarket tag labels) wins.
 TOPICS = [
@@ -79,7 +78,7 @@ def fetch_poly_tags():
     seen, out = set(), []
     for tag in POLY_TAGS:
         off = 0
-        while off < 4000:
+        while off < 20000:
             page = ingest.get("https://gamma-api.polymarket.com/events", {"tag_slug": tag, "closed": "false", "limit": 100, "offset": off})
             if not isinstance(page, list) or not page:  # an error object (e.g. past the offset limit) ends this tag
                 break
@@ -161,9 +160,9 @@ def main():
     praw += [e for e in extra if e["id"] not in seen]
     ck, cp = covered_ids()
     events = [x for x in (kalshi_event(e, ck) for e in kraw) if x] + [x for x in (poly_event(e, cp) for e in praw) if x]
-    events = [e for e in events if e["vol"] >= MIN_VOLUME and not COVERED_TITLES.search(e["title"])]
+    # every market, however thinly traded: the site represents all of both exchanges' politics and elections
+    events = [e for e in events if not COVERED_TITLES.search(e["title"])]
     events.sort(key=lambda e: (-e["vol24"], -e["vol"]))
-    events = events[:MAX_EVENTS]
     by_topic = {}
     for e in events:
         by_topic.setdefault(e["topic"], 0)
@@ -180,7 +179,8 @@ def main():
     q = lambda s: "'" + str(s).replace("'", "''") + "'"
     lines = []
     for e in events:
-        lines.append(f"INSERT OR REPLACE INTO politics_history (event_id, ts, p) VALUES ({q(e['id'])}, {hour}, {e['o'][0]['p']});")
+        # first reading of each hour; later runs in the hour are ignored (no write cost)
+        lines.append(f"INSERT OR IGNORE INTO politics_history (event_id, ts, p) VALUES ({q(e['id'])}, {hour}, {e['o'][0]['p']});")
         lines.append(f"INSERT OR IGNORE INTO politics_first_seen (event_id, title, topic, src, first_seen) VALUES ({q(e['id'])}, {q(e['title'][:200])}, {q(e['topic'])}, {q(e['src'])}, {int(NOW.timestamp())});")
     open(os.path.join(OUT, "politics.sql"), "w").write("\n".join(lines) + "\n")
     print(f"politics: {len(events)} events ({board['totals']['kalshi']} Kalshi, {board['totals']['polymarket']} Polymarket), "
