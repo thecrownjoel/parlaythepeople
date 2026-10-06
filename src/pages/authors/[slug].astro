@@ -53,7 +53,7 @@ const ld = graph(
 				: <span class="au-photo au-initials" aria-hidden="true">{initials}</span>}
 			<div class="au-intro">
 				<p class="eyebrow">{isAI ? "AI writer · Parlay Newsroom" : staff ? "Staff writer · Parlay Newsroom" : `Author · ${SITE_NAME}`}</p>
-				<h1>{author.displayName}{isAI && <span class="ai-badge" title="A fictional persona; stories are researched and written by AI and reviewed by our editor">AI writer</span>}</h1>
+				<h1>{author.displayName}{isAI && <span class="ai-badge" title={staff?.approval === "auto" ? "Stories are researched and written by AI from cited sources and checked automatically before publishing" : "Stories are researched and written by AI from cited sources, checked automatically, and reviewed by our editor"}>AI writer</span>}</h1>
 				{staff && (
 					<p class="au-meta">
 						{staff.age ? <>{staff.age} · </> : null}{staff.beats.map((b) => BEATS[b] ?? b).join(", ")}{staff.geography.length && !staff.geography.includes("US") ? <> · {staff.geography.join(", ")}</> : null}{staff.perspective !== 0 ? <> · writes from a {perspectiveOf(staff.perspective).label === "Strong D" ? "progressive" : perspectiveOf(staff.perspective).label === "Lean D" ? "center-left" : perspectiveOf(staff.perspective).label === "Lean R" ? "center-right" : "conservative"} perspective</> : null}
