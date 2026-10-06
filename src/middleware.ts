@@ -6,10 +6,8 @@ import { env } from "cloudflare:workers";
  * - robots.txt: explicit welcome for search and AI crawlers, plus our sitemap and llms.txt
  * - sitemap.xml: lists /market-sitemap.xml alongside EmDash's per-collection sitemaps
  */
-// Maintenance mode (MAINTENANCE = "1" in wrangler.jsonc): the public gets a 503 "back soon" page; the EmDash admin keeps working.
-const MAINTENANCE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Parlay the People</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#111;color:#eee}}main{padding:16px;text-align:center}h1{font-size:1.75rem;margin:0 0 8px}p{color:#666;margin:0}</style></head>
-<body><main><h1>Parlay the People</h1><p>We're making some changes. Back soon.</p></main></body></html>`;
+// Maintenance mode (MAINTENANCE = "1" in wrangler.jsonc): the public gets a blank black page (503); the EmDash admin keeps working.
+const MAINTENANCE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><meta name="color-scheme" content="dark"><title>Parlay the People</title><style>html,body{margin:0;height:100%;background:#000}</style></head><body></body></html>`;
 
 const AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"];
 
