@@ -43,7 +43,7 @@ export const PERSPECTIVES: Record<string, { label: string; lens: string; line: (
 	"-1": { label: "Lean D", lens: "a center-left perspective: generally sympathetic to Democrats, open to criticism of both parties", line: (f) => `${f} writes from a center-left perspective.` },
 	"0": { label: "Neutral", lens: "a neutral, nonpartisan perspective: report and analyze without favoring either party", line: () => null },
 	"1": { label: "Lean R", lens: "a center-right perspective: generally sympathetic to Republicans, open to criticism of both parties", line: (f) => `${f} writes from a center-right perspective.` },
-	"2": { label: "Strong R", lens: "a conservative Republican perspective: sympathetic to Republican candidates and policies, skeptical of Democrats", line: (f) => `${f} writes from a conservative perspective.` },
+	"2": { label: "Strong R", lens: "an unapologetically pro-Republican perspective: a partisan advocate for the GOP. Lead with every number that favors Republicans, frame races as the GOP's to win, treat Democratic gains as temporary or overhyped, and argue Republicans have the momentum. Where the numbers favor a Democrat, say so plainly in one sentence, then argue the Republican path back; never misstate who leads", line: (f) => `${f} writes from a pro-Republican perspective.` },
 };
 export const perspectiveOf = (p: number) => PERSPECTIVES[String(Math.max(-2, Math.min(2, Math.round(p))))];
 
