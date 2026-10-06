@@ -1,0 +1,33 @@
+---
+/** The close races where a Republican can win or lose, closest first, each with the odds and ways to help. */
+import { committeeFor, stakes, type Battleground } from "../lib/gop";
+import { pct } from "../lib/markets";
+import "../styles/gop.css";
+
+interface Props { items: Battleground[]; compact?: boolean }
+const { items, compact = false } = Astro.props;
+---
+<ol class="bg-list" data-compact={compact ? "" : undefined}>
+	{items.map((b) => {
+		const com = committeeFor(b.r);
+		return (
+			<li class="bg-row">
+				<div class="bg-main">
+					<a class="bg-race" href={b.r.path}>{b.name}</a>
+					<p class="bg-who"><b>{b.who}</b> (R){b.dem && <span> vs. {b.dem} (D)</span>}</p>
+					<div class="bg-bar" role="img" aria-label={`Traders give ${b.who} a ${pct(b.R)} chance`}><i style={`width:${(b.R * 100).toFixed(1)}%`}></i></div>
+				</div>
+				<div class="bg-side">
+					<p class="bg-odds"><b>{pct(b.R)}</b> <span>{stakes(b.R)}</span></p>
+					{!compact && (
+						<p class="bg-help">
+							{b.campaign?.donate && <a href={b.campaign.donate} rel="noopener">Donate</a>}
+							{b.campaign?.site && <a href={b.campaign.site} rel="noopener">Campaign</a>}
+							<a href={com.url} rel="noopener">{com.name}</a>
+						</p>
+					)}
+				</div>
+			</li>
+		);
+	})}
+</ol>

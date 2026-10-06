@@ -10,7 +10,7 @@ import cal from "../data/calendar.json";
 export type SeasonKey = "stretch" | "election-night" | "aftermath" | "transition" | "governing" | "primaries";
 export type ModuleKey =
 	| "pin" | "results" | "lead" | "yours" | "ticker" | "big" | "moving" | "pulse" | "globe" | "money" | "map" | "grid"
-	| "congress" | "leaders" | "politics" | "polls" | "analysis" | "ballots" | "explore";
+	| "congress" | "leaders" | "politics" | "polls" | "analysis" | "ballots" | "explore" | "fight";
 
 export interface Season {
 	key: SeasonKey; label: string; cycle: number; eday: string;
@@ -21,7 +21,7 @@ export interface Season {
 export interface Pin { title: string; text?: string | null; url?: string | null; until: number; tone?: "news" | "alert" }
 
 const ORDER: Record<SeasonKey, ModuleKey[]> = {
-	stretch: ["pin", "lead", "yours", "ticker", "big", "moving", "pulse", "globe", "money", "map", "grid", "leaders", "politics", "polls", "congress", "analysis", "ballots", "explore"],
+	stretch: ["pin", "lead", "fight", "yours", "ticker", "big", "moving", "pulse", "globe", "money", "map", "grid", "leaders", "politics", "polls", "congress", "analysis", "ballots", "explore"],
 	"election-night": ["pin", "results", "yours", "ticker", "big", "moving", "globe", "money", "grid", "analysis", "politics", "explore"],
 	aftermath: ["pin", "results", "ticker", "analysis", "politics", "congress", "moving", "money", "leaders", "grid", "big", "explore"],
 	transition: ["pin", "lead", "ticker", "congress", "politics", "analysis", "leaders", "moving", "money", "explore"],
@@ -56,7 +56,7 @@ export async function resolveSeason(now = Date.now()): Promise<Season> {
 		// well before a presidential general, the primaries lead
 		if (presidential && now < at(`${cycle}-06-15T00:00:00Z`) && now >= at(`${cycle - 1}-11-01T00:00:00Z`)) return make("primaries", "Primary season", `The ${cycle} race for the White House, with the odds`, `${cycle} presidential primary odds`);
 		const stretchStart = at(`${cycle}-06-15T00:00:00Z`);
-		if (now >= stretchStart) return make("stretch", `${cycle} ${word}`, `Political news and ${cycle} ${word} odds from Kalshi and Polymarket, race by race`, `live ${cycle} ${word} odds from Kalshi & Polymarket`);
+		if (now >= stretchStart) return make("stretch", `${cycle} ${word}`, `The fight for a Republican majority: ${cycle} ${word} odds from Kalshi and Polymarket, race by race`, `${cycle} ${word} odds: where Republicans can win`);
 	}
 	// after the last general: aftermath to mid-December, transition to inauguration / swearing-in, then governing
 	const last = prev ?? next;

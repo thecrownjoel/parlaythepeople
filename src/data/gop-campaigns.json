@@ -1,0 +1,20 @@
+{
+  "_source": "Hand-checked campaign links, 2026-10-06. Add entries by candidate name as they appear in the market data.",
+  "Rick Jackson": { "site": "https://rickjackson.com/", "donate": "https://secure.psqimpact.com/donate/jackson-for-governor/donate" },
+  "Joe Lombardo": { "site": "https://www.joelombardofornv.com/", "donate": "https://secure.winred.com/lombardo-for-governor/website-donate-button" },
+  "Ashley Hinson": { "site": "https://ashleyhinson.com/", "donate": "https://secure.winred.com/ashley-hinson-victory-committee/donate" },
+  "Susan Collins": { "site": "https://susancollins.com/", "donate": "https://secure.winred.com/susan-collins/donate-contributebutton-2026" },
+  "Jon Husted": { "site": "https://www.jonhustedforsenate.com/", "donate": "https://secure.winred.com/husted-for-senate/donate-today" },
+  "Ken Paxton": { "site": "https://www.kenpaxton.com/", "donate": "https://secure.winred.com/ken-paxton-for-senate/donate-today" },
+  "Roger Marshall": { "site": "https://kansansformarshall.com/", "donate": "https://secure.anedot.com/kansans-for-marshall/donate" },
+  "Vivek Ramaswamy": { "site": "https://vivekforohio.com/", "donate": "https://secure.winred.com/vivek-ramaswamy-for-ohio/website-donate" },
+  "Pete Ricketts": { "site": "https://petericketts.com/", "donate": "https://secure.anedot.com/pete-ricketts-for-senate/33c2056e-4e94-4c9a-8596-31eeeb032b4b" },
+  "Mike Rogers": { "site": "https://rogersforsenate.com/", "donate": "https://secure.winred.com/team-rogers/donate" },
+  "Dan Sullivan": { "site": "https://dansullivanforalaska.com/", "donate": "https://secure.winred.com/alaskans-for-dan-sullivan/donate" },
+  "Greg Abbott": { "site": "https://www.gregabbott.com/", "donate": "https://donate.gregabbott.com/home-page" },
+  "Ty Masterson": { "site": "https://www.mastersonforgovernor.com/", "donate": "https://secure.winred.com/ty-masterson-for-governor-4b4f973d/donate-today" },
+  "Bernadette Wilson": { "site": "https://bernadetteforgovernor.com/", "donate": "https://secure.winred.com/bernadette-for-governor/0d09bec8-2d3a-4076-b9e1-1a258d234c60" },
+  "Phil Scott": { "site": "https://www.philscott.org/", "donate": "https://secure.anedot.com/phil-scott/donate" },
+  "Christine Drazan": { "site": "https://www.christinefororegon.com/", "donate": "https://secure.winred.com/friends-of-christine-drazan/donate-today" },
+  "Byron Donalds": { "site": "https://byrondonalds.com/", "donate": "https://secure.winred.com/byron-donalds-for-governor/donate" }
+}

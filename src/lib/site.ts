@@ -1,8 +1,8 @@
 /** Site-wide identity used in structured data, feeds and AI-facing files. */
 export const SITE_NAME = "Parlay the People";
-export const SITE_TAGLINE = "The running record of what election markets expect.";
+export const SITE_TAGLINE = "The conservative read on the election markets.";
 export const SITE_DESCRIPTION =
-	"Kalshi and Polymarket odds for every U.S. presidential, Senate, House and governor race, side by side, with price history. Updated every 10 minutes.";
+	"Kalshi and Polymarket odds for every U.S. presidential, Senate, House and governor race, read from a pro-Republican perspective, and where your help can make the difference for GOP candidates. Updated every 10 minutes.";
 
 export function organization(origin: string) {
 	return {

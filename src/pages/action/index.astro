@@ -1,0 +1,84 @@
+---
+/**
+ * The GOP action hub: /action/. Where Republicans can win this cycle (the closest races with a Republican on the
+ * ballot, by market odds) and how to help: campaigns, the party committees, and registering and voting.
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import Battlegrounds from "../../components/Battlegrounds.astro";
+import { getIndex, getCycle, consensus, pct, daysUntil } from "../../lib/markets";
+import { battlegrounds, COMMITTEES } from "../../lib/gop";
+import { organization, breadcrumbs, graph } from "../../lib/site";
+import "../../styles/data.css";
+import "../../styles/gop.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=600");
+const origin = Astro.url.origin;
+const index = await getIndex();
+const year = index?.next;
+const cycle = year ? await getCycle(year) : null;
+const races = cycle?.races ?? [];
+const eday = index?.cycles.find((c) => c.year === year)?.election_day;
+const control = (k: string) => { const r = races.find((x) => x.id === `${year}-${k}-control`); return r ? consensus(r).R : null; };
+const senate = control("senate"), house = control("house");
+const top = battlegrounds(races, { kinds: ["senate", "governor"] });
+const seats = battlegrounds(races, { kinds: ["house"], limit: 20 });
+const lede = `${eday ? `${daysUntil(eday)} days to Election Day. ` : ""}These are the races where Republicans can win or lose, closest first, with the markets' real odds and the fastest ways to help.`;
+const ld = graph(organization(origin), breadcrumbs(origin, [["Take action", "/action/"]]));
+---
+<Base title="Where Republicans can win, and how to help" description={lede} canonical={`${origin}/action/`}>
+	<JsonLd slot="head" data={ld} />
+	<div class="fx">
+		<header class="fx-hero">
+			<p class="eyebrow">Take action</p>
+			<h1>Where Republicans can win{year ? ` in ${year}` : ""}</h1>
+			<p class="fx-lede">{lede}</p>
+			{(senate != null || house != null) && (
+				<p class="fx-note">
+					{senate != null && <span>Traders give Republicans a <b>{pct(senate)}</b> chance of controlling the Senate. </span>}
+					{house != null && <span>House: <b>{pct(house)}</b>. </span>}
+					Every race below can move those numbers.
+				</p>
+			)}
+		</header>
+
+		<section class="fx-sec">
+			<h2>Senate and governor races</h2>
+			<p class="fx-note">Each bar is the Republican's chance from Kalshi and Polymarket. "Hold the lead" races are ones the GOP is favored to win and can't afford to lose; "Close the gap" races are winnable pickups.</p>
+			{top.length ? <Battlegrounds items={top} /> : <p>No close statewide races right now.</p>}
+		</section>
+
+		{seats.length > 0 && (
+			<section class="fx-sec">
+				<h2>The closest House seats</h2>
+				<p class="fx-note">The 20 House races nearest to a coin flip with a named Republican.</p>
+				<Battlegrounds items={seats} />
+			</section>
+		)}
+
+		<section class="fx-sec">
+			<h2>Ways to help</h2>
+			<div class="act-ways">
+				<div>
+					<h3>Register and vote</h3>
+					<p>Check your registration, request a mail ballot, or find early voting with your state's official election office.</p>
+					<a href="/voting/">How to vote in your state</a>
+				</div>
+				<div>
+					<h3>Give</h3>
+					<p>Give to a candidate above, or to the party committee for that office:</p>
+					<ul>{Object.values(COMMITTEES).map((c) => <li><a href={c.url} rel="noopener">{c.name}</a>: {c.full}</li>)}</ul>
+				</div>
+				<div>
+					<h3>Volunteer</h3>
+					<p>Door-knocking and phone banks win close races. Every campaign site and committee above has a volunteer sign-up.</p>
+				</div>
+				<div>
+					<h3>Spread the word</h3>
+					<p>Share a race page with a friend in that state. Each one has the current odds and a share image.</p>
+				</div>
+			</div>
+		</section>
+		<p class="fx-src">Odds: Kalshi and Polymarket, updated every 10 minutes. Parlay the People isn't affiliated with any campaign or party committee; campaign links were checked by hand.</p>
+	</div>
+</Base>

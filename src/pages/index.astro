@@ -37,6 +37,8 @@ import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "..
 import ResultsLead from "../components/home/ResultsLead.astro";
 import CongressWeek from "../components/home/CongressWeek.astro";
 import { resolveSeason, activePin, calendarMoments } from "../lib/season";
+import Battlegrounds from "../components/Battlegrounds.astro";
+import { battlegrounds } from "../lib/gop";
 import "../styles/data.css";
 import "../styles/home.css";
 
@@ -111,6 +113,7 @@ const name = (r: Race) => (r.kind === "house" ? `${r.label} (${r.state})` : `${r
 const closest = races.filter((r) => r.kind !== "control").map((r) => ({ r, c: consensus(r) })).sort((a, b) => a.c.lp - b.c.lp).slice(0, 8);
 const gaps = races.filter((r) => r.k && r.p).map((r) => ({ r, g: Math.abs(shares(r.k)!.D - shares(r.p)!.D) })).sort((a, b) => b.g - a.g).slice(0, 6);
 const moved = next ? await movers(next, 7, 6) : [];
+const fight = battlegrounds(races, { kinds: ["senate", "governor"], limit: 6 });
 
 // ---- presidency leaderboard
 /** Money traded on a race across both exchanges (Kalshi $1 contracts + Polymarket dollars). */
@@ -220,6 +223,12 @@ const ld = graph(organization(origin), {
 			</section>
 		)}
 				</Fragment>
+			)}
+			{k === "fight" && fight.length > 0 && (
+				<section aria-labelledby="fight-h">
+					<div class="sec-head"><h2 id="fight-h">Where Republicans can win</h2><a class="sec-note" style="margin:0" href="/action/">All races and how to help →</a></div>
+					<Battlegrounds items={fight} compact />
+				</section>
 			)}
 			{k === "yours" && (
 				<Fragment>

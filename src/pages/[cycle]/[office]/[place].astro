@@ -33,6 +33,8 @@ import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
 import { renderMulti, rangeOf } from "../../../lib/chart";
 import "../../../styles/charts.css";
+import "../../../styles/gop.css";
+import { campaignFor, committeeFor, electionOffice } from "../../../lib/gop";
 
 const { cycle, office, place } = Astro.params;
 if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
@@ -43,6 +45,9 @@ if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
 const c = consensus(race);
+// GOP action box: the Republican on the ballot and ways to help (lib/gop.ts)
+const gopWho = race.kind !== "control" ? candidate(race, "R") : null;
+const gopCampaign = campaignFor(gopWho), gopCommittee = committeeFor(race), gopOffice = electionOffice(race.state);
 const polls = race.kind === "control" ? null : await pollAverage(race.id);
 const expert = race.kind === "control" ? {} : await ratingsFor(race.id);
 // who holds the seat now (Congress.gov): the district's representative, or the senator whose seat is up (matched to a
@@ -273,6 +278,20 @@ import { parlayD } from "../../../lib/model";
 				<div><dt>Election Day</dt><dd>{fmtDate(data.meta.election_day + "T12:00:00-05:00", false)}{days > 0 && ` (${days} days)`}</dd></div>
 			</dl>
 		</section>
+
+		{gopWho && (
+			<section class="gop-help" aria-labelledby="gop-h">
+				<h2 id="gop-h">Help {gopWho} win</h2>
+				<p>Traders give {gopWho} (R) a {pct(c.R)} chance. {c.R >= 0.5 ? "Hold the lead:" : "Close the gap:"} every dollar, door and vote counts in {race.state}.</p>
+				<ul>
+					{gopCampaign?.donate && <li><a href={gopCampaign.donate} rel="noopener">Donate to {gopWho}</a></li>}
+					{gopCampaign?.site && <li><a href={gopCampaign.site} rel="noopener">Campaign site</a></li>}
+					<li><a href={gopCommittee.url} rel="noopener">{gopCommittee.name}</a></li>
+					{gopOffice && <li><a href={gopOffice} rel="noopener">Register and vote in {race.state}</a></li>}
+					<li><a href="/action/">More races to help</a></li>
+				</ul>
+			</section>
+		)}
 
 		{race.kind !== "control" && (
 			<section aria-labelledby="polls-h">
