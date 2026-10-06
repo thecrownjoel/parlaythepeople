@@ -34,6 +34,7 @@ export default defineConfig({
 						{ path: "/queue", label: "Story queue", icon: "list" },
 						{ path: "/drafts", label: "Drafts", icon: "file-text" },
 						{ path: "/balance", label: "Balance", icon: "chart" },
+						{ path: "/homepage", label: "Homepage", icon: "home" },
 						{ path: "/settings", label: "Settings", icon: "settings" },
 					],
 				},

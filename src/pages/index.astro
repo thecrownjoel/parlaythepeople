@@ -34,10 +34,20 @@ import { parsePeriod } from "../lib/period";
 import { biggestTrades } from "../lib/money";
 import { raceName } from "../lib/home";
 import { organization, graph, authorPath, SITE_NAME, SITE_DESCRIPTION } from "../lib/site";
+import ResultsLead from "../components/home/ResultsLead.astro";
+import CongressWeek from "../components/home/CongressWeek.astro";
+import { resolveSeason, activePin, calendarMoments } from "../lib/season";
 import "../styles/data.css";
 import "../styles/home.css";
 
 const origin = Astro.url.origin;
+// the homepage engine: the season (and an admin's ?at= preview of any date, Eastern time) decides what leads and in what order
+const atParam = Astro.url.searchParams.get("at");
+const previewAt = atParam && ((Astro.locals as any).user?.role ?? 0) >= 50 ? Date.parse(`${atParam}${atParam.length <= 16 ? ":00" : ""}-05:00`) : NaN;
+const nowMs = Number.isFinite(previewAt) ? previewAt : Date.now();
+if (Number.isFinite(previewAt)) Astro.response.headers.set("cache-control", "no-store");
+const [season, pin] = await Promise.all([resolveSeason(nowMs), activePin(nowMs)]);
+const moments = calendarMoments(nowMs);
 const index = await getIndex();
 const nextYear = index?.next;
 const presYear = index?.cycles.find((c) => c.offices.includes("president") && c.year >= (nextYear ?? 0))?.year;
@@ -161,7 +171,7 @@ const ticker: { text: string; href: string; tag: string; external?: boolean }[] 
 // ---- the Pulse shows when LunarCrush has candidates
 const pulses = Object.values(social?.topics ?? {}).filter((p) => p.kind === "candidate");
 
-const h1Words = "Political News, Election odds from Kalshi and Polymarket, race by race".split(" ");
+const h1Words = season.h1.split(" ");
 const postDate = (d?: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
 const ld = graph(organization(origin), {
@@ -170,21 +180,30 @@ const ld = graph(organization(origin), {
 });
 ---
 
-<Base title={`${SITE_NAME}: live election odds from Kalshi & Polymarket`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`} image={`${origin}/og/home.png`}>
+<Base title={`${SITE_NAME}: ${season.title}`} description={lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede} canonical={`${origin}/`} image={`${origin}/og/home.png`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp">
+		{season.modules.map((k) => (
+			<Fragment>
+			{k === "pin" && (pin || moments.length > 0) && (
+				<div class="moments">
+					{pin && <a class={`moment moment-${pin.tone ?? "news"}`} href={pin.url ?? undefined}><b>{pin.title}</b>{pin.text && <span>{pin.text}</span>}</a>}
+					{moments.map((m) => <a class="moment" href={m.url ?? "/calendar/"}><b>Today: {m.title}</b>{m.note && <span>{m.note}</span>}</a>)}
+				</div>
+			)}
+			{k === "results" && <ResultsLead cycle={season.cycle} live={season.key === "election-night"} h1={season.h1} />}
+			{k === "lead" && (
+				<Fragment>
 		<header class="dp-head home-hero">
 			<div class="home-hero-text">
-				<p class="eyebrow ga" data-ga="hero">{SITE_NAME}{days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ""}</p>
+				<p class="eyebrow ga" data-ga="hero">{SITE_NAME}{season.key === "stretch" && days != null && days > 0 ? ` · ${days} days to the ${nextYear} election` : ` · ${season.label}`}</p>
 				<h1 class="hero-h1">{h1Words.map((w) => <><span class="w ga" data-ga="word">{w}</span>{" "}</>)}</h1>
 				<p class="lede ga" data-ga="hero">{lede}</p>
 				{next && <p class="updated ga" data-ga="hero">Updated <time datetime={next.meta.generated}>{fmtDate(next.meta.generated)}</time></p>}
 			</div>
 			<img class="home-hero-logo ga" data-ga="logo" src="/brand/logo-full.png" width="760" height="936" alt={`${SITE_NAME} logo: a voter casting a ballot as dollar bills fall`} fetchpriority="high" />
 		</header>
-
-
-		{next && (
+		{season.key === "stretch" && next && (
 			<section class="snap" aria-labelledby="snap-h" data-period-section="snapshot">
 				<div class="snap-head">
 					<div>
@@ -200,12 +219,18 @@ const ld = graph(organization(origin), {
 				<p class="snap-foot">{totalRaces.toLocaleString()} races tracked · {counts.points.toLocaleString()} price points recorded · <a href={`/${nextYear}/`}>Every {nextYear} race →</a> · <a href={`/daily/${new Date().toISOString().slice(0, 10)}/`}>Today's market report →</a></p>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "yours" && (
+				<Fragment>
 		<section id="your-races" class="yr" hidden aria-labelledby="yr-h">
 			<div class="sec-head"><h2 id="yr-h">Your races</h2><span class="sec-note" style="margin:0">Races you follow · change since your last visit</span></div>
 			<div class="yr-grid" data-yr></div>
 		</section>
-
+				</Fragment>
+			)}
+			{k === "ticker" && (
+				<Fragment>
 		{ticker.length > 0 && (
 			<section class="ticker" aria-label="Latest headlines">
 				<span class="ticker-label">Latest</span>
@@ -220,20 +245,28 @@ const ld = graph(organization(origin), {
 				</div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "big" && (
+				<Fragment>
 		{(senC || houseC) && (
 			<section data-period-section="big">
 				<div class="sec-head"><h2>The big picture</h2><PeriodPicker {...pickerOf("big")} /></div>
 				<div data-period-body><BigPictureBody d={home} period={P.big} /></div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "moving" && (
+				<Fragment>
 		<section aria-labelledby="story-h" data-period-section="moving">
 			<div class="sec-head"><h2 id="story-h">What's moving the markets</h2><PeriodPicker {...pickerOf("moving")} /></div>
 			<div data-period-body><MovingBody d={home} period={P.moving} /></div>
 		</section>
-
-
+				</Fragment>
+			)}
+			{k === "pulse" && (
+				<Fragment>
 		{pulses.length > 0 && (
 			<section class="pulse" aria-labelledby="pulse-h" data-period-section="pulse">
 				<div class="sec-head">
@@ -243,7 +276,10 @@ const ld = graph(organization(origin), {
 				<div data-period-body><PulseBody d={home} period={P.pulse} /></div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "globe" && (
+				<Fragment>
 		{globeRaces.length > 0 && (
 			<section class="globe-panel ga" data-ga="globe" aria-labelledby="money-h">
 				<MoneyGlobe races={globeRaces} cycle={nextYear!} totalTraded={traded} />
@@ -269,19 +305,28 @@ const ld = graph(organization(origin), {
 				</div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "money" && (
+				<Fragment>
 		<section aria-labelledby="money-went-h" data-period-section="money">
 			<div class="sec-head"><h2 id="money-went-h">Where the money went</h2><PeriodPicker {...pickerOf("money")} /></div>
 			<div data-period-body><MoneyBody d={home} period={P.money} /></div>
 		</section>
-
+				</Fragment>
+			)}
+			{k === "map" && (
+				<Fragment>
 		{senMap.length > 0 && (
 			<section data-ga-map data-period-section="map">
 				<div class="sec-head"><h2>The {nextYear} map</h2><PeriodPicker {...pickerOf("map")} /></div>
 				<div data-period-body><MapBody d={home} period={P.map} /></div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "grid" && (
+				<Fragment>
 		<div class="grid3">
 			<section class="panel" data-period-section="movers">
 				<div class="sec-head"><h2 style="font-size:22px">Biggest moves</h2><PeriodPicker {...pickerOf("movers")} /></div>
@@ -300,7 +345,11 @@ const ld = graph(organization(origin), {
 				</section>
 			)}
 		</div>
-
+				</Fragment>
+			)}
+			{k === "congress" && <CongressWeek />}
+			{k === "leaders" && (
+				<Fragment>
 		{leaders.length > 0 && (
 			<section class="panel" data-period-section="leaders">
 				<div class="sec-head">
@@ -310,11 +359,20 @@ const ld = graph(organization(origin), {
 				<div data-period-body><LeadersBody d={home} period={P.leaders} /></div>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "politics" && (
+				<Fragment>
 		<PoliticsTeaser />
-
+				</Fragment>
+			)}
+			{k === "polls" && (
+				<Fragment>
 		<PollsTeaser races={home.races} />
-
+				</Fragment>
+			)}
+			{k === "analysis" && (
+				<Fragment>
 		<section class="analysis" aria-labelledby="analysis-h">
 			<div class="analysis-head">
 				<h2 id="analysis-h" style="margin:0;font-size:clamp(28px,4vw,40px)">Analysis</h2>
@@ -339,7 +397,10 @@ const ld = graph(organization(origin), {
 				<div class="analysis-empty">The {SITE_NAME} desk publishes analysis of the races and the politics behind them here. The first articles are on the way.</div>
 			)}
 		</section>
-
+				</Fragment>
+			)}
+			{k === "ballots" && (
+				<Fragment>
 		{coinFlips.length > 0 && (
 			<section>
 				<h2>Ballot measures on a knife's edge</h2>
@@ -349,7 +410,10 @@ const ld = graph(organization(origin), {
 				</ul>
 			</section>
 		)}
-
+				</Fragment>
+			)}
+			{k === "explore" && (
+				<Fragment>
 		<section>
 			<h2>Explore</h2>
 			<p class="datalinks">
@@ -357,6 +421,10 @@ const ld = graph(organization(origin), {
 				<a href="/daily/">Daily market report</a><a href="/model/">Our model</a><a href="/methodology/">Methodology</a><a href="/data/">Data &amp; API</a>
 			</p>
 		</section>
+				</Fragment>
+			)}
+			</Fragment>
+		))}
 	</div>
 </Base>
 

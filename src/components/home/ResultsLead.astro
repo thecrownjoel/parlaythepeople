@@ -1,0 +1,67 @@
+---
+/** The homepage lead on election night and in the days after: control of Congress, the seat tally by status, and
+ *  the calls as the markets make them (lib/results.ts). Live on the night (the page refreshes itself every minute). */
+import { resultsBoard, tally, CALL } from "../../lib/results";
+import { pct, PARTY_WORD } from "../../lib/markets";
+
+interface Props { cycle: number; live: boolean; h1: string }
+const { cycle, live, h1 } = Astro.props;
+const b = await resultsBoard(cycle);
+const called = (b?.rows ?? []).filter((r) => r.status === "called" || r.status === "settled").sort((a, x) => (x.at ?? 0) - (a.at ?? 0));
+const total = b?.rows.length ?? 0;
+const time = (t: number | null) => (t ? new Date(t * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "");
+const where = (r: (typeof called)[number]) => (r.race.kind === "house" ? `${r.race.label} House` : `${r.race.state} ${r.race.kind === "senate" ? "Senate" : "governor"}`);
+const open = (b?.rows ?? []).filter((r) => r.status !== "called" && r.status !== "settled" && r.race.kind !== "house").sort((a, x) => a.chance - x.chance).slice(0, 6);
+---
+{b && (
+	<section class="rl" data-live={live ? "1" : undefined} aria-labelledby="rl-h">
+		<p class="eyebrow">{live ? <><span class="rl-dot" aria-hidden="true"></span> Live · updates every minute</> : `${cycle} results`}</p>
+		<h1 id="rl-h">{h1}</h1>
+		<p class="lede">{called.length} of {total} races called by the markets or settled by the exchanges. A race is called when Kalshi and Polymarket together price one side at {Math.round(CALL * 100)}% or more after polls close and hold it there. Official counts come from each state.</p>
+		<div class="rl-grid">
+			{b.control.map(({ race, c }) => {
+				const t = tally(b.rows, race.label.startsWith("Senate") ? "senate" : "house");
+				return (
+					<a class="rl-card" href={race.path}>
+						<span class="rl-k">{race.label.startsWith("Senate") ? "Senate" : "House"} control</span>
+						<b class={`rl-${c.lead}`}>{PARTY_WORD[c.lead as "D" | "R"]}s {pct(c.lp)}</b>
+						<span class="rl-t">Won or called: D {t.D.settled + t.D.called} · R {t.R.settled + t.R.called} · {t.tossup} toss-ups left</span>
+					</a>
+				);
+			})}
+		</div>
+		<div class="rl-cols">
+			<div>
+				<h2>Latest calls</h2>
+				{called.length ? (
+					<ol class="rl-calls">{called.slice(0, 10).map((r) => <li><time>{time(r.at)}</time> <a href={r.race.path}>{where(r)}</a>: <b class={`rl-${r.party}`}>{r.name ?? PARTY_WORD[r.party]} ({r.party})</b></li>)}</ol>
+				) : <p class="sec-note">No races called yet. Calls appear here as the markets settle on winners.</p>}
+			</div>
+			<div>
+				<h2>Still too close</h2>
+				<ul class="rl-calls">{open.map((r) => <li><a href={r.race.path}>{where(r)}</a>: {r.name ?? PARTY_WORD[r.party]} ({r.party}) {pct(r.chance)}</li>)}</ul>
+			</div>
+		</div>
+		<p class="rl-more"><a href={`/results/${cycle}/`}>Every race, called and uncalled →</a> · <a href="/track-record/">How the markets did</a> · <a href="/forecasters/">The forecasters vs. the markets</a></p>
+	</section>
+)}
+{live && <script is:inline>setTimeout(() => location.reload(), 60000);</script>}
+
+<style>
+	.rl { padding: 8px 0 28px; border-bottom: 2px solid var(--color-text); margin-bottom: 26px; }
+	.rl h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 52px); line-height: 1.05; margin: 6px 0 10px; }
+	.rl-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e85a4c; margin-right: 4px; animation: rlp 1.6s infinite; }
+	@keyframes rlp { 50% { opacity: .3; } }
+	.rl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 18px 0; }
+	.rl-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); color: inherit; text-decoration: none; }
+	.rl-k { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.rl-card b { font-family: var(--font-display); font-size: 30px; }
+	.rl-t { font-size: 13.5px; color: var(--color-text-secondary); }
+	.rl-D { color: var(--bt-d, #2e62d0); } .rl-R { color: var(--bt-r, #d23f35); } .rl-I { color: var(--color-text-secondary); }
+	.rl-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+	.rl-cols h2 { font-size: 18px; margin: 0 0 8px; }
+	.rl-calls { list-style: none; padding: 0; margin: 0; }
+	.rl-calls li { padding: 7px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 15px; }
+	.rl-calls time { font: 500 12px var(--font-mono), monospace; color: var(--color-muted); margin-right: 6px; }
+	.rl-more { margin: 16px 0 0; font-size: 14.5px; }
+</style>

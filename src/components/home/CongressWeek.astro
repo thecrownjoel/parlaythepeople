@@ -1,0 +1,30 @@
+---
+/** "This week in Congress": the bills with the latest action (Congress.gov, lib/congress.ts), laws first. */
+import { recentBills, billUrl, billLabel, isLaw } from "../../lib/congress";
+
+const bills = (await recentBills({ days: 10, n: 40 })).filter((b) => b.title);
+const ranked = [...bills.filter(isLaw), ...bills.filter((b) => !isLaw(b) && /passed|agreed to|vote|cloture|presented to the president/i.test(b.latest_action ?? "")), ...bills.filter((b) => !isLaw(b))]
+	.filter((b, i, a) => a.findIndex((x) => x.id === b.id) === i).slice(0, 8);
+const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+---
+{ranked.length > 0 && (
+	<section class="cw" aria-labelledby="cw-h">
+		<div class="sec-head"><h2 id="cw-h">This week in Congress</h2><a class="datalinks" href="https://www.congress.gov/" rel="noopener" target="_blank">Congress.gov ↗</a></div>
+		<ul class="cw-list">
+			{ranked.map((b) => (
+				<li>
+					<a href={billUrl(b)} rel="noopener" target="_blank"><b>{billLabel(b)}</b> {b.title}</a>
+					<span>{isLaw(b) ? <em class="cw-law">Became law</em> : null}{b.policy_area ? ` ${b.policy_area} ·` : ""}{b.sponsor_name ? ` ${b.sponsor_name.includes(",") ? b.sponsor_name.split(",")[0] : b.sponsor_name} (${b.sponsor_party}-${b.sponsor_state}) ·` : ""} {(b.latest_action ?? "").replace(/\s*\(text:.*?\)/, "").slice(0, 120)} ({date(b.latest_action_date)})</span>
+				</li>
+			))}
+		</ul>
+	</section>
+)}
+
+<style>
+	.cw-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 28px; }
+	.cw-list li { padding: 11px 0; border-bottom: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: 4px; }
+	.cw-list a { color: var(--color-text); line-height: 1.4; }
+	.cw-list span { color: var(--color-muted); font-size: 12.5px; }
+	.cw-law { font-style: normal; font-weight: 700; color: #3fb68b; margin-right: 4px; }
+</style>

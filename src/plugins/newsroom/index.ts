@@ -12,6 +12,7 @@ import { upsertByline, deleteByline, publishPost, appendCorrection } from "../..
 import { assign, runDesk } from "../../lib/newsroom/desk";
 import { recentSignals } from "../../lib/newsroom/signals";
 import { STATES } from "../../lib/states";
+import { resolveSeason, activePin, setPin, previewDates } from "../../lib/season";
 
 type Block = Record<string, unknown>;
 type Res = { blocks: Block[]; toast?: { message: string; type: "success" | "error" | "info" } };
@@ -205,6 +206,33 @@ async function balancePage(): Promise<Res> {
 	] };
 }
 
+async function homepagePage(): Promise<Res> {
+	const season = await resolveSeason();
+	const pin = await activePin();
+	return { blocks: [
+		{ type: "header", text: "Homepage" },
+		{ type: "fields", fields: [
+			{ label: "Season now", value: season.label },
+			{ label: "Headline", value: season.h1 },
+			{ label: "Modules, in order", value: season.modules.join(" → ") },
+			{ label: "Pinned", value: pin ? `${pin.title} (until ${new Date(pin.until * 1000).toLocaleString("en-US", { timeZone: "America/New_York" })} ET)` : "Nothing pinned" },
+		] },
+		{ type: "context", text: "The season follows the election calendar on its own: final stretch → election night (switches at 6pm ET on Election Day) → aftermath → transition → governing → 2028 primaries. Preview any of them:" },
+		{ type: "actions", elements: previewDates(season.eday).map((d) => ({ type: "link", label: `${d.label} ↗`, target: { kind: "external", url: `/?at=${d.at}` } })) },
+		{ type: "divider" },
+		{ type: "header", text: "Pin a moment" },
+		{ type: "context", text: "A banner at the top of the homepage until the time you set: breaking news, a deadline, a debate tonight." },
+		{ type: "form", block_id: "pin", fields: [
+			{ type: "text_input", action_id: "title", label: "Headline", initial_value: pin?.title ?? "" },
+			{ type: "text_input", action_id: "text", label: "One line under it (optional)", initial_value: pin?.text ?? "" },
+			{ type: "text_input", action_id: "url", label: "Link (optional)", placeholder: "/posts/… or https://…", initial_value: pin?.url ?? "" },
+			{ type: "number_input", action_id: "hours", label: "Keep it up for (hours)", initial_value: 12, min: 1, max: 336 },
+			{ type: "select", action_id: "tone", label: "Style", options: [{ label: "News", value: "news" }, { label: "Alert (red)", value: "alert" }], initial_value: pin?.tone ?? "news" },
+		], submit: { label: "Pin it", action_id: "save_pin" } },
+		...(pin ? [{ type: "actions", elements: [{ type: "button", action_id: "clear_pin", label: "Remove the pin", style: "danger" }] }] : []),
+	] };
+}
+
 async function settingsPage(): Promise<Res> {
 	const s = await getSettings();
 	return { blocks: [
@@ -268,6 +296,7 @@ async function handle(ctx: PluginContext & { input: any; user?: any }): Promise<
 			if (page === "/drafts") return draftsPage();
 			if (page === "/balance") return balancePage();
 			if (page === "/settings") return settingsPage();
+			if (page === "/homepage") return homepagePage();
 			return writersPage();
 		}
 		const action = String(i.action_id ?? "");
@@ -340,6 +369,14 @@ async function handle(ctx: PluginContext & { input: any; user?: any }): Promise<
 				}
 				return { ...(await draftsPage()), toast: { type: "success", message: "Correction appended." } };
 			}
+			case "save_pin": {
+				const title = String(v.title ?? "").trim();
+				if (!title) return { ...(await homepagePage()), toast: { type: "error", message: "A headline is required." } };
+				const url = String(v.url ?? "").trim();
+				await setPin({ title, text: String(v.text ?? "").trim() || null, url: /^(https?:\/\/|\/)/.test(url) ? url : null, until: now() + Math.max(1, Number(v.hours ?? 12)) * 3600, tone: v.tone === "alert" ? "alert" : "news" });
+				return { ...(await homepagePage()), toast: { type: "success", message: "Pinned to the homepage." } };
+			}
+			case "clear_pin": { await setPin(null); return { ...(await homepagePage()), toast: { type: "success", message: "Pin removed." } }; }
 			case "save_settings": {
 				await setSettings({
 					paused: v.paused === true, daily_cap: Number(v.daily_cap ?? 6), monthly_budget_cents: Math.round(Number(v.budget ?? 50) * 100), model: String(v.model ?? "@cf/zai-org/glm-5.3"),
@@ -361,6 +398,7 @@ export const ADMIN_PAGES = [
 	{ path: "/queue", label: "Story queue", icon: "list" },
 	{ path: "/drafts", label: "Drafts", icon: "file-text" },
 	{ path: "/balance", label: "Balance", icon: "chart" },
+	{ path: "/homepage", label: "Homepage", icon: "home" },
 	{ path: "/settings", label: "Settings", icon: "settings" },
 ];
 
