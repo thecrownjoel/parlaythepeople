@@ -1,0 +1,172 @@
+---
+/**
+ * The discussion on a data page (lib/comments.ts, /api/comments). Comments are rendered on the server (so they're
+ * part of the page) and refreshed in the browser. Joining is one email box: a sign-in link comes back to this spot.
+ */
+import { listComments, normalPage, MAX_LEN } from "../lib/comments";
+
+interface Props { title?: string; prompt?: string }
+const page = normalPage(Astro.url.pathname) ?? "/";
+const { title = "Discussion", prompt = "What do you make of this? Share what you're seeing." } = Astro.props;
+const comments = await listComments(page);
+const tops = comments.filter((c) => !c.parent);
+const replies = (id: string) => comments.filter((c) => c.parent === id);
+const when = (t: number) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+---
+<section class="dz panel" id="discuss" data-page={page} data-max={MAX_LEN} aria-labelledby="dz-h">
+	<h2 id="dz-h">{title} <span class="dz-n" data-dz-count>{comments.length ? `· ${comments.length}` : ""}</span></h2>
+
+	<ol class="dz-list" data-dz-list>
+		{tops.map((c) => (
+			<li class="dz-c" data-id={c.id}>
+				<p class="dz-meta"><b>{c.name}</b> <time datetime={new Date(c.ts * 1000).toISOString()}>{when(c.ts)}</time></p>
+				<p class="dz-body">{c.body}</p>
+				{replies(c.id).length > 0 && (
+					<ol class="dz-replies">
+						{replies(c.id).map((r) => (
+							<li class="dz-c" data-id={r.id}>
+								<p class="dz-meta"><b>{r.name}</b> <time datetime={new Date(r.ts * 1000).toISOString()}>{when(r.ts)}</time></p>
+								<p class="dz-body">{r.body}</p>
+							</li>
+						))}
+					</ol>
+				)}
+			</li>
+		))}
+	</ol>
+	{!comments.length && <p class="sec-note" data-dz-empty>No comments yet. Start the conversation.</p>}
+
+	<!-- signed out: joining is one email box -->
+	<form class="dz-join" data-dz-join hidden>
+		<p class="dz-pitch"><b>Join the discussion, free.</b> Enter your email and we'll send a link that signs you in and brings you back here. No password, no spam.</p>
+		<div class="dz-row">
+			<input type="email" name="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email address" />
+			<button type="submit">Send my link</button>
+		</div>
+		<p class="dz-msg" data-dz-msg role="status"></p>
+		<p class="dz-fine">Already have a passkey? <a href="/account/">Sign in</a>. A free account also lets you follow races and get alerts.</p>
+	</form>
+
+	<!-- signed in -->
+	<form class="dz-form" data-dz-form hidden>
+		<input type="hidden" name="parent" value="" />
+		<p class="dz-replying" data-dz-replying hidden>Replying to <b></b> · <button type="button" data-dz-cancel>cancel</button></p>
+		<label class="dz-name" data-dz-name hidden>Your display name (shown with your comments)
+			<input name="name" maxlength="40" autocomplete="nickname" placeholder="e.g. Pat from Ohio" />
+		</label>
+		<textarea name="body" rows="3" maxlength={MAX_LEN} required placeholder={prompt} aria-label="Your comment"></textarea>
+		<div class="dz-row">
+			<span class="dz-fine">Be civil and specific. Comments are checked automatically; research, not betting advice.</span>
+			<button type="submit">Post</button>
+		</div>
+		<p class="dz-msg" data-dz-msg2 role="status"></p>
+	</form>
+</section>
+
+<script>
+	type C = { id: string; parent: string | null; body: string; ts: number; name: string; user_id: string };
+	for (const root of document.querySelectorAll<HTMLElement>("section.dz")) {
+		const page = root.dataset.page!;
+		const list = root.querySelector<HTMLOListElement>("[data-dz-list]")!;
+		const join = root.querySelector<HTMLFormElement>("[data-dz-join]")!;
+		const form = root.querySelector<HTMLFormElement>("[data-dz-form]")!;
+		const nameBox = root.querySelector<HTMLElement>("[data-dz-name]")!;
+		const replying = root.querySelector<HTMLElement>("[data-dz-replying]")!;
+		const msg = root.querySelector<HTMLElement>("[data-dz-msg]")!, msg2 = root.querySelector<HTMLElement>("[data-dz-msg2]")!;
+		let me: { signedIn: boolean; name: string | null; id: string | null } = { signedIn: false, name: null, id: null };
+		const ERR: Record<string, string> = {
+			slow_down: "You're posting quickly. Try again in a few minutes.", too_long: "That's too long.", empty: "Write something first.",
+			too_many_links: "Two links per comment at most.", duplicate: "You already posted that.", name: "Pick a display name: 2–40 letters or numbers.",
+			name_required: "Add a display name first.", sign_in: "Your session ended. Sign in again.", too_many: "Too many links requested. Try again later.",
+		};
+		const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+		const when = (t: number) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+		const item = (c: C) => `<li class="dz-c" data-id="${c.id}"><p class="dz-meta"><b>${esc(c.name)}</b> <time>${when(c.ts)}</time>
+			<span class="dz-acts">${me.signedIn ? `<button type="button" data-reply="${c.id}" data-name="${esc(c.name)}">Reply</button>` : ""}${c.user_id === me.id ? `<button type="button" data-del="${c.id}">Delete</button>` : `<button type="button" data-report="${c.id}">Report</button>`}</span></p>
+			<p class="dz-body">${esc(c.body)}</p></li>`;
+		function render(cs: C[]) {
+			const tops = cs.filter((c) => !c.parent);
+			list.innerHTML = tops.map((c) => {
+				const rs = cs.filter((r) => r.parent === c.id);
+				return item(c).replace(/<\/li>$/, rs.length ? `<ol class="dz-replies">${rs.map(item).join("")}</ol></li>` : "</li>");
+			}).join("");
+			root.querySelector("[data-dz-empty]")?.toggleAttribute("hidden", cs.length > 0);
+			root.querySelector("[data-dz-count]")!.textContent = cs.length ? `· ${cs.length}` : "";
+		}
+		async function load() {
+			const r: any = await fetch(`/api/comments?page=${encodeURIComponent(page)}`).then((x) => x.json()).catch(() => null);
+			if (!r) return;
+			me = r.me;
+			join.hidden = me.signedIn;
+			form.hidden = !me.signedIn;
+			nameBox.hidden = !!me.name;
+			render(r.comments);
+		}
+		const post = (body: object): Promise<any> => fetch("/api/comments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(async (x) => ({ status: x.status, ...((await x.json().catch(() => ({}))) as object) }));
+
+		join.addEventListener("submit", async (e) => {
+			e.preventDefault();
+			const email = (join.elements.namedItem("email") as HTMLInputElement).value;
+			msg.textContent = "Sending…";
+			const r: any = await fetch("/api/auth/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, next: `${page}#discuss` }) }).then(async (x) => ({ status: x.status, ...((await x.json().catch(() => ({}))) as object) }));
+			if ((r as any).dev_link) { location.href = (r as any).dev_link; return; }
+			msg.textContent = r.status < 300 ? `Check ${email}: your link signs you in and brings you back to this discussion.` : ERR[(r as any).error] ?? "That didn't work. Check the address and try again.";
+		});
+		form.addEventListener("submit", async (e) => {
+			e.preventDefault();
+			const f = form.elements as any;
+			msg2.textContent = "Posting…";
+			const r: any = await post({ page, body: f.body.value, parent: f.parent.value || null, ...(me.name ? {} : { name: f.name.value }) });
+			if (r.ok) {
+				f.body.value = ""; f.parent.value = ""; replying.hidden = true;
+				msg2.textContent = r.held ? "Thanks. Your comment is waiting for a moderator." : "";
+				await load();
+			} else msg2.textContent = ERR[r.error] ?? "That didn't post. Try again.";
+		});
+		root.addEventListener("click", async (e) => {
+			const t = e.target as HTMLElement;
+			if (t.dataset.reply) {
+				(form.elements as any).parent.value = t.dataset.reply;
+				replying.hidden = false;
+				replying.querySelector("b")!.textContent = t.dataset.name ?? "";
+				(form.elements as any).body.focus();
+			} else if (t.matches("[data-dz-cancel]")) {
+				(form.elements as any).parent.value = ""; replying.hidden = true;
+			} else if (t.dataset.del && confirm("Delete your comment?")) {
+				await post({ action: "delete", id: t.dataset.del }); await load();
+			} else if (t.dataset.report) {
+				await post({ action: "report", id: t.dataset.report });
+				t.textContent = "Reported"; t.setAttribute("disabled", "");
+			}
+		});
+		load();
+	}
+</script>
+
+<style>
+	.dz h2 { margin-top: 0; }
+	.dz-n { color: var(--color-muted); font-weight: 500; font-size: .8em; }
+	.dz-list, .dz-replies { list-style: none; padding: 0; margin: 0; }
+	.dz-replies { margin: 8px 0 0 18px; border-left: 2px solid var(--color-border-subtle); padding-left: 14px; }
+	.dz-c { padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); }
+	.dz-replies .dz-c:last-child { border-bottom: 0; }
+	.dz-meta { margin: 0 0 4px; font-size: 13.5px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+	.dz-meta time { color: var(--color-muted); font-size: 12.5px; }
+	:global(.dz-acts) { margin-left: auto; display: flex; gap: 10px; }
+	:global(.dz-acts button) { background: none; border: 0; padding: 0; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+	:global(.dz-acts button:hover) { text-decoration: underline; }
+	.dz-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+	.dz-join, .dz-form { margin-top: 16px; display: grid; gap: 10px; }
+	.dz-pitch { margin: 0; }
+	.dz-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+	.dz-row input { flex: 1; min-width: 200px; }
+	.dz input, .dz textarea { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); width: 100%; box-sizing: border-box; }
+	.dz-row input { width: auto; }
+	.dz button[type="submit"] { font: 600 15px var(--font-body); padding: 10px 18px; border-radius: 10px; border: 0; background: var(--color-brand); color: var(--color-on-brand, #fff); cursor: pointer; }
+	.dz-form .dz-row { justify-content: space-between; }
+	.dz-name { display: grid; gap: 6px; font-size: 14px; }
+	.dz-fine { color: var(--color-muted); font-size: 12.5px; margin: 0; }
+	.dz-msg { margin: 0; font-size: 14px; color: var(--color-text-secondary); min-height: 1em; }
+	.dz-replying { margin: 0; font-size: 13.5px; }
+	.dz-replying button { background: none; border: 0; color: var(--color-brand); cursor: pointer; padding: 0; font: inherit; }
+</style>

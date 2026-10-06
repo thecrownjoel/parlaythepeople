@@ -1,6 +1,7 @@
 ---
 /** One state: /states/maine/. Every race with odds, ballot measures, candidates, money and the state's other politics markets. */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { stateFromSlug, stateView, stateMoney, statePath } from "../../lib/states";
 import { consensus, candidate, pct, fmtVol, daysUntil, RATING_LABEL, PARTY_WORD, officeTitle } from "../../lib/markets";
@@ -126,6 +127,7 @@ const ld = graph(
 			</section>
 		)}
 		<p class="sec-note" style="font-size:12.5px">Odds from Kalshi and Polymarket, collected every 10 minutes; campaign money from the FEC, daily. Research, not betting advice.</p>
+		<Discussion title="Talk about this state" />
 	</article>
 </Base>
 

@@ -13,6 +13,7 @@ import { assign, runDesk } from "../../lib/newsroom/desk";
 import { recentSignals } from "../../lib/newsroom/signals";
 import { STATES } from "../../lib/states";
 import { resolveSeason, activePin, setPin, previewDates } from "../../lib/season";
+import { moderationQueue, setStatus as setCommentStatus } from "../../lib/comments";
 
 type Block = Record<string, unknown>;
 type Res = { blocks: Block[]; toast?: { message: string; type: "success" | "error" | "info" } };
@@ -206,6 +207,27 @@ async function balancePage(): Promise<Res> {
 	] };
 }
 
+async function commentsPage(): Promise<Res> {
+	const q = await moderationQueue(60).catch(() => []);
+	const blocks: Block[] = [
+		{ type: "header", text: "Reader comments" },
+		{ type: "context", text: "Comments held by the automatic safety check, or reported by readers (three reports hide a comment until you decide). Everything else posts right away." },
+	];
+	if (!q.length) blocks.push({ type: "empty", title: "Nothing to review", description: "Held and reported comments show up here." });
+	for (const c of q) {
+		blocks.push(
+			{ type: "section", text: `**${c.name}** on ${c.page} · ${ago(c.ts)} · ${c.status}${c.reports ? ` · ${c.reports} report${c.reports === 1 ? "" : "s"}` : ""}${c.reason ? ` · ${c.reason}` : ""}\n${String(c.body).slice(0, 1500)}` },
+			{ type: "actions", elements: [
+				{ type: "link", label: "Open page ↗", target: { kind: "external", url: `${c.page}#discuss` } },
+				...(c.status !== "visible" ? [{ type: "button", action_id: "comment_ok", label: "Approve", value: c.id, style: "primary" }] : [{ type: "button", action_id: "comment_ok", label: "Keep (clear reports)", value: c.id }]),
+				...(c.status !== "hidden" ? [{ type: "button", action_id: "comment_hide", label: "Remove", value: c.id, style: "danger" }] : []),
+			] },
+			{ type: "divider" },
+		);
+	}
+	return { blocks };
+}
+
 async function homepagePage(): Promise<Res> {
 	const season = await resolveSeason();
 	const pin = await activePin();
@@ -297,6 +319,7 @@ async function handle(ctx: PluginContext & { input: any; user?: any }): Promise<
 			if (page === "/balance") return balancePage();
 			if (page === "/settings") return settingsPage();
 			if (page === "/homepage") return homepagePage();
+			if (page === "/comments") return commentsPage();
 			return writersPage();
 		}
 		const action = String(i.action_id ?? "");
@@ -369,6 +392,8 @@ async function handle(ctx: PluginContext & { input: any; user?: any }): Promise<
 				}
 				return { ...(await draftsPage()), toast: { type: "success", message: "Correction appended." } };
 			}
+			case "comment_ok": { await setCommentStatus(String(i.value), "visible"); return { ...(await commentsPage()), toast: { type: "success", message: "Approved." } }; }
+			case "comment_hide": { await setCommentStatus(String(i.value), "hidden"); return { ...(await commentsPage()), toast: { type: "success", message: "Removed." } }; }
 			case "save_pin": {
 				const title = String(v.title ?? "").trim();
 				if (!title) return { ...(await homepagePage()), toast: { type: "error", message: "A headline is required." } };
@@ -399,6 +424,7 @@ export const ADMIN_PAGES = [
 	{ path: "/drafts", label: "Drafts", icon: "file-text" },
 	{ path: "/balance", label: "Balance", icon: "chart" },
 	{ path: "/homepage", label: "Homepage", icon: "home" },
+	{ path: "/comments", label: "Reader comments", icon: "message" },
 	{ path: "/settings", label: "Settings", icon: "settings" },
 ];
 

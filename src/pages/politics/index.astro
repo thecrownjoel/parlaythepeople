@@ -1,6 +1,7 @@
 ---
 /** Beyond the ballot: every other politics market on Kalshi and Polymarket, by topic (board: components/PoliticsBoard.astro). */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import PoliticsBoard from "../../components/PoliticsBoard.astro";
 import { getPolitics, politicsLd } from "../../lib/politics";
@@ -16,4 +17,5 @@ const ld = board ? politicsLd(origin, "/politics/", title, description, board.ev
 <Base title={title} description={description} canonical={`${origin}/politics/`} modifiedTime={board?.generated}>
 	{ld && <JsonLd slot="head" data={ld} />}
 	<PoliticsBoard board={board} />
+	<div class="dp" style="padding-top:0"><Discussion /></div>
 </Base>

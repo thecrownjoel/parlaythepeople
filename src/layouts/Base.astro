@@ -188,7 +188,7 @@ const isLoggedIn = !!Astro.locals.user;
 							</a>
 						)
 					}
-					<a href="/account/" class="nav-acct" data-acct>Sign in</a>
+					<a href="/account/" class="nav-acct" data-acct title="Free account: join the discussions, follow races, get alerts">Join free</a>
 					<a href="/pro/" class="nav-pro" data-nav-pro>Pro</a>
 					<SearchOverlay />
 					<CountrySwitcher />
@@ -959,7 +959,7 @@ const isLoggedIn = !!Astro.locals.user;
 				const set = (j: Me) => {
 					document.documentElement.dataset.history = j.history;
 					document.documentElement.dataset.archive = j.archive ? "1" : "0";
-					// header: "Sign in" becomes "Account"; members of a paid plan don't need the Pro link
+					// header: "Join free" becomes "Account"; members of a paid plan don't need the Pro link
 					const acct = document.querySelector<HTMLElement>("[data-acct]");
 					if (acct && j.signedIn) acct.textContent = "Account";
 					const pro = document.querySelector<HTMLElement>("[data-nav-pro]");

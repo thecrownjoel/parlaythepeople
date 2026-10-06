@@ -1,6 +1,7 @@
 ---
 /** Election results by the markets: /results/2026/. Before Election Day, what the markets expect; on the night, races as the markets call them. */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { resultsBoard, tally, CALL, type RaceResult, type Status } from "../../lib/results";
 import { pct, fmtDate, PARTY_WORD } from "../../lib/markets";
@@ -74,6 +75,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Results", path]]),
 			);
 		})}
 		<p class="sec-note" style="font-size:12.5px">Market calls are a forecast, not a count. Find each state's official results through its <a href="/states/">state page</a>. Research, not betting advice.</p>
+		<Discussion title="Election night discussion" prompt="What are you watching? Calls, upsets, counts." />
 	</div>
 </Base>
 

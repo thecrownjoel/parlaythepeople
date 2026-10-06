@@ -5,6 +5,7 @@
  * report by report. FEC bulk data for everyone; OpenFEC detail for candidates in competitive races.
  */
 import Base from "../../../layouts/Base.astro";
+import Discussion from "../../../components/Discussion.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import RaceFinance from "../../../components/RaceFinance.astro";
 import { getIndex, getCycle, candidate, consensus, pct, type Race } from "../../../lib/markets";
@@ -125,6 +126,7 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Money", "/finance/
 			<RaceFinance race={race} names={[names.D, names.R].filter((n): n is string => !!n)} />
 		</section>
 		<p class="fx-src">Source: FEC bulk data (daily) and the OpenFEC API. <a href={race.path}>Odds, polls and buzz for this race →</a></p>
+		<Discussion title="Talk about the money in this race" />
 	</div>
 </Base>
 

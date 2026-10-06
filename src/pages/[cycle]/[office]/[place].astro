@@ -4,6 +4,7 @@
  * Answer first, then the numbers from each exchange, history, FAQ and related races.
  */
 import Base from "../../../layouts/Base.astro";
+import Discussion from "../../../components/Discussion.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import HistoryChart from "../../../components/HistoryChart.astro";
 import {
@@ -517,5 +518,6 @@ import { parlayD } from "../../../lib/model";
 			</p>
 			<p class="disclaimer">Cite as: {SITE_NAME}, “{race.cycle} {officeTitle(race)},” {origin}{path}, accessed {fmtDate(data.meta.generated, false)}. Prediction-market prices are crowd forecasts, not certainties, and nothing here is betting or investment advice.</p>
 		</section>
+		<Discussion title="Talk about this race" prompt="What's moving this race? Polls, money, news you're seeing on the ground." />
 	</div>
 </Base>

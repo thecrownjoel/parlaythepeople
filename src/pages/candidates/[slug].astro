@@ -4,6 +4,7 @@
  * polls, social buzz (LunarCrush) and headlines that name them. Answer first.
  */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { findCandidate, allCandidates, candidatePath, entryLabel, entryPath, type CandidateEntry } from "../../lib/candidates";
 import { getIndex, pct, PARTY_WORD, candidate as raceCandidate } from "../../lib/markets";
@@ -141,6 +142,7 @@ const ld = graph(
 			</section>
 		)}
 		<p class="sec-note" style="font-size:12.5px">Market prices from Kalshi and Polymarket, collected every 10 minutes. Research, not betting advice.</p>
+		<Discussion title="Talk about this candidate" />
 	</article>
 </Base>
 

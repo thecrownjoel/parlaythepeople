@@ -1,6 +1,7 @@
 ---
 /** One day in the election markets: control odds, biggest moves, lead changes, money and headlines. */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { dailyReport, dailySummary, isoDate, DAILY_START } from "../../lib/daily";
 import { pct, fmtVol } from "../../lib/markets";
@@ -112,6 +113,7 @@ const ld = graph(organization(origin), {
 			{next <= today && <a href={`/daily/${next}/`}>{next} →</a>}
 		</nav>
 		</MaybeGate>
+		<Discussion title="Talk about today's markets" />
 	</div>
 </Base>
 

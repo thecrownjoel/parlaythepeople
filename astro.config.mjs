@@ -35,6 +35,7 @@ export default defineConfig({
 						{ path: "/drafts", label: "Drafts", icon: "file-text" },
 						{ path: "/balance", label: "Balance", icon: "chart" },
 						{ path: "/homepage", label: "Homepage", icon: "home" },
+						{ path: "/comments", label: "Reader comments", icon: "message" },
 						{ path: "/settings", label: "Settings", icon: "settings" },
 					],
 				},

@@ -1,6 +1,7 @@
 ---
 /** Presidential race for a cycle: /2028/president/ */
 import Base from "../../../layouts/Base.astro";
+import Discussion from "../../../components/Discussion.astro";
 import JsonLd from "../../../components/JsonLd.astro";
 import HistoryChart from "../../../components/HistoryChart.astro";
 import MultiChart from "../../../components/MultiChart.astro";
@@ -177,5 +178,6 @@ const partyFacts = (["k", "p"] as const).map((x) => {
 			<p class="datalinks"><a href={`/${year}/`}>All {year} races</a><a href={`/api/v1/${year}.json`}>{year} data (JSON)</a><a href={`/api/v1/history/${year}-president.json`}>Party odds history (JSON)</a><a href="/methodology/">Methodology</a></p>
 			<p class="disclaimer">Prediction-market prices are crowd forecasts, not certainties. Nothing here is betting or investment advice. {SITE_NAME} is not affiliated with Kalshi or Polymarket.</p>
 		</section>
+		<Discussion title="Talk about the race for the White House" />
 	</div>
 </Base>

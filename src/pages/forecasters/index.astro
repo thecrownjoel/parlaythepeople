@@ -5,6 +5,7 @@
  * with the races where the experts and the money disagree.
  */
 import Base from "../../layouts/Base.astro";
+import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { getIndex, getCycle, consensus, candidate, officeTitle, pct, type Race } from "../../lib/markets";
 import { allRatings, recentChanges, expertScore, marketScore, scoreWord, chipClass, FORECASTERS, FORECASTER_KEYS, type Forecaster, type Rating } from "../../lib/ratings";
@@ -158,6 +159,7 @@ const ld = graph(
 		</section>
 
 		<p class="sec-note" style="font-size:12.5px">Ratings are the forecasters' own, as cited on Wikipedia's 2026 Senate, gubernatorial and House election pages (CC BY-SA 4.0), each with its date; visit the forecasters for their analysis. {updated && <>Last checked {updated.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. </>}Market odds: the average of Kalshi and Polymarket, the Democrat's share of the two main parties. Research, not betting advice.</p>
+		<Discussion title="Experts or markets: who has it right?" prompt="Which race do the forecasters or the traders have wrong, and why?" />
 	</article>
 </Base>
 
