@@ -44,6 +44,8 @@
 	"vars": {
 		// AI Gateway for every Workers AI call ("default" is created by Cloudflare on first use)
 		"AI_GATEWAY_ID": "default",
+		// "1" takes the public site down behind a "back soon" page (src/middleware.ts); the admin stays up
+		"MAINTENANCE": "1",
 	},
 	"ai": { "binding": "AI" },
 	// Browser Rendering: draws the per-race share images (/og/race/<id>.png)
