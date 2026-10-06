@@ -25,6 +25,8 @@ export const STATUS: Record<string, (i: any) => string> = {
 	polls: () => "Reading the polls",
 	campaign_finance: () => "Checking the FEC filings",
 	expert_ratings: () => "Checking the Cook, Sabato and Inside Elections ratings",
+	congress_record: (i) => `Reading ${i.name}'s record on Congress.gov`,
+	congress_bills: (i) => `Checking what Congress did${i.policy_area ? ` on ${String(i.policy_area).toLowerCase()}` : ""}`,
 };
 
 export async function systemPrompt(a: Account, mode: Action) {
@@ -42,7 +44,7 @@ export async function systemPrompt(a: Account, mode: Action) {
 Today is ${today}.${next ? ` The next general election is ${next.election_day} (${daysUntil(next.election_day)} days away).` : ""}
 
 How to answer:
-- Get every number from the tools; never state a figure from memory. Start with find_races when the user names a race or candidate, then race_detail. Use search_research for headlines, articles and context, polls for public polling (cite pollster and dates; polls and market odds measure different things), expert_ratings for what Cook, Sabato and Inside Elections rate the race (credit them by name), and campaign_finance for fundraising, cash on hand and outside spending (FEC; say the report date).
+- Get every number from the tools; never state a figure from memory. Start with find_races when the user names a race or candidate, then race_detail. Use search_research for headlines, articles and context, polls for public polling (cite pollster and dates; polls and market odds measure different things), expert_ratings for what Cook, Sabato and Inside Elections rate the race (credit them by name), congress_record for a sitting member's record and congress_bills for legislation (Congress.gov), and campaign_finance for fundraising, cash on hand and outside spending (FEC; say the report date).
 - Lead with the answer in a sentence or two, then the evidence. Keep it under about 250 words unless asked for more. Use short paragraphs or bullets, plain words, and markdown links.
 - Market odds are crowd probabilities: "traders give Collins a 41% chance". Say when Kalshi and Polymarket disagree. Give the Parlay estimate where it differs from the market and say it is our model's adjustment (clear favorites are nudged up; competitive races keep market odds).
 - Link race pages and articles you rely on (the url fields), e.g. [Maine Senate](https://parlaythepeople.com/2026/senate/maine/).

@@ -24,6 +24,8 @@ import { candidateLinks } from "../../../lib/candidates";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
 import { pollAverage, marginText, RCP_URL } from "../../../lib/polls";
+import CongressRecord from "../../../components/CongressRecord.astro";
+import { seatHolders, billsBy } from "../../../lib/congress";
 import { ratingsFor, FORECASTERS, FORECASTER_KEYS, chipClass, marketScore, scoreWord } from "../../../lib/ratings";
 import { moneySince, kalshiRecent } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
@@ -42,6 +44,14 @@ const origin = Astro.url.origin;
 const c = consensus(race);
 const polls = race.kind === "control" ? null : await pollAverage(race.id);
 const expert = race.kind === "control" ? {} : await ratingsFor(race.id);
+// who holds the seat now (Congress.gov): the district's representative, or the senator whose seat is up (matched to a
+// candidate's last name; for an open Senate seat neither senator matches and none is shown)
+const lastWord = (n: string) => n.toLowerCase().replace(/,.*$/, "").split(/\s+/).filter((w) => !["jr.", "jr", "sr.", "ii", "iii"].includes(w)).pop() ?? "";
+const runningLast = [candidate(race, "D"), candidate(race, "R"), candidate(race, "I")].filter((n): n is string => !!n).map(lastWord);
+const incumbents = (await seatHolders(race))
+	.map((m) => ({ m, running: runningLast.includes(lastWord(m.last ?? m.name)) }))
+	.filter((x) => race.kind === "house" || x.running);
+const incumbentBills = await Promise.all(incumbents.map((x) => billsBy(x.m.bioguide, 5)));
 const pollPct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
 const pollDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
@@ -304,6 +314,8 @@ import { parlayD } from "../../../lib/model";
 				<p class="sec-note" style="font-size:12.5px">Ratings as cited on Wikipedia, with each forecaster's date. Markets on the same scale: 40–60% toss-up, 60–75% Lean, 75–90% Likely, 90%+ Safe. <a href="/forecasters/">Every race: the experts vs. the markets →</a></p>
 			</section>
 		)}
+
+		{incumbents.map((x, i) => <CongressRecord member={x.m} bills={incumbentBills[i]} heading={x.running ? "The incumbent's record" : "Who holds this seat now"} running={x.running} />)}
 
 		<section aria-labelledby="quotes-h">
 			<h2 id="quotes-h">Share prices</h2>

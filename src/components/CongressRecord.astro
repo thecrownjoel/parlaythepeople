@@ -1,0 +1,56 @@
+---
+/** A sitting member of Congress's record from Congress.gov: seat, years served, leadership, bills sponsored. */
+import { displayName, memberUrl, billUrl, billLabel, isLaw, yearsIn, seatWord, type Member, type Bill } from "../lib/congress";
+
+interface Props { member: Member; bills: Bill[]; heading?: string; running?: boolean }
+const { member: m, bills, heading = "Record in Congress", running } = Astro.props;
+const years = yearsIn(m);
+const party = m.party === "D" ? "Democrat" : m.party === "R" ? "Republican" : m.party === "I" ? "Independent" : m.party;
+const credit = (m.photo_credit ?? "").replace(/<[^>]+>/g, "").trim();
+const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
+---
+<section class="panel cg">
+	<h2>{heading}</h2>
+	<div class="cg-head">
+		{m.photo && <img src={m.photo} alt={`${displayName(m)}, official portrait`} width="88" height="108" loading="lazy" title={credit || undefined} />}
+		<div>
+			<p class="cg-who"><b>{displayName(m)}</b> ({party}) is the {seatWord(m)}{m.since ? `, in Congress since ${m.since}` : ""}{years ? ` (${years} ${years === 1 ? "year" : "years"})` : ""}.{running === false && " Not on the ballot for this seat in this race."}</p>
+			{m.leadership && <p class="cg-lead">Leadership: {m.leadership}</p>}
+			<dl class="cg-stats">
+				{m.sponsored != null && <div><dt>Bills sponsored</dt><dd>{m.sponsored.toLocaleString("en-US")}</dd></div>}
+				{m.cosponsored != null && <div><dt>Bills cosponsored</dt><dd>{m.cosponsored.toLocaleString("en-US")}</dd></div>}
+				{m.birth_year && <div><dt>Born</dt><dd>{m.birth_year}</dd></div>}
+			</dl>
+		</div>
+	</div>
+	{bills.length > 0 && (
+		<>
+			<h3>Latest bills {displayName(m).split(/\s+/).pop()} sponsored</h3>
+			<ul class="cg-bills">
+				{bills.map((b) => (
+					<li>
+						<a href={billUrl(b)} rel="noopener" target="_blank"><b>{billLabel(b)}</b> {b.title}</a>
+						<span>{b.policy_area ? `${b.policy_area} · ` : ""}introduced {date(b.introduced)}{b.latest_action ? ` · ${isLaw(b) ? "Became law" : `Latest: ${b.latest_action.replace(/\s*\(text:.*?\)/, "").slice(0, 110)}`} (${date(b.latest_action_date)})` : ""}</span>
+					</li>
+				))}
+			</ul>
+		</>
+	)}
+	<p class="sec-note">From <a href={memberUrl(m)} rel="noopener" target="_blank">Congress.gov</a>{m.website && <>; <a href={m.website} rel="noopener" target="_blank">official website</a></>}.{credit && ` Photo: ${credit}.`}</p>
+</section>
+
+<style>
+	.cg-head { display: flex; gap: 16px; align-items: flex-start; }
+	.cg-head img { width: 88px; height: auto; border-radius: 8px; border: 1px solid var(--color-border); flex: none; }
+	.cg-who { margin: 0 0 6px; line-height: 1.55; }
+	.cg-lead { margin: 0 0 6px; color: var(--color-text-secondary); font-size: 14px; }
+	.cg-stats { display: flex; flex-wrap: wrap; gap: 18px; margin: 8px 0 0; }
+	.cg-stats dt { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.cg-stats dd { margin: 3px 0 0; font-size: 17px; }
+	.cg h3 { font-size: 15px; margin: 18px 0 6px; }
+	.cg-bills { list-style: none; padding: 0; margin: 0; }
+	.cg-bills li { padding: 9px 0; border-bottom: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: 3px; }
+	.cg-bills a { color: var(--color-text); line-height: 1.4; }
+	.cg-bills span { color: var(--color-muted); font-size: 12.5px; }
+	@media (max-width: 560px) { .cg-head { flex-direction: column; } }
+</style>

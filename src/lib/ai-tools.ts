@@ -15,6 +15,7 @@ import { nameKey } from "./names";
 import { aiRun } from "./ai";
 import { findAnalogs } from "./analogs";
 import { pollsFor, average, marginText, pollAverage } from "./polls";
+import { memberByName, billsBy, recentBills, billUrl, billLabel, displayName, seatWord, memberUrl } from "./congress";
 import { ratingsFor, expertScore, marketScore, scoreWord, FORECASTERS, FORECASTER_KEYS } from "./ratings";
 
 const DAY = 86400;
@@ -92,6 +93,16 @@ export const TOOLS = [
 		name: "expert_ratings",
 		description: "Expert race ratings from The Cook Political Report, Sabato's Crystal Ball and Inside Elections (Safe/Likely/Lean/Tilt/Toss-up, as cited on Wikipedia with each forecaster's date), the previous rating if it changed, and the market odds on the same scale for comparison.",
 		input_schema: { type: "object", properties: { race_id: { type: "string" } }, required: ["race_id"] },
+	},
+	{
+		name: "congress_record",
+		description: "A sitting member of Congress's record from Congress.gov: seat, party, years in Congress, leadership posts, how many bills they have sponsored and cosponsored, and their latest sponsored bills with status. Give the person's name and state code.",
+		input_schema: { type: "object", properties: { name: { type: "string" }, state: { type: "string", description: "two-letter code, e.g. ME" } }, required: ["name", "state"] },
+	},
+	{
+		name: "congress_bills",
+		description: "Bills with action in Congress over the last N days (Congress.gov), newest first, optionally in one policy area: e.g. 'Armed Forces and National Security', 'International Affairs', 'Agriculture and Food', 'Economics and Public Finance', 'Health', 'Immigration', 'Taxation', 'Energy', 'Crime and Law Enforcement', 'Government Operations and Politics'. Each with sponsor, latest action and link.",
+		input_schema: { type: "object", properties: { days: { type: "integer", default: 7 }, policy_area: { type: "string" }, limit: { type: "integer", default: 15 } } },
 	},
 	{
 		name: "search_research",
@@ -348,6 +359,20 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 			const p = Object.values(social?.topics ?? {}).filter((x) => x.key === key).sort((a, b) => b.i24 - a.i24)[0];
 			if (!p) return { error: `No social data for ${input.candidate}. Social data covers candidates in races the site tracks.` };
 			return { ...pulseBrief(p), daily: p.series.map(([t, i, s]) => ({ day: new Date(t * 1000).toISOString().slice(0, 10), interactions: i, sentiment: s })), source: "LunarCrush" };
+		}
+		case "congress_record": {
+			const m = await memberByName(String(input.name ?? ""), String(input.state ?? "").toUpperCase());
+			if (!m) return { error: "No sitting member of Congress by that name in that state (Congress.gov). They may be a challenger, a governor or not in office." };
+			const bills = await billsBy(m.bioguide, 10);
+			return {
+				name: displayName(m), seat: seatWord(m), party: m.party, in_congress_since: m.since, leadership: m.leadership, born: m.birth_year,
+				bills_sponsored_career: m.sponsored, bills_cosponsored_career: m.cosponsored, congress_gov: memberUrl(m), website: m.website,
+				latest_sponsored_bills: bills.map((b) => ({ bill: billLabel(b), title: b.title, policy_area: b.policy_area, introduced: b.introduced, latest_action: b.latest_action, latest_action_date: b.latest_action_date, url: billUrl(b) })),
+			};
+		}
+		case "congress_bills": {
+			const bills = await recentBills({ days: Math.min(60, Number(input.days ?? 7)), policy: input.policy_area ? String(input.policy_area) : undefined, n: Math.min(40, Number(input.limit ?? 15)) });
+			return { source: "Congress.gov", bills: bills.map((b) => ({ bill: billLabel(b), title: b.title, policy_area: b.policy_area, sponsor: b.sponsor_name ? `${b.sponsor_name} (${b.sponsor_party}-${b.sponsor_state})` : null, introduced: b.introduced, latest_action: b.latest_action, latest_action_date: b.latest_action_date, url: billUrl(b) })) };
 		}
 		case "expert_ratings": {
 			const all = (await allRaces()).find((x) => x.r.id === input.race_id);

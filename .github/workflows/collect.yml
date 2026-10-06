@@ -38,6 +38,10 @@ jobs:
         run: python3 ingest/polls.py || echo "polls fetch failed; keeping the previous polls"
       - name: Expert ratings (Cook, Sabato, Inside Elections) from Wikipedia (every 6 hours)
         run: python3 ingest/ratings.py || echo "ratings fetch failed; keeping the previous ratings"
+      - name: Congress.gov members and bills (a slice of members each run; api.data.gov key)
+        env:
+          FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
+        run: python3 ingest/congress.py || echo "congress fetch failed; keeping the previous records"
       - name: Campaign finance from the FEC (daily)
         env:
           FEC_API_KEY: ${{ secrets.FEC_API_KEY }}

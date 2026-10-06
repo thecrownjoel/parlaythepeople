@@ -212,3 +212,31 @@ CREATE TABLE IF NOT EXISTS ratings (
   previous TEXT,                -- the rating before that change
   PRIMARY KEY (race_id, source)
 ) WITHOUT ROWID;
+
+-- Congress.gov (ingest/congress.py): every sitting member of Congress, and bills (each member's latest sponsored
+-- bills plus the bills updated most recently). Public domain (U.S. government work).
+CREATE TABLE IF NOT EXISTS congress_members (
+  bioguide TEXT PRIMARY KEY,
+  name TEXT, first TEXT, last TEXT,
+  party TEXT,                   -- D | R | I
+  state TEXT, state_name TEXT,
+  district INTEGER,             -- House; NULL for senators, 0 or NULL at-large
+  chamber TEXT,                 -- senate | house
+  since INTEGER,                -- first year in Congress
+  birth_year INTEGER,
+  photo TEXT, photo_credit TEXT, website TEXT, phone TEXT, office TEXT,
+  leadership TEXT,
+  sponsored INTEGER, cosponsored INTEGER,   -- bills, career totals
+  updated INTEGER
+);
+CREATE INDEX IF NOT EXISTS congress_members_seat ON congress_members (state, chamber, district);
+CREATE TABLE IF NOT EXISTS congress_bills (
+  id TEXT PRIMARY KEY,          -- 119-hr-1234
+  congress INTEGER, type TEXT, number TEXT,
+  title TEXT, introduced TEXT, policy_area TEXT,
+  latest_action TEXT, latest_action_date TEXT,
+  sponsor TEXT,                 -- bioguide id, when known
+  updated INTEGER
+);
+CREATE INDEX IF NOT EXISTS congress_bills_sponsor ON congress_bills (sponsor, introduced);
+CREATE INDEX IF NOT EXISTS congress_bills_action ON congress_bills (latest_action_date);

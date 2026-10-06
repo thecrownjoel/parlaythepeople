@@ -12,6 +12,8 @@ import { pollAverage } from "../../lib/polls";
 import { getSocial, pulseIndex, compact } from "../../lib/social";
 import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
 import { env } from "cloudflare:workers";
+import CongressRecord from "../../components/CongressRecord.astro";
+import { memberByName, billsBy, memberUrl, seatWord } from "../../lib/congress";
 import "../../styles/data.css";
 
 const c = await findCandidate(Astro.params.slug ?? "");
@@ -47,14 +49,18 @@ try {
 } catch { /* no headline archive */ }
 const day = (t: number | null) => (t ? new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }) : "");
 const fin = finance.find(Boolean);
+// a sitting member of Congress: their record from Congress.gov (state from any of their races)
+const member = await memberByName(c.name, c.state ?? raceEntries.find((e) => e.race)?.race!.st ?? null);
+const memberBills = member ? await billsBy(member.bioguide, 8) : [];
 
 const title = `${c.name} odds: ${entryLabel(main).replace(/ race$/, "")}`;
 const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
 const ld = graph(
 	organization(origin),
 	breadcrumbs(origin, [["Candidates", "/candidates/"], [c.name, path]]),
-	{ "@type": "Person", "@id": `${origin}${path}#person`, name: c.name, url: `${origin}${path}`, ...(party ? { affiliation: { "@type": "PoliticalParty", name: `${party === "independent" ? "Independent" : party === "Democrat" ? "Democratic Party" : "Republican Party"}` } } : {}) },
+	{ "@type": "Person", "@id": `${origin}${path}#person`, name: c.name, url: `${origin}${path}`, ...(member ? { jobTitle: seatWord(member), sameAs: [memberUrl(member), member.website].filter(Boolean), ...(member.photo ? { image: member.photo } : {}) } : {}), ...(party ? { affiliation: { "@type": "PoliticalParty", name: `${party === "independent" ? "Independent" : party === "Democrat" ? "Democratic Party" : "Republican Party"}` } } : {}) },
 	faq(c.entries.slice(0, 4).map((e) => [`What are ${c.name}'s chances of winning the ${entryLabel(e)}?`, `As of ${asOf}, prediction markets give ${c.name} a ${pct(e.chance)} chance (${srcs(e)}).`] as [string, string])
+		.concat(member ? [[`Is ${c.name} in Congress?`, `Yes. ${c.name} is the ${seatWord(member)}${member.since ? `, in Congress since ${member.since}` : ""}${member.sponsored != null ? `, and has sponsored ${member.sponsored.toLocaleString("en-US")} bills` : ""}, according to Congress.gov.`] as [string, string]] : [])
 		.concat(fin ? [[`How much money has ${c.name} raised?`, `${c.name}'s campaign has raised ${usd(fin.receipts)} and has ${usd(fin.cash)} cash on hand, through ${asOfReport(fin.coverage_end)}, according to the FEC.`]] : [])),
 );
 ---
@@ -86,6 +92,8 @@ const ld = graph(
 			</div>
 			<p class="sec-note">Chance = this candidate's share of each market's prices, averaged across the exchanges that list it.</p>
 		</section>
+
+		{member && <CongressRecord member={member} bills={memberBills} />}
 
 		{fin && (
 			<section class="panel">
