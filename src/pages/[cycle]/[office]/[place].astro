@@ -24,6 +24,7 @@ import { candidateLinks } from "../../../lib/candidates";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
 import { pollAverage, marginText, RCP_URL } from "../../../lib/polls";
+import { ratingsFor, FORECASTERS, FORECASTER_KEYS, chipClass, marketScore, scoreWord } from "../../../lib/ratings";
 import { moneySince, kalshiRecent } from "../../../lib/money";
 import { getKalshiTrades } from "../../../lib/markets";
 import { raceSpark } from "../../../lib/trends";
@@ -40,6 +41,7 @@ if (!data || !race) return Astro.rewrite("/404");
 const origin = Astro.url.origin;
 const c = consensus(race);
 const polls = race.kind === "control" ? null : await pollAverage(race.id);
+const expert = race.kind === "control" ? {} : await ratingsFor(race.id);
 const pollPct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
 const pollDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const est = race.kind !== "control" ? parlayD(c.D, c.R) : null;
@@ -206,6 +208,14 @@ import { parlayD } from "../../../lib/model";
 	.qb-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #7c8492; }
 	@media (max-width: 520px) { .qb th:nth-child(5), .qb td:nth-child(5) { display: none; } .qb { font-size: 12.5px; } }
 	.est-how { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+	.fc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+	.fc-cell { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+	.fc-src { font: 600 12px var(--font-mono), monospace; color: var(--color-text-secondary); }
+	.fc-cell small { color: var(--color-muted); font-size: 12px; }
+	.rt { display: inline-block; font: 700 14px/1 var(--font-mono), monospace; padding: 6px 9px; border-radius: 6px; }
+	.rt-d3 { background: #1d3f8c; color: #fff; } .rt-d2 { background: #2e62d0; color: #fff; } .rt-d1 { background: color-mix(in srgb, #6f9bf2 45%, transparent); }
+	.rt-toss { background: color-mix(in srgb, #a77dc2 35%, transparent); }
+	.rt-r1 { background: color-mix(in srgb, #f2867b 45%, transparent); } .rt-r2 { background: #d23f35; color: #fff; } .rt-r3 { background: #8c241c; color: #fff; }
 </style>
 <Base title={title} description={description} canonical={`${origin}${path}`} type="website" modifiedTime={data.meta.generated} image={`${origin}/og/race/${race.id}.png`}>
 	<JsonLd slot="head" data={ld} />
@@ -269,6 +279,29 @@ import { parlayD } from "../../../lib/model";
 						<p class="sec-note" style="font-size:12.5px">Polls as listed on <a href={polls.source} rel="noopener" target="_blank">Wikipedia</a> (CC BY-SA 4.0), each citing its pollster. Average: each pollster's latest poll from the past 30 days, weighted by recency and sample size, partisan polls counted half. (D)/(R) after a pollster marks a party-sponsored poll. Compare with <a href={RCP_URL[race.kind]} rel="noopener nofollow" target="_blank">RealClearPolitics</a>.</p>
 					</>
 				) : <p class="sec-note">No general-election polls of this race are listed yet. See <a href={RCP_URL[race.kind]} rel="noopener nofollow" target="_blank">RealClearPolitics</a> for its poll listings.</p>}
+			</section>
+		)}
+
+		{FORECASTER_KEYS.some((f) => expert[f]) && (
+			<section aria-labelledby="fc-h">
+				<h2 id="fc-h">What the forecasters say</h2>
+				<div class="fc-row">
+					{FORECASTER_KEYS.map((f) => expert[f] && (
+						<div class="panel fc-cell">
+							<a class="fc-src" href={FORECASTERS[f].url} rel="noopener" target="_blank">{FORECASTERS[f].name}</a>
+							<span class={`rt ${chipClass(expert[f]!.score)}`}>{expert[f]!.rating}</span>
+							{expert[f]!.as_of && <small>{new Date(`${expert[f]!.as_of}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</small>}
+						</div>
+					))}
+					{(() => { const pD = c.D / Math.max(0.01, c.D + c.R); const m = marketScore(pD); return (
+						<div class="panel fc-cell">
+							<span class="fc-src">Kalshi + Polymarket</span>
+							<span class={`rt ${chipClass(m)}`}>{scoreWord(m)}</span>
+							<small>{pct(Math.max(pD, 1 - pD))} {pD >= 0.5 ? "D" : "R"} now</small>
+						</div>
+					); })()}
+				</div>
+				<p class="sec-note" style="font-size:12.5px">Ratings as cited on Wikipedia, with each forecaster's date. Markets on the same scale: 40–60% toss-up, 60–75% Lean, 75–90% Likely, 90%+ Safe. <a href="/forecasters/">Every race: the experts vs. the markets →</a></p>
 			</section>
 		)}
 

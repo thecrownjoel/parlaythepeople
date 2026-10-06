@@ -36,6 +36,8 @@ jobs:
         run: python3 ingest/news.py || echo "news fetch failed; keeping the previous headlines"
       - name: Public polls from Wikipedia's race pages (every 6 hours)
         run: python3 ingest/polls.py || echo "polls fetch failed; keeping the previous polls"
+      - name: Expert ratings (Cook, Sabato, Inside Elections) from Wikipedia (every 6 hours)
+        run: python3 ingest/ratings.py || echo "ratings fetch failed; keeping the previous ratings"
       - name: Campaign finance from the FEC (daily)
         env:
           FEC_API_KEY: ${{ secrets.FEC_API_KEY }}

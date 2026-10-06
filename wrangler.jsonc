@@ -36,7 +36,11 @@
 	// Race analogs (Pro): 32-day odds paths of every race (src/lib/analogs.ts)
 	"vectorize": [{ "binding": "ANALOGS", "index_name": "race-analogs" }],
 	// Morning briefings: one durable workflow run per Pro reader per day (src/lib/briefing.ts)
-	"workflows": [{ "name": "parlay-briefing", "binding": "BRIEFING", "class_name": "BriefingWorkflow" }],
+	"workflows": [
+		{ "name": "parlay-briefing", "binding": "BRIEFING", "class_name": "BriefingWorkflow" },
+		// The Parlay Newsroom: one durable run per story (research, write, fact-check, draft) (src/lib/newsroom/workflow.ts)
+		{ "name": "parlay-newsroom", "binding": "NEWSROOM", "class_name": "NewsroomWorkflow" },
+	],
 	"vars": {
 		// AI Gateway for every Workers AI call ("default" is created by Cloudflare on first use)
 		"AI_GATEWAY_ID": "default",

@@ -2,8 +2,10 @@ import handler, { createScheduledHandler, PluginBridge } from "@emdash-cms/cloud
 import { startBriefings, checkAlerts, BriefingWorkflow } from "./lib/briefing";
 import { buildAnalogs, analogsCount } from "./lib/analogs";
 import { pingIndexNow } from "./lib/indexnow";
+import { NewsroomWorkflow } from "./lib/newsroom/workflow";
+import { runDesk } from "./lib/newsroom/desk";
 
-export { PluginBridge, BriefingWorkflow };
+export { PluginBridge, BriefingWorkflow, NewsroomWorkflow };
 
 const emdashScheduled = createScheduledHandler();
 
@@ -13,6 +15,7 @@ const emdashScheduled = createScheduledHandler();
  * - 11:00 daily (7am Eastern): start the morning briefing workflows
  * - Mondays 06:30: rebuild the race analogs index
  * - 12:15 daily: tell IndexNow (Bing, ChatGPT search, Copilot) which pages to recrawl
+ * - every hour at :20: the Newsroom's assignment desk (collect story signals, assign stories to writers on shift)
  */
 async function proJobs(at: Date) {
 	const m = at.getUTCMinutes(), h = at.getUTCHours();
@@ -25,6 +28,7 @@ async function proJobs(at: Date) {
 		if (h === 11 && m === 0) console.log("briefings", JSON.stringify(await startBriefings()));
 		if (at.getUTCDay() === 1 && h === 6 && m === 30) console.log("analogs", JSON.stringify(await buildAnalogs()));
 		if (h === 12 && m === 15) console.log("indexnow", JSON.stringify(await pingIndexNow()));
+		if (m === 20) console.log("newsroom", JSON.stringify(await runDesk().catch((e) => ({ error: String(e) }))));
 	} catch (e) {
 		console.error("pro jobs", String(e));
 	}

@@ -1,0 +1,186 @@
+---
+/**
+ * The forecasters vs. the markets: The Cook Political Report, Sabato's Crystal Ball and Inside Elections ratings for
+ * every 2026 Senate, governor and House race (as cited on Wikipedia, lib/ratings.ts), next to Kalshi and Polymarket odds,
+ * with the races where the experts and the money disagree.
+ */
+import Base from "../../layouts/Base.astro";
+import JsonLd from "../../components/JsonLd.astro";
+import { getIndex, getCycle, consensus, candidate, officeTitle, pct, type Race } from "../../lib/markets";
+import { allRatings, recentChanges, expertScore, marketScore, scoreWord, chipClass, FORECASTERS, FORECASTER_KEYS, type Forecaster, type Rating } from "../../lib/ratings";
+import { organization, breadcrumbs, faq, graph } from "../../lib/site";
+import "../../styles/data.css";
+
+Astro.response.headers.set("cache-control", "public, max-age=1800");
+const origin = Astro.url.origin;
+const index = await getIndex();
+const data = index ? await getCycle(index.next) : null;
+const ratings = await allRatings();
+const changes = await recentChanges(30);
+
+type Row = { race: Race; r: Partial<Record<Forecaster, Rating>>; expert: number; market: number; pD: number };
+const rows: Row[] = [];
+for (const race of data?.races ?? []) {
+	const r = ratings.get(race.id);
+	const expert = r ? expertScore(r) : null;
+	if (!r || expert == null || race.kind === "control") continue;
+	const pD = consensus(race).D / Math.max(0.01, consensus(race).D + consensus(race).R);
+	rows.push({ race, r, expert, market: marketScore(pD), pD });
+}
+const byId = new Map(rows.map((x) => [x.race.id, x]));
+const OFFICES = [["senate", "Senate"], ["governor", "Governor"], ["house", "House"]] as const;
+const of = (k: string) => rows.filter((x) => x.race.kind === k);
+
+// tallies: races each forecaster rates toward each party, by office
+const tally = (k: string, f: Forecaster) => {
+	const t = { D: 0, R: 0, toss: 0 };
+	for (const x of of(k)) { const s = x.r[f]?.score; if (s == null) continue; s > 0 ? t.D++ : s < 0 ? t.R++ : t.toss++; }
+	return t;
+};
+const mtally = (k: string) => {
+	const t = { D: 0, R: 0, toss: 0 };
+	for (const x of of(k)) x.market > 0 ? t.D++ : x.market < 0 ? t.R++ : t.toss++;
+	return t;
+};
+
+// disagreements: the experts' average and the market land at least two steps apart, or on opposite sides
+const disagree = rows
+	.filter((x) => Math.abs(x.expert - x.market) >= 2 || (x.expert * x.market < 0 && Math.abs(x.expert - x.market) >= 1))
+	.sort((a, b) => Math.abs(b.expert - b.market) - Math.abs(a.expert - a.market) || Math.abs(0.5 - a.pD) - Math.abs(0.5 - b.pD))
+	.slice(0, 20);
+// competitive: anyone short of safe
+const competitive = (k: string) => of(k).filter((x) => FORECASTER_KEYS.some((f) => x.r[f]?.score != null && Math.abs(x.r[f]!.score!) < 3) || Math.abs(x.market) < 3)
+	.sort((a, b) => a.expert - b.expert || a.race.label.localeCompare(b.race.label));
+const tossups = rows.filter((x) => FORECASTER_KEYS.some((f) => x.r[f]?.score === 0));
+const name = (race: Race) => officeTitle(race);
+const fav = (x: Row) => (x.pD >= 0.5 ? candidate(x.race, "D") ?? "the Democrat" : candidate(x.race, "R") ?? "the Republican");
+const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
+const updated = rows.length ? new Date(Math.max(...rows.flatMap((x) => FORECASTER_KEYS.map((f) => x.r[f]?.seen ?? 0))) * 1000) : null;
+
+const lede = rows.length
+	? `${rows.length} races rated by The Cook Political Report, Sabato's Crystal Ball and Inside Elections, side by side with what traders on Kalshi and Polymarket are paying. ${tossups.length} races are a toss-up to at least one forecaster; in ${disagree.length} the experts and the markets clearly disagree.`
+	: "Expert ratings from The Cook Political Report, Sabato's Crystal Ball and Inside Elections, side by side with Kalshi and Polymarket odds. Ratings load with the next data update.";
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [["Forecasters", "/forecasters/"]]),
+	faq([
+		["What are the Cook Political Report and Sabato's Crystal Ball?", "Two of the best-known nonpartisan election forecasters. The Cook Political Report (founded 1984) and Sabato's Crystal Ball (University of Virginia Center for Politics) rate each race from Safe or Solid for one party, through Likely and Lean, to Toss-up. Inside Elections adds a Tilt step."],
+		["Do forecasters and prediction markets agree?", disagree.length ? `Mostly, but not everywhere: in ${disagree.length} of ${rows.length} rated 2026 races the forecasters' average rating and the market odds are at least two steps apart on the Safe–Likely–Lean–Toss-up scale.` : "Mostly. This page lists every race where they don't."],
+		["How do you compare a rating with market odds?", "We put market odds on the forecasters' scale: 40–60% is a toss-up, 60–75% Lean, 75–90% Likely and 90% or more Safe, using the average of Kalshi and Polymarket for the Democrat's share of the two main parties."],
+	]),
+);
+---
+<Base title="Cook Political Report and Sabato's Crystal Ball ratings vs. prediction markets" description={lede.slice(0, 155).replace(/\s\S*$/, "") + "…"} canonical={`${origin}/forecasters/`}>
+	<JsonLd slot="head" data={ld} />
+	<article class="dp fc">
+		<header class="dp-head">
+			<p class="eyebrow">Forecasters · {index?.next ?? 2026}</p>
+			<h1>The experts vs. the markets</h1>
+			<p class="lede">{lede}</p>
+		</header>
+
+		{rows.length > 0 && (
+			<section class="panel" aria-labelledby="tally-h">
+				<h2 id="tally-h">Where each forecaster has the races</h2>
+				<p class="sec-note">Races rated toward each party (Lean or stronger) and toss-ups, by office. The market column puts Kalshi and Polymarket odds on the same scale.</p>
+				<div class="tbl-wrap"><table class="tbl fc-tally">
+					<thead><tr><th scope="col">Office</th>{FORECASTER_KEYS.map((f) => <th scope="col">{FORECASTERS[f].short}</th>)}<th scope="col">Markets</th></tr></thead>
+					<tbody>
+						{OFFICES.map(([k, label]) => (
+							<tr>
+								<th scope="row">{label} <small>{of(k).length} rated</small></th>
+								{FORECASTER_KEYS.map((f) => { const t = tally(k, f); return <td class="num"><span class="fc-d">D {t.D}</span> · <span class="fc-t">{t.toss} toss-up</span> · <span class="fc-r">R {t.R}</span></td>; })}
+								{(() => { const t = mtally(k); return <td class="num"><span class="fc-d">D {t.D}</span> · <span class="fc-t">{t.toss} toss-up</span> · <span class="fc-r">R {t.R}</span></td>; })()}
+							</tr>
+						))}
+					</tbody>
+				</table></div>
+				<p class="sec-note">Counts are of the races these pages track (seats up in {index?.next ?? 2026}), not chamber totals.</p>
+			</section>
+		)}
+
+		{disagree.length > 0 && (
+			<section aria-labelledby="split-h">
+				<h2 id="split-h">Where the experts and the money disagree</h2>
+				<p class="sec-note">The forecasters' average rating against the market odds, biggest gaps first. A gap means one side knows something, or is slow: watch which one moves.</p>
+				<div class="tbl-wrap"><table class="tbl">
+					<thead><tr><th scope="col">Race</th>{FORECASTER_KEYS.map((f) => <th scope="col">{FORECASTERS[f].short}</th>)}<th scope="col">Markets</th><th scope="col">The split</th></tr></thead>
+					<tbody>
+						{disagree.map((x) => (
+							<tr>
+								<th scope="row"><a href={x.race.path}>{name(x.race)}</a></th>
+								{FORECASTER_KEYS.map((f) => <td><span class={`rt ${chipClass(x.r[f]?.score)}`}>{x.r[f]?.rating ?? "—"}</span></td>)}
+								<td><span class={`rt ${chipClass(x.market)}`}>{scoreWord(x.market)}</span> <small class="num">{pct(Math.max(x.pD, 1 - x.pD))} {x.pD >= 0.5 ? "D" : "R"}</small></td>
+								<td class="fc-why">{x.market > x.expert ? `Traders are more bullish on ${candidate(x.race, "D") ?? "the Democrat"} than the experts` : `Traders are more bullish on ${candidate(x.race, "R") ?? "the Republican"} than the experts`}</td>
+							</tr>
+						))}
+					</tbody>
+				</table></div>
+			</section>
+		)}
+
+		{changes.length > 0 && (
+			<section aria-labelledby="chg-h">
+				<h2 id="chg-h">Recent rating changes</h2>
+				<ul class="fc-chg">
+					{changes.slice(0, 25).map((c) => { const x = byId.get(c.race_id); return x && (
+						<li><b><a href={x.race.path}>{name(x.race)}</a></b>: {FORECASTERS[c.source].name} moved it from {c.previous} to <span class={`rt ${chipClass(c.score)}`}>{c.rating}</span>{c.as_of && <> ({date(c.as_of)})</>}. Markets: {pct(Math.max(x.pD, 1 - x.pD))} {fav(x)}.</li>
+					); })}
+				</ul>
+			</section>
+		)}
+
+		{OFFICES.map(([k, label]) => competitive(k).length > 0 && (
+			<section aria-labelledby={`t-${k}`}>
+				<h2 id={`t-${k}`}>{label} ratings{k === "house" ? ": competitive districts" : ""}</h2>
+				{k === "house" && <p class="sec-note">Districts any forecaster or the markets rate short of Safe. House ratings on Wikipedia are updated less often than Senate and governor ratings; check each forecaster's date.</p>}
+				<div class="tbl-wrap"><table class="tbl fc-full">
+					<thead><tr><th scope="col">Race</th>{FORECASTER_KEYS.map((f) => <th scope="col">{FORECASTERS[f].short}</th>)}<th scope="col">Markets</th></tr></thead>
+					<tbody>
+						{competitive(k).map((x) => (
+							<tr>
+								<th scope="row"><a href={x.race.path}>{name(x.race)}</a></th>
+								{FORECASTER_KEYS.map((f) => <td><span class={`rt ${chipClass(x.r[f]?.score)}`}>{x.r[f]?.rating ?? "—"}</span>{x.r[f]?.as_of && <small class="fc-date">{date(x.r[f]!.as_of)}</small>}</td>)}
+								<td><span class={`rt ${chipClass(x.market)}`}>{scoreWord(x.market)}</span><small class="fc-date num">{pct(x.pD)} D</small></td>
+							</tr>
+						))}
+					</tbody>
+				</table></div>
+			</section>
+		))}
+
+		<section class="panel" aria-labelledby="about-h">
+			<h2 id="about-h">The forecasters</h2>
+			<dl class="fc-about">
+				{FORECASTER_KEYS.map((f) => <div><dt><a href={FORECASTERS[f].url} rel="noopener" target="_blank">{FORECASTERS[f].name} ↗</a></dt><dd>{FORECASTERS[f].about}</dd></div>)}
+			</dl>
+			<p class="sec-note">How to read the scale: Safe or Solid means not competitive; Likely, competitive but one party is clearly favored; Lean, competitive with an edge; Tilt (Inside Elections), the slightest edge; Toss-up, either party could win. "(flip)" marks a seat rated to change parties.</p>
+		</section>
+
+		<p class="sec-note" style="font-size:12.5px">Ratings are the forecasters' own, as cited on Wikipedia's 2026 Senate, gubernatorial and House election pages (CC BY-SA 4.0), each with its date; visit the forecasters for their analysis. {updated && <>Last checked {updated.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. </>}Market odds: the average of Kalshi and Polymarket, the Democrat's share of the two main parties. Research, not betting advice.</p>
+	</article>
+</Base>
+
+<style>
+	.fc { max-width: 1100px; }
+	.fc th small, .fc-date { display: block; font: 400 11px var(--font-mono), monospace; color: var(--color-muted); margin-top: 3px; }
+	.fc-d { color: var(--bt-d, #2e62d0); font-weight: 600; }
+	.fc-r { color: var(--bt-r, #d23f35); font-weight: 600; }
+	.fc-t { color: var(--color-text-secondary); }
+	.fc-why { font-size: 13.5px; color: var(--color-text-secondary); min-width: 200px; }
+	.rt { display: inline-block; font: 600 12px/1 var(--font-mono), monospace; padding: 5px 7px; border-radius: 5px; white-space: nowrap; }
+	.rt-d3 { background: #1d3f8c; color: #fff; }
+	.rt-d2 { background: #2e62d0; color: #fff; }
+	.rt-d1 { background: color-mix(in srgb, #6f9bf2 45%, transparent); }
+	.rt-toss { background: color-mix(in srgb, #a77dc2 35%, transparent); }
+	.rt-r1 { background: color-mix(in srgb, #f2867b 45%, transparent); }
+	.rt-r2 { background: #d23f35; color: #fff; }
+	.rt-r3 { background: #8c241c; color: #fff; }
+	.rt-none { color: var(--color-muted); }
+	.fc-chg { padding-left: 18px; }
+	.fc-chg li { margin: 8px 0; line-height: 1.6; }
+	.fc-about { display: grid; gap: 14px; margin: 0; }
+	.fc-about dt { font-weight: 600; }
+	.fc-about dd { margin: 4px 0 0; color: var(--color-text-secondary); }
+	.fc-tally td { white-space: nowrap; }
+</style>

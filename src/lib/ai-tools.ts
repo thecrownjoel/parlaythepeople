@@ -15,6 +15,7 @@ import { nameKey } from "./names";
 import { aiRun } from "./ai";
 import { findAnalogs } from "./analogs";
 import { pollsFor, average, marginText, pollAverage } from "./polls";
+import { ratingsFor, expertScore, marketScore, scoreWord, FORECASTERS, FORECASTER_KEYS } from "./ratings";
 
 const DAY = 86400;
 const r3 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 1000) / 1000);
@@ -85,6 +86,11 @@ export const TOOLS = [
 	{
 		name: "campaign_finance",
 		description: "FEC campaign finance for a House or Senate race: each candidate's money raised, spent, cash on hand and debts through their latest report, where it came from (individuals, PACs, party, self-funding), and outside spending for or against them with the biggest outside spenders. Updated daily. Governors report to their states, so governor races have no FEC data.",
+		input_schema: { type: "object", properties: { race_id: { type: "string" } }, required: ["race_id"] },
+	},
+	{
+		name: "expert_ratings",
+		description: "Expert race ratings from The Cook Political Report, Sabato's Crystal Ball and Inside Elections (Safe/Likely/Lean/Tilt/Toss-up, as cited on Wikipedia with each forecaster's date), the previous rating if it changed, and the market odds on the same scale for comparison.",
 		input_schema: { type: "object", properties: { race_id: { type: "string" } }, required: ["race_id"] },
 	},
 	{
@@ -342,6 +348,21 @@ export async function runTool(name: string, input: Record<string, any>, ctx: { p
 			const p = Object.values(social?.topics ?? {}).filter((x) => x.key === key).sort((a, b) => b.i24 - a.i24)[0];
 			if (!p) return { error: `No social data for ${input.candidate}. Social data covers candidates in races the site tracks.` };
 			return { ...pulseBrief(p), daily: p.series.map(([t, i, s]) => ({ day: new Date(t * 1000).toISOString().slice(0, 10), interactions: i, sentiment: s })), source: "LunarCrush" };
+		}
+		case "expert_ratings": {
+			const all = (await allRaces()).find((x) => x.r.id === input.race_id);
+			if (!all) return { error: `No race ${input.race_id}. Use find_races first.` };
+			const r = await ratingsFor(all.r.id);
+			const c = consensus(all.r);
+			const pD = c.D / Math.max(0.01, c.D + c.R);
+			const exp = expertScore(r);
+			return {
+				race: officeTitle(all.r), url: `https://parlaythepeople.com${all.r.path}`,
+				ratings: FORECASTER_KEYS.filter((f) => r[f]).map((f) => ({ forecaster: FORECASTERS[f].name, rating: r[f]!.rating, as_of: r[f]!.as_of, previous: r[f]!.previous, link: FORECASTERS[f].url })),
+				experts_average: exp == null ? null : scoreWord(Math.round(exp)),
+				market_on_same_scale: scoreWord(marketScore(pD)), market_D_two_party: r3(pD),
+				note: "Ratings are the forecasters' own; credit them by name. Scale: Safe/Solid, Likely, Lean, Tilt, Toss-up.",
+			};
 		}
 		case "search_research": {
 			try {

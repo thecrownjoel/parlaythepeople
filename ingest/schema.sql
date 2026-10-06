@@ -197,3 +197,18 @@ CREATE TABLE IF NOT EXISTS fec_detail (
   updated INTEGER,
   PRIMARY KEY (cand_id, cycle)
 ) WITHOUT ROWID;
+
+-- Expert race ratings (Cook Political Report, Sabato's Crystal Ball, Inside Elections) as cited on Wikipedia's
+-- 2026 election pages (ingest/ratings.py). score: +3 safe D … 0 tossup … −3 safe R.
+CREATE TABLE IF NOT EXISTS ratings (
+  race_id TEXT NOT NULL,
+  source TEXT NOT NULL,         -- cook | sabato | ie
+  rating TEXT NOT NULL,         -- as published, e.g. "Lean D (flip)"
+  score REAL,
+  as_of TEXT,                   -- the forecaster's date for this rating, as cited
+  cited_on TEXT,                -- Wikipedia page it was read from
+  seen INTEGER NOT NULL,
+  changed INTEGER,              -- when we first saw the current rating differ from the one before
+  previous TEXT,                -- the rating before that change
+  PRIMARY KEY (race_id, source)
+) WITHOUT ROWID;

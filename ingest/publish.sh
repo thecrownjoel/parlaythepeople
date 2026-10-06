@@ -23,6 +23,7 @@ $WR d1 execute ballottape-markets --remote --file ingest/out/d1.sql >/dev/null
 [ -s ingest/out/politics.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/politics.sql >/dev/null && rm ingest/out/politics.sql || echo "politics upload failed"; }
 [ -s ingest/out/fec.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/fec.sql >/dev/null && rm ingest/out/fec.sql || echo "fec upload failed"; }
 [ -s ingest/out/polls.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/polls.sql >/dev/null && rm ingest/out/polls.sql || echo "polls upload failed"; }
+[ -s ingest/out/ratings.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/ratings.sql >/dev/null && rm ingest/out/ratings.sql || echo "ratings upload failed"; }
 [ -s ingest/out/forecast.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/forecast.sql >/dev/null || echo "forecast upload failed"; }
 [ -s ingest/out/archive.sql ] && { $WR d1 execute ballottape-markets --remote --file ingest/out/archive.sql >/dev/null || echo "archive history upload failed"; }
 $WR d1 execute ballottape-trades --remote --file ingest/trades_schema.sql >/dev/null || echo "trades schema failed"

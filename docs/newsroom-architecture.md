@@ -1,6 +1,10 @@
 # The Parlay Newsroom: AI writers (and real ones) as editorial staff
 
-Status: architecture, written 2026-10-05. Build starts next session.
+Status: built 2026-10-06 (days 1–4 of the build plan, plus forecaster ratings). Code: `src/lib/newsroom/` (engine), `src/plugins/newsroom/` (admin), `ingest/newsroom_schema.sql` (tables), `ingest/ratings.py` + `src/lib/ratings.ts` + `/forecasters/` (Cook, Sabato, Inside Elections ratings).
+
+How it runs: every hour at :20 the worker cron runs the assignment desk (`desk.ts`): it collects signals (`signals.ts`: odds moves, favorite flips, money, big bets, new polls, forecaster rating changes, experts-vs-markets splits, the calendar), matches them to writers on shift, and starts one `NewsroomWorkflow` per story (`workflow.ts`): reporter → writer → fact-checker (`agents.ts`, GLM 5.3 on Workers AI; one rewrite allowed) → EmDash draft with the writer's byline (`cms.ts`). Hiring (`persona.ts`): GLM invents a fictional persona (name, age, hometown, bio, voice, sample paragraphs) and FLUX.1 [schnell] paints a photorealistic portrait of a person who doesn't exist; both are editable. Admin: EmDash → Plugins → Newsroom (Writers, Story queue, Drafts, Balance, Settings).
+
+Measured in testing: a hire costs about $0.03 and takes under a minute; a story costs about $0.15–0.30 and takes 5–10 minutes.
 
 ## What we're building
 
