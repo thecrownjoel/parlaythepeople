@@ -27,6 +27,7 @@ export const BEATS: Record<string, string> = {
 	money: "Money in politics", polls: "Polls vs. markets", markets: "Market moves and big bets", natsec: "National security",
 	agriculture: "Agriculture", economy: "Economy", immigration: "Immigration", health: "Health care", energy: "Energy",
 	courts: "Courts", voting: "Voting and elections administration", world: "World politics", local: "Local politics",
+	record: "The administration's record",
 };
 
 export interface Format { label: string; words: [number, number]; brief: string; opinion: boolean }
@@ -107,8 +108,62 @@ export async function storiesSince(writerId: string, ts: number) {
 	return r?.n ?? 0;
 }
 
-export interface Settings { daily_cap: number; monthly_budget_cents: number; model: string; debate_pairs: boolean; quiet: [number, number] | null; paused: boolean; notify_email: string | null }
-export const DEFAULT_SETTINGS: Settings = { daily_cap: 6, monthly_budget_cents: 5000, model: "@cf/zai-org/glm-5.3", debate_pairs: false, quiet: [23, 6], paused: false, notify_email: null };
+export interface Settings {
+	daily_cap: number; monthly_budget_cents: number; model: string; debate_pairs: boolean; quiet: [number, number] | null; paused: boolean; notify_email: string | null;
+	/** The "record" beat: the topics its writers look for in the news, and topics they skip (covered elsewhere). Editable in Settings. */
+	record_topics: string[]; record_avoid: string[];
+	/** Search queries the record beat writes explainers for, highest monthly searches first (0 = not measured). */
+	keywords: Keyword[];
+}
+export interface Keyword { q: string; searches: number }
+export const DEFAULT_SETTINGS: Settings = {
+	daily_cap: 6, monthly_budget_cents: 5000, model: "@cf/zai-org/glm-5.3", debate_pairs: false, quiet: [23, 6], paused: false, notify_email: null,
+	record_topics: ["border security", "energy production", "judicial appointments", "deregulation", "trade deals", "manufacturing investment", "crime and law enforcement", "military and defense", "foreign policy wins"],
+	record_avoid: ["Working Families Tax Cut", "household costs", "affordability"],
+	keywords: [
+		{ q: "trump account for kids", searches: 200401 },
+		{ q: "social security cola 2027", searches: 37201 },
+		{ q: "rap student loan marriage penalty", searches: 28258 },
+		{ q: "trump account eligibility", searches: 25255 },
+		{ q: "child tax credit 2026", searches: 13062 },
+		{ q: "why are gas prices so high", searches: 12405 },
+		{ q: "salt deduction cap", searches: 9903 },
+		{ q: "no tax on overtime", searches: 7674 },
+		{ q: "trump account vs 529", searches: 7384 },
+		{ q: "trump account for older kids", searches: 6892 },
+		{ q: "trump account 530a employer match", searches: 6084 },
+		{ q: "are we getting another stimulus check", searches: 6062 },
+		{ q: "when is medicare open enrollment", searches: 5712 },
+		{ q: "how to open a trump account", searches: 4868 },
+		{ q: "federal pay raise 2027", searches: 3843 },
+		{ q: "medicaid work requirements", searches: 3709 },
+		{ q: "50 year mortgage", searches: 2808 },
+		{ q: "trump tariff refund", searches: 2426 },
+		{ q: "who is exempt from snap work requirements", searches: 2422 },
+		{ q: "trump account calculator", searches: 2222 },
+		{ q: "child and dependent care credit", searches: 2120 },
+		{ q: "no tax on overtime calculator", searches: 1759 },
+		{ q: "is there no tax on social security", searches: 1567 },
+		{ q: "repayment assistance plan", searches: 1415 },
+		{ q: "trump rx zepbound", searches: 1408 },
+		{ q: "help with electric bill", searches: 1189 },
+		{ q: "are paper checks going away", searches: 1040 },
+		{ q: "government shutdown social security", searches: 1018 },
+		{ q: "portable mortgage trump", searches: 756 },
+		{ q: "why are beef prices so high", searches: 652 },
+		{ q: "car loan interest deduction", searches: 538 },
+		{ q: "how to use trump rx", searches: 462 },
+		{ q: "obamacare refund", searches: 336 },
+		{ q: "no tax on tips 2026", searches: 155 },
+		{ q: "$90 medicare payment", searches: 0 },
+	],
+};
+
+/** Does any avoided topic match this text? Spaces and case are ignored, so "TrumpRx" also catches "trump rx". */
+export const isAvoided = (text: string, avoid: string[]) => {
+	const t = text.toLowerCase().replace(/\s+/g, "");
+	return avoid.some((a) => a && t.includes(a.toLowerCase().replace(/\s+/g, "")));
+};
 
 export async function getSettings(): Promise<Settings> {
 	const { results } = await db().prepare("SELECT key, value FROM newsroom_settings").all<{ key: string; value: string }>().catch(() => ({ results: [] as { key: string; value: string }[] }));

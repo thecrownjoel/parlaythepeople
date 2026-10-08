@@ -263,11 +263,14 @@ async function settingsPage(): Promise<Res> {
 			{ type: "toggle", action_id: "paused", label: "Pause the assignment desk", initial_value: s.paused },
 			{ type: "number_input", action_id: "daily_cap", label: "Most stories a day, whole newsroom", initial_value: s.daily_cap, min: 0, max: 50 },
 			{ type: "number_input", action_id: "budget", label: "Monthly AI budget, whole newsroom ($)", initial_value: s.monthly_budget_cents / 100, min: 0, max: 2000 },
-			{ type: "select", action_id: "model", label: "Model", options: [{ label: "GLM 5.3 (best writing)", value: "@cf/zai-org/glm-5.3" }, { label: "gpt-oss-120b (cheaper)", value: "@cf/openai/gpt-oss-120b" }], initial_value: s.model },
+			{ type: "select", action_id: "model", label: "Model", options: [{ label: "GLM 5.3 (best writing)", value: "@cf/zai-org/glm-5.3" }, { label: "gpt-oss-120b (cheaper)", value: "@cf/openai/gpt-oss-120b" }, { label: "Gemini 3.5 Flash (Google)", value: "gemini-3.5-flash" }, { label: "Gemini 3.6 Flash (Google)", value: "gemini-3.6-flash" }], initial_value: s.model },
 			{ type: "toggle", action_id: "debate_pairs", label: "Debate pairs: big stories go to a Lean D and a Lean R writer at once", initial_value: s.debate_pairs },
 			{ type: "number_input", action_id: "quiet_start", label: "Quiet hours start (Eastern)", initial_value: s.quiet?.[0] ?? 23, min: 0, max: 23 },
 			{ type: "number_input", action_id: "quiet_end", label: "Quiet hours end (Eastern)", initial_value: s.quiet?.[1] ?? 6, min: 0, max: 23 },
 			{ type: "text_input", action_id: "notify_email", label: "Email me new drafts at", initial_value: s.notify_email ?? "" },
+			{ type: "text_input", action_id: "record_topics", label: "Administration's record beat: topics to cover (comma-separated)", initial_value: s.record_topics.join(", ") },
+			{ type: "text_input", action_id: "keywords", label: "Administration's record beat: search keywords, one per line as keyword | searches a month (most searched gets written first)", initial_value: s.keywords.map((k) => `${k.q} | ${k.searches}`).join("\n"), multiline: true },
+			{ type: "text_input", action_id: "record_avoid", label: "Administration's record beat: topics to skip (comma-separated)", initial_value: s.record_avoid.join(", ") },
 		], submit: { label: "Save settings", action_id: "save_settings" } },
 	] };
 }
@@ -406,6 +409,8 @@ async function handle(ctx: PluginContext & { input: any; user?: any }): Promise<
 				await setSettings({
 					paused: v.paused === true, daily_cap: Number(v.daily_cap ?? 6), monthly_budget_cents: Math.round(Number(v.budget ?? 50) * 100), model: String(v.model ?? "@cf/zai-org/glm-5.3"),
 					debate_pairs: v.debate_pairs === true, quiet: [Number(v.quiet_start ?? 23), Number(v.quiet_end ?? 6)], notify_email: String(v.notify_email ?? "").trim() || null,
+					record_topics: list(v.record_topics), record_avoid: list(v.record_avoid),
+					keywords: String(v.keywords ?? "").split("\n").map((l) => l.split("|")).filter(([q]) => q?.trim()).map(([q, n]) => ({ q: q.trim(), searches: Number(String(n ?? "").replace(/[^0-9]/g, "")) || 0 })),
 				});
 				return { ...(await settingsPage()), toast: { type: "success", message: "Settings saved." } };
 			}

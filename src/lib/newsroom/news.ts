@@ -3,6 +3,7 @@
  * and a plain-text reader for articles. Writers read to understand; posts summarize and link, with short quotes at most.
  */
 import { STATES } from "../states";
+import { isAvoided } from "./writers";
 
 export interface Headline { title: string; url: string; source: string | null; published: number | null; via: string }
 
@@ -79,10 +80,12 @@ export const BEAT_QUERY: Record<string, string> = {
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]/g, "").split(/\s+/).slice(0, 7).join(" ");
 
 /** Headlines for a writer's beats × places, newest first, duplicates and blocked domains removed. */
-export async function headlinesFor(o: { beats: string[]; geography: string[]; places: string[]; feeds?: string[]; block?: string[]; limit?: number }): Promise<Headline[]> {
+export async function headlinesFor(o: { beats: string[]; geography: string[]; places: string[]; feeds?: string[]; block?: string[]; topics?: string[]; avoid?: string[]; limit?: number }): Promise<Headline[]> {
 	const where = o.geography.filter((g) => g !== "US").map((g) => STATES[g] ?? g).concat(o.places);
 	const queries: string[] = [];
-	for (const b of o.beats.slice(0, 4)) {
+	// the record beat searches four of its topics each run, picked at random so every topic comes up over a week
+	if (o.beats.includes("record")) for (const t of [...(o.topics ?? [])].sort(() => Math.random() - 0.5).slice(0, 4)) queries.push(`Trump administration ${t}`);
+	for (const b of o.beats.filter((b) => b !== "record").slice(0, 4)) {
 		const q = BEAT_QUERY[b] ?? b;
 		if (where.length) for (const w of where.slice(0, 3)) queries.push(`"${w}" ${q}`);
 		else queries.push(q);
@@ -99,6 +102,7 @@ export async function headlinesFor(o: { beats: string[]; geography: string[]; pl
 	const seen = new Set<string>();
 	const block = (o.block ?? []).map((d) => d.toLowerCase());
 	return all
+		.filter((h) => !isAvoided(h.title, o.avoid ?? []))
 		.filter((h) => (h.published ?? Date.now() / 1000) >= cutoff)
 		.filter((h) => !block.some((d) => h.url.toLowerCase().includes(d) || (h.source ?? "").toLowerCase().includes(d)))
 		.sort((a, b) => (b.published ?? 0) - (a.published ?? 0))

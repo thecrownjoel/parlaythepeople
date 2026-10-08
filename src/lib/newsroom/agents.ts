@@ -14,7 +14,7 @@ import { costUsd } from "../plans";
 import { getIndex, daysUntil } from "../markets";
 import { headlinesFor, googleNews, readArticle } from "./news";
 import { parseJson } from "./persona";
-import { BEATS, FORMATS, perspectiveOf, type Writer } from "./writers";
+import { BEATS, FORMATS, perspectiveOf, getSettings, type Writer } from "./writers";
 
 export interface Usage { tin: number; tout: number; cost: number }
 export interface Fact { id: string; fact: string; source: string; url?: string | null; quote?: string | null }
@@ -59,7 +59,8 @@ async function context() {
 export async function report(o: { writer: Writer; brief: Brief; format: string; model: string; feedback?: string | null }): Promise<{ facts: Fact[]; usage: Usage; used: string[] }> {
 	const { writer: w, brief, format } = o;
 	const tools = [...TOOLS, ...PRO_TOOLS, ...NEWS_TOOLS].map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } }));
-	const headlines = await headlinesFor({ beats: w.beats, geography: w.geography, places: w.places, feeds: w.sources.feeds, block: w.sources.block, limit: 12 }).catch(() => []);
+	const settings = await getSettings();
+	const headlines = await headlinesFor({ beats: w.beats, geography: w.geography, places: w.places, feeds: w.sources.feeds, block: w.sources.block, topics: settings.record_topics, avoid: settings.record_avoid, limit: 12 }).catch(() => []);
 	const system = `You are the reporter on the Parlay Newsroom at Parlay the People (parlaythepeople.com), an election research site tracking Kalshi and Polymarket prediction markets, polls, expert ratings and campaign money. ${await context()}
 
 Your job: research one story for ${w.name}, who covers ${w.beats.map((b) => BEATS[b] ?? b).join(", ")} (${w.geography.join(", ")}${w.places.length ? `; ${w.places.join(", ")}` : ""}), for a ${FORMATS[format]?.label ?? format}.
@@ -68,6 +69,7 @@ How to research:
 - Get every number from the tools. Start with find_races if you need a race_id, then race_detail; add odds_history, trade_flow, polls, expert_ratings, campaign_finance, money, whale_watch, exchange_divergence or race_analogs when they help the story. Use news_search and read_article for what's happening and why, and search_research for background.
 - Make 4 to 10 tool calls. Stay on this story.
 - Voting dates, deadlines and how-to-vote details: only from official sources the tools return, never from memory.
+- For tax, benefit, loan and program questions (amounts, eligibility, dates, how to apply), read the official page with read_article: irs.gov, ssa.gov, medicare.gov, studentaid.gov, treasury.gov, opm.gov, fns.usda.gov, eia.gov, congress.gov. Note anything not yet official as proposed or pending.
 - Polymarket wallets are pseudonyms: never guess who owns one. Social posts are claims, not facts.
 
 When done, reply with ONLY JSON (no prose): {"facts": [{"id": "F1", "fact": "one specific, checkable statement with its number and date", "source": "tool name, or publisher name", "url": "the page or article URL", "quote": "an exact short quote from an article, or null"}, ...]}
@@ -106,6 +108,13 @@ ${headlines.map((h) => `- ${h.title} (${h.source ?? "?"}, ${h.published ? new Da
 
 // ---- 2. writer ----
 
+/** For writers on the record beat: the topics to build on and the ones to leave alone (edited in Settings). */
+async function recordFocus(w: Writer) {
+	if (!w.beats.includes("record")) return "";
+	const s = await getSettings();
+	return `Record beat: write about the administration's accomplishments, chosen from these topics: ${s.record_topics.join(", ")}. Don't write about ${s.record_avoid.join(", ")}; those are covered elsewhere on the site.\n`;
+}
+
 export async function write(o: { writer: Writer; brief: Brief; format: string; facts: Fact[]; model: string; feedback?: string | null }): Promise<{ draft: Draft | null; usage: Usage }> {
 	const { writer: w, format } = o;
 	const f = FORMATS[format] ?? FORMATS.brief;
@@ -113,7 +122,7 @@ export async function write(o: { writer: Writer; brief: Brief; format: string; f
 	const label: Draft["label"] = w.perspective !== 0 || f.opinion ? "perspective" : "news";
 	const system = `You are ${w.name}, a writer on the Parlay Newsroom at Parlay the People (parlaythepeople.com). ${await context()}
 Beat: ${w.beats.map((b) => BEATS[b] ?? b).join(", ")}. Coverage: ${w.geography.join(", ")}${w.places.length ? ` (${w.places.join(", ")})` : ""}.
-Perspective: ${lens.lens}.${label === "perspective" ? " This piece runs labeled as Perspective (opinion)." : " This piece runs as News: keep your own opinions out of it."}
+${await recordFocus(w)}Perspective: ${lens.lens}.${label === "perspective" ? " This piece runs labeled as Perspective (opinion)." : " This piece runs as News: keep your own opinions out of it."}
 Voice: ${w.voice ?? "clear, specific, plain words"}
 ${w.samples ? `How you sound:\n${w.samples}\n` : ""}
 Assignment: ${f.brief} Length: ${f.words[0]}–${f.words[1]} words.
@@ -134,7 +143,9 @@ TAGS: comma-separated, only from: senate, house, governor, president, 2026, 2028
 CATEGORY: market-moves or analysis
 ---
 the story in markdown, with [F#] tags`;
-	const user = `Story: ${o.brief.title}${o.brief.note ? `\nEditor's note: ${o.brief.note}` : ""}${o.feedback ? `\nThe fact-checker flagged the last draft. Fix every issue: ${o.feedback}` : ""}
+	const kw = o.brief.kind === "keyword" ? String((o.brief.data as any).keyword ?? o.brief.title) : null;
+	const seo = kw ? `\nThis explainer answers the search "${kw}". Use that phrase, or a natural form of it, in the headline and the first paragraph. Answer the question in the first two sentences, then the details readers need (who qualifies, amounts, dates, how to do it), with a few ## subheads. If the answer is "no" or "not yet", say so plainly. Use CATEGORY: analysis.` : "";
+	const user = `Story: ${o.brief.title}${seo}${o.brief.note ? `\nEditor's note: ${o.brief.note}` : ""}${o.feedback ? `\nThe fact-checker flagged the last draft. Fix every issue: ${o.feedback}` : ""}
 Source log:
 ${o.facts.map((x) => `[${x.id}] ${x.fact} (source: ${x.source}${x.url ? `, ${x.url}` : ""})${x.quote ? ` Quote: "${x.quote}"` : ""}`).join("\n")}`;
 	const res: any = await aiRun(o.model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 16000, reasoning_effort: "low", temperature: 0.6 }, { feature: "newsroom-write", writer: w.slug });

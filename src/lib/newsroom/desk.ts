@@ -6,7 +6,7 @@
 import { env } from "cloudflare:workers";
 import { recentSignals, refreshSignals, type Signal } from "./signals";
 import { headlinesFor } from "./news";
-import { db, now, DAY, newId, listWriters, getSettings, onShift, spentCents, storiesSince, monthStart, type Writer } from "./writers";
+import { db, now, DAY, newId, listWriters, getSettings, onShift, spentCents, storiesSince, monthStart, isAvoided, type Writer, type Settings } from "./writers";
 
 const covers = (w: Writer, s: Signal) =>
 	(w.geography.includes("US") || w.geography.includes(s.geography) || s.geography === "US") && s.beats.some((b) => w.beats.includes(b));
@@ -25,6 +25,7 @@ function formatFor(w: Writer, s: Signal): string {
 	const has = (f: string) => w.formats.includes(f);
 	const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
 	if (has("roundup") && et.getDay() === 5 && s.kind === "roundup") return "roundup";
+	if (s.kind === "keyword" && has("explainer")) return "explainer";
 	if (w.perspective !== 0 && has("column") && (s.score >= 70 || !has("market"))) return "column";
 	if (["move", "flip", "money", "whale", "split"].includes(s.kind) && has("market")) return "market";
 	if (["poll", "rating", "split"].includes(s.kind) && has("explainer")) return "explainer";
@@ -62,13 +63,30 @@ export async function assign(writerId: string, o: { signalId?: string | null; fo
 }
 
 /** A news signal for a writer whose beat our data doesn't cover: the freshest headline on their beat and place. */
-async function newsSignal(w: Writer): Promise<Signal | null> {
-	const hs = await headlinesFor({ beats: w.beats, geography: w.geography, places: w.places, feeds: w.sources.feeds, block: w.sources.block, limit: 8 });
+async function newsSignal(w: Writer, settings: Settings): Promise<Signal | null> {
+	const hs = await headlinesFor({ beats: w.beats, geography: w.geography, places: w.places, feeds: w.sources.feeds, block: w.sources.block, topics: settings.record_topics, avoid: settings.record_avoid, limit: 8 });
 	for (const h of hs) {
 		const id = `news:${h.url}`.slice(0, 200);
 		const seen = await db().prepare("SELECT 1 FROM newsroom_assignments WHERE signal_id = ? LIMIT 1").bind(id).first();
 		if (seen) continue;
 		const s: Signal = { id, kind: "news", key: null, title: h.title, data: { headline: h.title, source: h.source, url: h.url, published: h.published, related: hs.slice(0, 6) }, score: 50, geography: w.geography[0] ?? "US", beats: w.beats };
+		await db().prepare("INSERT OR IGNORE INTO newsroom_signals (id, kind, key, title, data, score, geography, beats, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			.bind(s.id, s.kind, s.key, s.title, JSON.stringify(s.data), s.score, s.geography, JSON.stringify(s.beats), now()).run();
+		return s;
+	}
+	return null;
+}
+
+/** A search keyword for a record-beat writer: the most-searched one nobody has written up in 30 days, skipping
+ *  avoided topics. Keywords are edited in Settings. */
+async function keywordSignal(w: Writer, settings: Settings): Promise<Signal | null> {
+	if (!w.beats.includes("record")) return null;
+	const kws = [...settings.keywords].filter((k) => k.q && !isAvoided(k.q, settings.record_avoid)).sort((a, b) => b.searches - a.searches);
+	for (const k of kws) {
+		const id = `kw:${k.q.toLowerCase().replace(/[^a-z0-9]+/g, "-")}:${Math.floor(now() / (30 * DAY))}`;
+		const seen = await db().prepare("SELECT 1 FROM newsroom_assignments a JOIN newsroom_signals g ON g.id = a.signal_id WHERE g.kind = 'keyword' AND g.title = ? AND a.created >= ? AND a.status NOT IN ('dropped', 'killed') LIMIT 1").bind(k.q, now() - 30 * DAY).first();
+		if (seen) continue;
+		const s: Signal = { id, kind: "keyword", key: null, title: k.q, data: { keyword: k.q, searches_per_month: k.searches || null }, score: 50, geography: "US", beats: ["record"] };
 		await db().prepare("INSERT OR IGNORE INTO newsroom_signals (id, kind, key, title, data, score, geography, beats, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			.bind(s.id, s.kind, s.key, s.title, JSON.stringify(s.data), s.score, s.geography, JSON.stringify(s.beats), now()).run();
 		return s;
@@ -103,7 +121,9 @@ export async function runDesk() {
 		for (const s of candidates) if (!(await alreadyCovered(s, w.id))) { pick = s; break; }
 		const breaking = !!pick && pick.score >= 80 && w.cadence.breaking;
 		if (!due(w, week) && !breaking) continue;
-		if (!pick) pick = await newsSignal(w).catch(() => null);
+		// record-beat writers work down the keyword list before falling back to the news
+		if (!pick) pick = await keywordSignal(w, settings).catch(() => null);
+		if (!pick) pick = await newsSignal(w, settings).catch(() => null);
 		if (!pick) continue;
 		const pairId = settings.debate_pairs && pick.score >= 85 && w.perspective !== 0 ? newId("p") : null;
 		out.push(await assign(w.id, { signalId: pick.id, format: formatFor(w, pick), pairId }));

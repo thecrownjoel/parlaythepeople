@@ -46,6 +46,9 @@ export const MODEL_PRICE: Record<string, { in: number; out: number }> = {
 	"@cf/zai-org/glm-5.3": { in: 1.4, out: 4.4 },
 	"@cf/openai/gpt-oss-120b": { in: 0.35, out: 0.75 },
 	"@cf/meta/llama-3.3-70b-instruct-fp8-fast": { in: 0.293, out: 2.253 },
+	// Gemini API paid-tier list prices (ai.google.dev/gemini-api/docs/pricing, Oct 2026); $0 while on the free tier
+	"gemini-3.5-flash": { in: 1.5, out: 9 },
+	"gemini-3.6-flash": { in: 1.5, out: 7.5 },
 };
 export const STANDARD_MODEL = "@cf/zai-org/glm-5.3";
 
