@@ -42,6 +42,11 @@ jobs:
         env:
           FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
         run: python3 ingest/congress.py || echo "congress fetch failed; keeping the previous records"
+      - name: Roll-call votes, House Clerk and senate.gov (new votes each run; reads progress from D1)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ece401f47370ecab76cbc85bf2a7054c
+        run: python3 ingest/votes.py || echo "votes fetch failed; keeping the stored votes"
       - name: Campaign finance from the FEC (daily)
         env:
           FEC_API_KEY: ${{ secrets.FEC_API_KEY }}

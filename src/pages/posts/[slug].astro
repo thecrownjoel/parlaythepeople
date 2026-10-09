@@ -15,7 +15,6 @@ import { Comments, CommentForm } from "emdash/ui/comments";
 import Base from "../../layouts/Base.astro";
 import PostCard from "../../components/PostCard.astro";
 import { getReadingTime } from "../../utils/reading-time";
-import { writerByByline } from "../../lib/newsroom/writers";
 import { resolveBlogSiteIdentity } from "../../utils/site-identity";
 
 const slug = decodeSlug(Astro.params.slug);
@@ -68,8 +67,6 @@ const seo = getSeoMeta(post, {
 const bylines = post.data.bylines ?? [];
 // byline avatars are served by storage key, not media id
 const avatarUrls = await mediaUrls(bylines.map((c) => c.byline.avatarMediaId));
-// Newsroom AI writers are labeled on every byline
-const aiBylines = new Set((await Promise.all(bylines.map(async (c) => ((await writerByByline(c.byline.id).catch(() => null))?.kind === "ai" ? c.byline.id : null)))).filter(Boolean));
 
 // Get reading time
 const readingTime = getReadingTime(post.data.content);
@@ -187,7 +184,6 @@ const publishDate =
 												{credit.roleLabel && (
 													<span class="byline-role">{credit.roleLabel}</span>
 												)}
-												{aiBylines.has(credit.byline.id) && <span class="byline-role byline-ai">AI writer</span>}
 											</div>
 										</div>
 									))}
@@ -235,7 +231,7 @@ const publishDate =
 										{bylines.map((credit, i) => (
 											<>
 												{i > 0 && ", "}
-												<a href={authorPath(credit.byline.slug)} rel="author">{credit.byline.displayName}</a>{aiBylines.has(credit.byline.id) && " (AI writer)"}
+												<a href={authorPath(credit.byline.slug)} rel="author">{credit.byline.displayName}</a>
 											</>
 										))}
 									</span>
@@ -470,7 +466,6 @@ const publishDate =
 		background: var(--color-border);
 	}
 
-	.byline-ai { display: inline-block; margin-top: 4px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
 	/* Byline styles */
 	.bylines {
 		display: flex;

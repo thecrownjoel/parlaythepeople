@@ -21,7 +21,7 @@ import RaceMoney from "../../../components/RaceMoney.astro";
 import RaceFinance from "../../../components/RaceFinance.astro";
 import EmbedCode from "../../../components/EmbedCode.astro";
 import RaceNotes from "../../../components/RaceNotes.astro";
-import { candidateLinks } from "../../../lib/candidates";
+import { personLinks } from "../../../lib/people";
 import FollowButton from "../../../components/FollowButton.astro";
 import ReportButton from "../../../components/ReportButton.astro";
 import { pollAverage, marginText, RCP_URL } from "../../../lib/polls";
@@ -35,12 +35,15 @@ import { renderMulti, rangeOf } from "../../../lib/chart";
 import "../../../styles/charts.css";
 import "../../../styles/gop.css";
 import { campaignFor, committeeFor, electionOffice } from "../../../lib/gop";
+import { stateFromSlug, statePath } from "../../../lib/states";
 
 const { cycle, office, place } = Astro.params;
 if (!/^\d{4}$/.test(cycle ?? "")) return Astro.rewrite("/404");
 const data = await getCycle(Number(cycle));
 const path = `/${cycle}/${office}/${place}/`;
 const race = data?.races.find((r) => r.path === path);
+// /2026/house/ohio/: a state, not a district, is every House race in that state
+if (data && !race && office === "house" && stateFromSlug(place ?? "")) return Astro.rewrite(`/hub/house/${cycle}/${place}/`);
 if (!data || !race) return Astro.rewrite("/404");
 
 const origin = Astro.url.origin;
@@ -100,7 +103,7 @@ const ago = (t: number | null) => {
 	return h < 1 ? "just now" : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 };
 const history = await getHistory(race.id);
-const candLink = await candidateLinks();
+const candLink = await personLinks();
 const ks = shares(race.k), ps = shares(race.p);
 const dName = candidate(race, "D"), rName = candidate(race, "R"), iName = candidate(race, "I");
 const lede = answer(race, data.meta.generated);
@@ -150,6 +153,7 @@ const closest = data.races
 const crumbs: [string, string][] = [
 	["Elections", "/elections/"],
 	[`${race.cycle}`, `/${race.cycle}/`],
+	...(race.kind === "house" ? [[`${race.state} House`, `/${race.cycle}/house/${statePath(race.st).split("/")[2]}/`] as [string, string]] : []),
 	[race.kind === "control" ? `${officeName} control` : race.kind === "house" ? race.label : `${race.state} ${officeName}`, path],
 ];
 const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;

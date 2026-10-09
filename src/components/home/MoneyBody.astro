@@ -65,7 +65,7 @@ import { PLANS } from "../../lib/plans";
 					);
 				}) : <p class="empty-note">No trades recorded {period.since}.</p>}
 				{big.length > FREE_TRADES && (
-					<div data-more-trades data-kind="home" data-since={period.ts} set:html={gateHtml("trades", PLANS.anon, big.slice(0, FREE_TRADES).map((t) => homeTradeRow(t, byId)).join(""), "/")} />
+					<div data-more-trades data-kind="home" data-since={period.ts} set:html={PLANS.anon.archive ? "" : gateHtml("trades", PLANS.anon, big.slice(0, FREE_TRADES).map((t) => homeTradeRow(t, byId)).join(""), "/")} />
 				)}
 			</div>
 		</div>

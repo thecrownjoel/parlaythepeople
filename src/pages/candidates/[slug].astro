@@ -1,80 +1,115 @@
 ---
 /**
- * One candidate: /candidates/susan-collins/. Their odds in every race and presidential market, the money (FEC),
- * polls, social buzz (LunarCrush) and headlines that name them. Answer first.
+ * One person: /candidates/susan-collins/. Everyone running for the House, Senate or governor and every sitting member
+ * of Congress (lib/people.ts). A short about, then the voting record for members of Congress (lib/votes.ts), their odds
+ * in every market, the money (FEC), polls, social buzz (LunarCrush) and headlines that name them.
  */
 import Base from "../../layouts/Base.astro";
 import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
-import { findCandidate, allCandidates, candidatePath, entryLabel, entryPath, type CandidateEntry } from "../../lib/candidates";
-import { getIndex, pct, PARTY_WORD, candidate as raceCandidate } from "../../lib/markets";
-import { raceFinance, matchFec, fecName, fecUrl, usd, asOfReport } from "../../lib/fec";
+import { entryLabel, entryPath, type CandidateEntry } from "../../lib/candidates";
+import { findPerson, allPeople, personPath, runLabel, officeWord, type Person, type Run } from "../../lib/people";
+import { getIndex, pct, PARTY_WORD } from "../../lib/markets";
+import { raceFinance, matchFec, fecCandidate, fecName, fecUrl, usd, asOfReport } from "../../lib/fec";
 import { pollAverage } from "../../lib/polls";
 import { getSocial, pulseIndex, compact } from "../../lib/social";
 import { organization, breadcrumbs, faq, graph, SITE_NAME } from "../../lib/site";
 import { env } from "cloudflare:workers";
 import CongressRecord from "../../components/CongressRecord.astro";
-import { memberByName, billsBy, memberUrl, seatWord } from "../../lib/congress";
+import VotingRecord from "../../components/VotingRecord.astro";
+import { billsBy, memberUrl, seatWord } from "../../lib/congress";
+import { voteStats } from "../../lib/votes";
+import { STATES } from "../../lib/states";
 import "../../styles/data.css";
 
-const c = await findCandidate(Astro.params.slug ?? "");
-if (!c) return Astro.rewrite("/404");
+const person = await findPerson(Astro.params.slug ?? "");
+if (!person) return Astro.rewrite("/404");
 Astro.response.headers.set("cache-control", "public, max-age=300");
+const c = person.candidate;
+const name = person.name;
 const origin = Astro.url.origin;
-const path = candidatePath(c);
+const path = personPath(person);
 const index = await getIndex();
 const asOf = new Date(index?.generated ?? Date.now()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
-const party = c.party ? PARTY_WORD[c.party as "D" | "R" | "I"] ?? null : null;
-const main = c.entries[0];
-const last = c.name.trim().split(/\s+/).pop()!;
+const party = person.party ? PARTY_WORD[person.party as "D" | "R" | "I"] ?? null : null;
+const member = person.member;
+const last = name.trim().split(/\s+/).filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop()!;
 const srcs = (e: CandidateEntry) => [e.k != null && `Kalshi ${pct(e.k)}`, e.p != null && `Polymarket ${pct(e.p)}`].filter(Boolean).join(", ");
-const lede = `As of ${asOf}, prediction markets give ${c.name}${party ? ` (${party})` : ""} a ${pct(main.chance)} chance of winning the ${entryLabel(main)} (${srcs(main)}).`
-	+ (c.entries.length > 1 ? ` ${c.name} also appears in ${c.entries.length - 1} other market${c.entries.length > 2 ? "s" : ""} below.` : "");
+const runs = person.runs.filter((r) => r.office !== "president" || c);
+const runText = (r: Run) => `${r.incumbent ? "running for re-election to" : "running for"} ${r.office === "governor" ? `governor of ${STATES[r.st ?? ""] ?? r.st}` : r.office === "house" ? `the U.S. House in ${r.st}-${Number(r.district) ? Number(r.district) : "AL"}` : r.office === "senate" ? `the U.S. Senate in ${STATES[r.st ?? ""] ?? r.st}` : "president"} in ${r.cycle}`;
 
-// money, polls and opponents for each race this candidate is in
-const raceEntries = c.entries.filter((e) => e.kind === "race");
-const finance = await Promise.all(raceEntries.map(async (e) => matchFec((await raceFinance(e.race!)) ?? [], c.name)));
-const polls = await Promise.all(raceEntries.map(async (e) => {
-	const a = await pollAverage(e.race!.id);
+// the about line: who they are, what they're running for, and the odds when a market lists them
+const main = c?.entries[0];
+const stats = member ? await voteStats(member.bioguide, member.party) : null;
+const about = [
+	`${name}${party ? ` (${party})` : ""}${member ? ` is the ${seatWord(member)}${member.since ? `, in Congress since ${member.since}` : ""}` : ""}${member && runs.length ? ", and is" : runs.length ? " is" : ""}${runs.length ? ` ${runs.slice(0, 2).map(runText).join(" and ")}` : member ? "" : ""}.`,
+	main ? `Prediction markets give ${last} a ${pct(main.chance)} chance of winning the ${entryLabel(main)} as of ${asOf} (${srcs(main)}).` : "",
+	member && !runs.length ? `${last} is not on the ballot this cycle.` : "",
+].filter(Boolean).join(" ");
+
+// money, polls and opponents for each race this person is in
+const raceRuns = runs.filter((r) => r.race);
+const finance = c
+	? await Promise.all(c.entries.filter((e) => e.kind === "race").map(async (e) => matchFec((await raceFinance(e.race!)) ?? [], c.name)))
+	: [];
+const fin = finance.find(Boolean) ?? (person.fec[0] ? await fecCandidate([...person.fec].sort((a, b) => b.receipts - a.receipts)[0].cand_id, person.fec[0].cycle) : null);
+const polls = await Promise.all(raceRuns.map(async (r) => {
+	const a = await pollAverage(r.race!.id);
 	if (!a) return null;
 	const mine = a.d_name.toLowerCase().includes(last.toLowerCase()) ? "d" : a.r_name.toLowerCase().includes(last.toLowerCase()) ? "r" : null;
-	return mine ? { a, mine: mine as "d" | "r" } : null;
+	return mine ? { a, mine: mine as "d" | "r", r } : null;
 }));
-const all = await allCandidates();
-const opponents = raceEntries.flatMap((e) => all.filter((o) => o.key !== c.key && o.entries.some((x) => x.race?.id === e.race!.id)).map((o) => ({ o, race: e.race! })));
-const pulse = pulseIndex(await getSocial())(c.name);
+const everyone = await allPeople();
+const sameRace = (a: Run, b: Run) => a.office === b.office && a.cycle === b.cycle && a.st === b.st && (a.office !== "house" || Number(a.district ?? 0) === Number(b.district ?? 0));
+const opponents = runs.filter((r) => r.office !== "president").flatMap((r) => everyone
+	.filter((o) => o !== person && o.runs.some((x) => sameRace(x, r)))
+	.map((o) => ({ o, r, chance: o.candidate?.entries.find((e) => e.race && r.race && e.race.id === r.race.id)?.chance ?? null, raised: o.fec.reduce((a, f) => Math.max(a, f.receipts), 0) })))
+	.sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1) || b.raised - a.raised)
+	.slice(0, 12);
+const pulse = pulseIndex(await getSocial())(name);
 let news: { title: string; source: string | null; url: string; published: number | null }[] = [];
 try {
 	news = (await env.MARKETS.prepare("SELECT title, source, url, published FROM news WHERE title LIKE ? ORDER BY COALESCE(published, first_seen) DESC LIMIT 8").bind(`%${last}%`).all<any>()).results ?? [];
 	news = news.filter((n) => new RegExp(`\\b${last.replace(/[^A-Za-z-]/g, "")}\\b`).test(n.title));
 } catch { /* no headline archive */ }
 const day = (t: number | null) => (t ? new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }) : "");
-const fin = finance.find(Boolean);
-// a sitting member of Congress: their record from Congress.gov (state from any of their races)
-const member = await memberByName(c.name, c.state ?? raceEntries.find((e) => e.race)?.race!.st ?? null);
-const memberBills = member ? await billsBy(member.bioguide, 8) : [];
+const memberBills = member ? await billsBy(member.bioguide, 6) : [];
 
-const title = `${c.name} odds: ${entryLabel(main).replace(/ race$/, "")}`;
-const description = lede.length > 158 ? lede.slice(0, 155).replace(/\s\S*$/, "") + "…" : lede;
+const title = member ? `${name}: voting record${runs.length ? ` and ${runs[0].cycle} race` : ""}` : main ? `${name} odds: ${entryLabel(main).replace(/ race$/, "")}` : runs.length ? `${name}: ${runLabel(runs[0]).replace(/ race$/, "")} candidate` : name;
+const description = about.length > 158 ? about.slice(0, 155).replace(/\s\S*$/, "") + "…" : about;
 const ld = graph(
 	organization(origin),
-	breadcrumbs(origin, [["Candidates", "/candidates/"], [c.name, path]]),
-	{ "@type": "Person", "@id": `${origin}${path}#person`, name: c.name, url: `${origin}${path}`, ...(member ? { jobTitle: seatWord(member), sameAs: [memberUrl(member), member.website].filter(Boolean), ...(member.photo ? { image: member.photo } : {}) } : {}), ...(party ? { affiliation: { "@type": "PoliticalParty", name: `${party === "independent" ? "Independent" : party === "Democrat" ? "Democratic Party" : "Republican Party"}` } } : {}) },
-	faq(c.entries.slice(0, 4).map((e) => [`What are ${c.name}'s chances of winning the ${entryLabel(e)}?`, `As of ${asOf}, prediction markets give ${c.name} a ${pct(e.chance)} chance (${srcs(e)}).`] as [string, string])
-		.concat(member ? [[`Is ${c.name} in Congress?`, `Yes. ${c.name} is the ${seatWord(member)}${member.since ? `, in Congress since ${member.since}` : ""}${member.sponsored != null ? `, and has sponsored ${member.sponsored.toLocaleString("en-US")} bills` : ""}, according to Congress.gov.`] as [string, string]] : [])
-		.concat(fin ? [[`How much money has ${c.name} raised?`, `${c.name}'s campaign has raised ${usd(fin.receipts)} and has ${usd(fin.cash)} cash on hand, through ${asOfReport(fin.coverage_end)}, according to the FEC.`]] : [])),
+	breadcrumbs(origin, [["Candidates", "/candidates/"], [name, path]]),
+	{ "@type": "Person", "@id": `${origin}${path}#person`, name, url: `${origin}${path}`, ...(member ? { jobTitle: seatWord(member), sameAs: [memberUrl(member), member.website].filter(Boolean), ...(member.photo ? { image: member.photo } : {}) } : {}), ...(party ? { affiliation: { "@type": "PoliticalParty", name: `${party === "independent" ? "Independent" : party === "Democrat" ? "Democratic Party" : "Republican Party"}` } } : {}) },
+	faq(([] as [string, string][])
+		.concat(member && stats ? [[`How does ${name} vote?`, `${name} has voted on ${stats.total.toLocaleString("en-US")} roll calls this Congress, missing ${Math.round((stats.missed / stats.total) * 1000) / 10}%, and sided with most of their party ${stats.partyVotes ? Math.round((stats.withParty / stats.partyVotes) * 1000) / 10 : 0}% of the time on party-line votes, according to official roll-call records.`] as [string, string]] : [])
+		.concat((c?.entries ?? []).slice(0, 3).map((e) => [`What are ${name}'s chances of winning the ${entryLabel(e)}?`, `As of ${asOf}, prediction markets give ${name} a ${pct(e.chance)} chance (${srcs(e)}).`] as [string, string]))
+		.concat(member ? [[`Is ${name} in Congress?`, `Yes. ${name} is the ${seatWord(member)}${member.since ? `, in Congress since ${member.since}` : ""}${member.sponsored != null ? `, and has sponsored ${member.sponsored.toLocaleString("en-US")} bills` : ""}, according to Congress.gov.`] as [string, string]] : [])
+		.concat(fin ? [[`How much money has ${name} raised?`, `${name}'s campaign has raised ${usd(fin.receipts)} and has ${usd(fin.cash)} cash on hand, through ${asOfReport(fin.coverage_end)}, according to the FEC.`] as [string, string]] : [])),
 );
+const credit = (member?.photo_credit ?? "").replace(/<[^>]+>/g, "").trim();
 ---
 <Base title={title} description={description} canonical={`${origin}${path}`} modifiedTime={index?.generated}>
 	<JsonLd slot="head" data={ld} />
 	<article class="dp cand">
-		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href="/candidates/">Candidates</a></nav>
-		<header class="dp-head">
-			<p class="eyebrow">{party ?? "Candidate"}{c.state ? ` · ${c.state}` : ""}</p>
-			<h1>{c.name}</h1>
-			<p class="lede">{lede}</p>
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href="/candidates/">Candidates</a>{person.state && STATES[person.state] && <> / <a href={`/states/${STATES[person.state].toLowerCase().replace(/\s+/g, "-")}/`}>{STATES[person.state]}</a></>}</nav>
+		<header class="dp-head cd-head">
+			{member?.photo && <img class="cd-photo" src={member.photo} alt={`${name}, official portrait`} width="96" height="118" title={credit || undefined} />}
+			<div>
+				<p class="eyebrow">{party ?? "Candidate"}{person.state ? ` · ${STATES[person.state] ?? person.state}` : ""}{member ? ` · ${member.chamber === "senate" ? "Senator" : "Representative"}` : ""}</p>
+				<h1>{name}</h1>
+				<p class="lede">{about}</p>
+				{runs.length > 0 && (
+					<p class="cd-runs">{runs.map((r) => r.race ? <a href={r.race.path}>{runLabel(r)} →</a> : r.office === "president" ? <a href={`/${r.cycle}/president/`}>{runLabel(r)} →</a> : <span>{runLabel(r)}</span>)}</p>
+				)}
+			</div>
 		</header>
 
+		{member && <VotingRecord member={member} url={Astro.url} />}
+
+		{member && <CongressRecord member={member} bills={memberBills} heading="In Congress" />}
+
+		{c && (
 		<section class="panel">
 			<h2>Odds in every market</h2>
 			<div class="fin-scroll">
@@ -93,8 +128,7 @@ const ld = graph(
 			</div>
 			<p class="sec-note">Chance = this candidate's share of each market's prices, averaged across the exchanges that list it.</p>
 		</section>
-
-		{member && <CongressRecord member={member} bills={memberBills} />}
+		)}
 
 		{fin && (
 			<section class="panel">
@@ -113,8 +147,8 @@ const ld = graph(
 		{polls.some(Boolean) && (
 			<section class="panel">
 				<h2>Polls</h2>
-				{polls.map((x, i) => x && (
-					<p>In the <a href={raceEntries[i].race!.path}>{entryLabel(raceEntries[i])}</a>, the Parlay polling average has {c.name} at <b>{pct(x.mine === "d" ? x.a.d : x.a.r)}</b> against {x.mine === "d" ? x.a.r_name : x.a.d_name} at {pct(x.mine === "d" ? x.a.r : x.a.d)}, from {x.a.used} polls (newest ended {x.a.latest}).</p>
+				{polls.map((x) => x && (
+					<p>In the <a href={x.r.race!.path}>{runLabel(x.r)}</a>, the Parlay polling average has {name} at <b>{pct(x.mine === "d" ? x.a.d : x.a.r)}</b> against {x.mine === "d" ? x.a.r_name : x.a.d_name} at {pct(x.mine === "d" ? x.a.r : x.a.d)}, from {x.a.used} polls (newest ended {x.a.latest}).</p>
 				))}
 			</section>
 		)}
@@ -122,7 +156,7 @@ const ld = graph(
 		{pulse && (
 			<section class="panel">
 				<h2>Social buzz</h2>
-				<p>{compact(pulse.i24)} interactions with posts about {c.name} in the last 24 hours from {compact(pulse.contributors)} people{pulse.sentiment != null ? `; ${Math.round(pulse.sentiment)}% of posts read as positive` : ""}{pulse.wow != null ? `, ${pulse.wow >= 0 ? "up" : "down"} ${Math.abs(Math.round(pulse.wow * 100))}% on last week` : ""}.</p>
+				<p>{compact(pulse.i24)} interactions with posts about {name} in the last 24 hours from {compact(pulse.contributors)} people{pulse.sentiment != null ? `; ${Math.round(pulse.sentiment)}% of posts read as positive` : ""}{pulse.wow != null ? `, ${pulse.wow >= 0 ? "up" : "down"} ${Math.abs(Math.round(pulse.wow * 100))}% on last week` : ""}.</p>
 				{(pulse.top ?? []).length > 0 && <ul class="cd-posts">{pulse.top.slice(0, 3).map((p) => <li><a href={p.u} rel="noopener nofollow" target="_blank">{p.t}</a> <span>{p.by ?? ""}{p.net ? ` · ${p.net}` : ""}</span></li>)}</ul>}
 				<p class="sec-note">Social data from <a href="https://lunarcrush.com/?utm_source=parlaythepeople&utm_medium=referral&utm_campaign=data_partner" rel="noopener" target="_blank">LunarCrush</a>. Posts are what people are saying, not verified facts.</p>
 			</section>
@@ -137,18 +171,27 @@ const ld = graph(
 
 		{opponents.length > 0 && (
 			<section class="panel">
-				<h2>Running against</h2>
-				<ul class="mk-rel">{opponents.map(({ o, race }) => <li><a href={candidatePath(o)}>{o.name}</a><b>{pct(o.entries.find((x) => x.race?.id === race.id)!.chance)}</b></li>)}</ul>
+				<h2>Also running</h2>
+				<ul class="mk-rel">{opponents.map(({ o, r, chance, raised }) => <li><span><a href={personPath(o)}>{o.name}</a>{o.party && <span class={`cd-p cd-${o.party}`}>{o.party}</span>}{runs.length > 1 && <span class="cd-in"> · {runLabel(r)}</span>}</span><b>{chance != null ? pct(chance) : raised > 0 ? `${usd(raised)} raised` : ""}</b></li>)}</ul>
 			</section>
 		)}
-		<p class="sec-note" style="font-size:12.5px">Market prices from Kalshi and Polymarket, collected every 10 minutes. Research, not betting advice.</p>
-		<Discussion title="Talk about this candidate" />
+		<p class="sec-note" style="font-size:12.5px">{c ? "Market prices from Kalshi and Polymarket, collected every 10 minutes. " : ""}Candidates from the FEC and the exchanges; votes from official House and Senate records. Research, not betting advice.</p>
+		<Discussion title={`Talk about ${name}`} />
 	</article>
 </Base>
 
 <style>
 	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
 	.mk-crumbs a { color: var(--color-text-secondary); }
+	.cd-head { display: flex; gap: 18px; align-items: flex-start; }
+	.cd-photo { width: 96px; height: auto; border-radius: 10px; border: 1px solid var(--color-border); flex: none; }
+	.cd-runs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; font-size: 14px; }
+	.cd-runs a { color: var(--color-text); font-weight: 600; }
+	.cd-runs span { color: var(--color-muted); }
+	.cd-p { margin-left: 8px; font: 700 10px var(--font-mono), monospace; padding: 1px 5px; border-radius: 5px; background: var(--color-border); }
+	.cd-D { color: #fff; background: var(--bt-d, #2f6bd8); } .cd-R { color: #fff; background: var(--bt-r, #d8432f); }
+	.cd-in { color: var(--color-muted); font-size: 13px; }
+	@media (max-width: 560px) { .cd-head { flex-direction: column; } .cd-photo { width: 80px; } }
 	.fin-scroll { overflow-x: auto; }
 	.cd-t { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 480px; }
 	.cd-t th, .cd-t td { padding: 9px 8px; border-bottom: 1px solid var(--color-border-subtle); text-align: right; }

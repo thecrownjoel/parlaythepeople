@@ -93,7 +93,7 @@ const ACTION: Record<string, string> = { ask: "Question", deep: "Deep analysis",
 					)}
 					{!paid && <p class="acct-quiet"><a href="/pro/">Pro</a> adds a morning briefing and alerts on the races you follow.</p>}
 				</section>
-				{a.plan.archive && (
+				{a.plan.proTools && (
 					<section class="panel acct-panel" data-keys>
 						<h2>Data API keys</h2>
 						<p class="acct-quiet" style="margin:0">Send <code>Authorization: Bearer ptp_…</code> with requests to <a href="/data/">the data API</a> to get your plan's full history and downloads from scripts and spreadsheets. Each key is shown once.</p>

@@ -1,0 +1,122 @@
+---
+/**
+ * Every House race in one state: /2026/house/ohio/ (the race route rewrites here when the place is a state, not a
+ * district). Each district: the market favorite, who holds the seat, and everyone running, linked to their pages.
+ */
+import Base from "../../../../layouts/Base.astro";
+import JsonLd from "../../../../components/JsonLd.astro";
+import { getCycle, consensus, candidate, pct, PARTY_WORD, daysUntil, fmtDate, type Race } from "../../../../lib/markets";
+import { stateFromSlug, statePath, STATES } from "../../../../lib/states";
+import { allPeople, personPath, type Person } from "../../../../lib/people";
+import { displayName } from "../../../../lib/congress";
+import { usd } from "../../../../lib/fec";
+import { organization, breadcrumbs, graph, faq } from "../../../../lib/site";
+import "../../../../styles/data.css";
+
+const { cycle, state } = Astro.params;
+const st = stateFromSlug(state ?? "");
+const data = /^\d{4}$/.test(cycle ?? "") && st ? await getCycle(Number(cycle)) : null;
+if (!st || !data) return Astro.rewrite("/404");
+const races = data.races.filter((r) => r.kind === "house" && r.st === st)
+	.sort((a, b) => Number(a.dist ?? 0) - Number(b.dist ?? 0) || (a.special ? 1 : 0) - (b.special ? 1 : 0));
+if (!races.length) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=300");
+
+const name = STATES[st];
+const origin = Astro.url.origin;
+const path = `/${cycle}/house/${state}/`;
+const people = await allPeople();
+const dnum = (d: string | null) => (d && /^\d+$/.test(d) ? Number(d) : 0);
+const inDistrict = (r: Race) => people
+	.map((p) => ({ p, run: p.runs.find((x) => x.office === "house" && x.cycle === r.cycle && x.st === st && dnum(x.district) === dnum(r.dist)) }))
+	.filter((x) => x.run)
+	.map(({ p, run }) => ({ p, incumbent: !!run!.incumbent, chance: p.candidate?.entries.find((e) => e.race?.id === r.id)?.chance ?? null, raised: p.fec.filter((f) => f.office === "H").reduce((a, f) => Math.max(a, f.receipts), 0) }))
+	.sort((a, b) => (b.chance ?? -1) - (a.chance ?? -1) || Number(b.incumbent) - Number(a.incumbent) || b.raised - a.raised)
+	.slice(0, 10);
+const holder = (r: Race): Person | null => people.find((p) => p.member?.chamber === "house" && p.member.state === st && dnum(String(p.member.district ?? 0)) === dnum(r.dist)) ?? null;
+const rows = races.map((r) => {
+	const c = consensus(r);
+	const priced = !!(r.k || r.p);
+	const fav = candidate(r, c.lead as "D" | "R" | "I");
+	return { r, c, priced, fav, holder: holder(r), field: inDistrict(r) };
+});
+const priced = rows.filter((x) => x.priced);
+const seats = { D: priced.filter((x) => x.c.lead === "D").length, R: priced.filter((x) => x.c.lead === "R").length };
+const close = priced.filter((x) => x.c.lp < 0.65);
+const held = { D: rows.filter((x) => x.holder?.party === "D").length, R: rows.filter((x) => x.holder?.party === "R").length };
+const eday = data.meta.election_day;
+const days = daysUntil(eday);
+const distLabel = (r: Race) => `${st}-${dnum(r.dist) || "AL"}${r.special ? " (special)" : ""}`;
+const lede = `${name} elects ${races.filter((r) => !r.special).length} members of the U.S. House on ${fmtDate(eday)}${days > 0 ? `, ${days} days from now` : ""}. Republicans hold ${held.R} of the seats and Democrats ${held.D} today.`
+	+ (priced.length ? ` Prediction markets favor Republicans in ${seats.R} districts and Democrats in ${seats.D}${close.length ? `; ${close.length === 1 ? "one is" : `${close.length} are`} competitive (favorite under 65%)` : ""}.` : "");
+const title = `${cycle} ${name} House races: every district, candidates and odds`;
+const ld = graph(
+	organization(origin),
+	breadcrumbs(origin, [[String(cycle), `/${cycle}/`], [name, statePath(st)], ["House", path]]),
+	{ "@type": "CollectionPage", "@id": `${origin}${path}#page`, url: `${origin}${path}`, name: title, description: lede,
+		mainEntity: { "@type": "ItemList", numberOfItems: rows.length, itemListElement: rows.map((x, i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${x.r.path}`, name: `${distLabel(x.r)} House race` })) } },
+	faq([
+		[`How many House seats does ${name} have?`, `${name} has ${races.filter((r) => !r.special).length} seats in the U.S. House. Republicans hold ${held.R} and Democrats hold ${held.D}.`],
+		...(close.length ? [[`Which ${name} House races are competitive in ${cycle}?`, `${close.map((x) => `${distLabel(x.r)} (${x.fav ?? PARTY_WORD[x.c.lead]} ${pct(x.c.lp)})`).join(", ")}, by prediction market odds.`] as [string, string]] : []),
+	]),
+);
+---
+<Base title={title} description={lede.slice(0, 158)} canonical={`${origin}${path}`} modifiedTime={data.meta.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp hh" style="max-width:1000px">
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href={`/${cycle}/`}>{cycle}</a> / <a href={statePath(st)}>{name}</a> / House</nav>
+		<header class="dp-head">
+			<p class="eyebrow">{cycle} · U.S. House · {name}</p>
+			<h1>{name} House races</h1>
+			<p class="lede">{lede}</p>
+		</header>
+
+		<section class="panel">
+			<h2>Every district</h2>
+			<ol class="hh-list">
+				{rows.map(({ r, c, priced, fav, holder, field }) => (
+					<li class="hh-row">
+						<div class="hh-top">
+							<a class="hh-d" href={r.path}>{distLabel(r)}</a>
+							{priced
+								? <span class={`hh-fav hh-${c.lead}`}>{fav ?? PARTY_WORD[c.lead]} {pct(c.lp)}</span>
+								: <span class="hh-fav">No market yet</span>}
+						</div>
+						{holder && (
+							<p class="hh-holder">Held by <a href={personPath(holder)}>{holder.member ? displayName(holder.member) : holder.name}</a> ({holder.party}){holder.runs.some((x) => x.office === "house" && x.cycle === r.cycle) ? "" : holder.runs.length ? ", running for another office" : ", not on the ballot"} · <a href={`${personPath(holder)}#votes`}>voting record</a></p>
+						)}
+						{field.length > 0 && (
+							<ul class="hh-field">
+								{field.map((x) => (
+									<li><a href={personPath(x.p)}>{x.p.name}</a>{x.p.party && <span class={`hh-p hh-${x.p.party}`}>{x.p.party}</span>}{x.incumbent && <span class="hh-inc">incumbent</span>}<b>{x.chance != null ? pct(x.chance) : x.raised > 0 ? usd(x.raised) : ""}</b></li>
+								))}
+							</ul>
+						)}
+					</li>
+				))}
+			</ol>
+			<p class="sec-note">Odds are each district's market favorite on Kalshi and Polymarket; dollar figures are money raised this cycle (FEC) for candidates the exchanges don't list. Every name links to a page with their record.</p>
+		</section>
+		<p class="sec-note"><a href={statePath(st)}>Everything in {name} →</a> · <a href={`/${cycle}/house/`}>Every state's House races →</a></p>
+	</div>
+</Base>
+
+<style>
+	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
+	.mk-crumbs a { color: var(--color-text-secondary); }
+	.hh-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+	.hh-row { border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; background: var(--color-surface); }
+	.hh-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+	.hh-d { font-size: 17px; font-weight: 700; color: var(--color-text); }
+	.hh-fav { font: 600 13px var(--font-mono), monospace; color: var(--color-muted); text-align: right; }
+	.hh-fav.hh-D { color: var(--bt-d, #2f6bd8); } .hh-fav.hh-R { color: var(--bt-r, #d8432f); }
+	.hh-holder { margin: 6px 0 0; font-size: 13px; color: var(--color-text-secondary); }
+	.hh-holder a { color: var(--color-text); }
+	.hh-field { list-style: none; padding: 0; margin: 8px 0 0; border-top: 1px solid var(--color-border-subtle); }
+	.hh-field li { display: flex; align-items: center; gap: 6px; padding: 5px 0; font-size: 14px; }
+	.hh-field a { color: var(--color-text); }
+	.hh-field b { margin-left: auto; font: 600 12.5px var(--font-mono), monospace; }
+	.hh-p { font: 700 10px var(--font-mono), monospace; padding: 1px 5px; border-radius: 5px; background: var(--color-border); }
+	span.hh-p.hh-D { color: #fff; background: var(--bt-d, #2f6bd8); } span.hh-p.hh-R { color: #fff; background: var(--bt-r, #d8432f); }
+	.hh-inc { font-size: 11px; color: var(--color-muted); }
+</style>

@@ -38,7 +38,7 @@ async function writersPage(): Promise<Res> {
 	const writers = await listWriters();
 	const weekAgo = now() - 7 * DAY;
 	const rows = await Promise.all(writers.map(async (w) => ({
-		name: w.name, kind: w.kind === "ai" ? "AI writer" : "Human", beats: w.beats.map((b) => BEATS[b] ?? b).join(", "), where: [...w.geography, ...w.places].join(", "),
+		name: w.name, kind: w.kind === "ai" ? "AI Contributor" : "Human", beats: w.beats.map((b) => BEATS[b] ?? b).join(", "), where: [...w.geography, ...w.places].join(", "),
 		lens: perspectiveOf(w.perspective).label, pace: `${w.cadence.per_week}/wk`, week: await storiesSince(w.id, weekAgo),
 		spent: w.kind === "ai" ? `${usd(await spentCents(w.id))} of ${usd(w.budget_cents)}` : "—",
 		status: !w.active ? "Off" : w.vacation_until && w.vacation_until > now() ? "Vacation" : "Active",
@@ -61,10 +61,10 @@ async function writersPage(): Promise<Res> {
 					{ key: "lens", label: "Perspective", format: "badge" }, { key: "pace", label: "Pace" }, { key: "week", label: "This week", format: "number" },
 					{ key: "spent", label: "AI this month" }, { key: "status", label: "Status", format: "badge" }, { key: "edit", label: "", format: "element" },
 				], rows }
-				: { type: "empty", title: "No writers yet", description: "Hire your first AI writer below: the newsroom invents a name, bio, voice and portrait." },
+				: { type: "empty", title: "No writers yet", description: "Hire your first AI contributor below: the newsroom invents a name, bio, voice and portrait." },
 			{ type: "divider" },
-			{ type: "header", text: "Hire an AI writer" },
-			{ type: "context", text: "Workers AI invents a fictional person (name, age, hometown, bio, voice) and FLUX paints a photorealistic portrait of someone who doesn't exist. AI writers carry an AI-writer label on their byline and author page. Takes about 30 seconds." },
+			{ type: "header", text: "Hire an AI contributor" },
+			{ type: "context", text: "Workers AI invents a fictional person (name, age, hometown, bio, voice) and FLUX paints a photorealistic portrait of someone who doesn't exist. AI contributors are titled \"AI Contributor\" on their author page. Takes about 30 seconds." },
 			{ type: "form", block_id: "hire", fields: [
 				{ type: "checkbox", action_id: "beats", label: "Beats", options: opts(BEATS), initial_value: ["senate", "markets"] },
 				{ type: "text_input", action_id: "geography", label: "Coverage: US for national, or state codes", placeholder: "US  or  OH, MI", initial_value: "US" },
@@ -93,7 +93,7 @@ async function editPage(w: Writer): Promise<Res> {
 		{ type: "header", text: w.name },
 	];
 	if (photo) blocks.push({ type: "columns", columns: [[{ type: "image", url: photo, alt: `${w.name}, portrait` }], [{ type: "fields", fields: [
-		{ label: "Kind", value: w.kind === "ai" ? "AI writer (fictional persona)" : "Human writer" }, { label: "Age", value: String(w.age ?? "—") },
+		{ label: "Kind", value: w.kind === "ai" ? "AI Contributor (fictional persona)" : "Human writer" }, { label: "Age", value: String(w.age ?? "—") },
 		{ label: "Perspective", value: perspectiveOf(w.perspective).label }, { label: "AI this month", value: `${usd(await spentCents(w.id))} of ${usd(w.budget_cents)}` },
 	] }]] });
 	blocks.push(

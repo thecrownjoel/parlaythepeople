@@ -1,5 +1,5 @@
 import { TOPIC_SLUG, getPolitics, marketPath } from "../lib/politics";
-import { allCandidates, candidatePath } from "../lib/candidates";
+import { allPeople, personPath } from "../lib/people";
 import { STATES, statePath } from "../lib/states";
 import { votingPath } from "../lib/history";
 import type { APIRoute } from "astro";
@@ -18,7 +18,7 @@ export const GET: APIRoute = async ({ url }) => {
 	urls.push([`${o}/track-record/`, ""], [`${o}/calendar/`, index?.generated ?? ""], [`${o}/results/2026/`, index?.generated ?? ""], [`${o}/states/`, index?.generated ?? ""], [`${o}/candidates/`, index?.generated ?? ""]);
 	for (const st of Object.keys(STATES)) urls.push([`${o}${statePath(st)}`, index?.generated ?? ""], [`${o}${votingPath(st)}`, ""]);
 	urls.push([`${o}/finance/`, index?.generated ?? ""], [`${o}/voting/`, ""]);
-	for (const c of await allCandidates()) urls.push([`${o}${candidatePath(c)}`, index?.generated ?? ""]);
+	for (const c of await allPeople()) urls.push([`${o}${personPath(c)}`, index?.generated ?? ""]);
 	// one page per politics market
 	const board = await getPolitics();
 	for (const e of board?.events ?? []) urls.push([`${o}${marketPath(e)}`, board!.generated]);

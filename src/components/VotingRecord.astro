@@ -1,0 +1,107 @@
+---
+/**
+ * A member of Congress's voting record this Congress (lib/votes.ts): how often they vote, how often with their party,
+ * and every roll call, newest first. Filters (?votes=passage|broke) and paging (?vp=2) are plain links.
+ */
+import { memberVotes, voteStats, withParty, voteUrl, billName, billLink, POSITION_WORD, type MemberVote } from "../lib/votes";
+import { displayName, type Member } from "../lib/congress";
+
+interface Props { member: Member; url: URL }
+const { member: m, url } = Astro.props;
+const PER = 40;
+const view = url.searchParams.get("votes");
+const filter = view === "passage" || view === "broke" ? view : "all";
+const page = Math.max(1, Math.min(200, Number(url.searchParams.get("vp")) || 1));
+const [stats, votes] = await Promise.all([
+	voteStats(m.bioguide, m.party),
+	memberVotes(m.bioguide, { limit: PER + 1, offset: (page - 1) * PER, passage: filter === "passage", broke: filter === "broke" ? m.party : null }),
+]);
+const more = votes.length > PER;
+const shown = votes.slice(0, PER);
+const last = displayName(m).split(/\s+/).pop();
+const side = m.party === "R" ? "Republicans" : "Democrats";
+const pctOf = (a: number, b: number) => (b ? `${Math.round((a / b) * 1000) / 10}%` : "—");
+const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
+const link = (o: { votes?: string; vp?: number }) => {
+	const u = new URL(url);
+	o.votes && o.votes !== "all" ? u.searchParams.set("votes", o.votes) : u.searchParams.delete("votes");
+	o.vp && o.vp > 1 ? u.searchParams.set("vp", String(o.vp)) : u.searchParams.delete("vp");
+	return `${u.pathname}${u.search}#votes`;
+};
+const sideOf = (v: MemberVote) => {
+	const y = m.party === "R" ? v.r_yea : v.d_yea, n = m.party === "R" ? v.r_nay : v.d_nay;
+	return y + n ? `${side}: ${y} yes, ${n} no` : "";
+};
+---
+<section class="panel vr" id="votes">
+	<h2>Voting record</h2>
+	{stats ? (
+		<>
+			<p class="vr-lede">{displayName(m)} has cast votes on {stats.total.toLocaleString("en-US")} roll calls in the {m.chamber === "senate" ? "Senate" : "House"} this Congress{stats.first ? ` (since ${date(stats.first)})` : ""}, missing {pctOf(stats.missed, stats.total)} of them. On votes that split {side}, {last} sided with most {side} {pctOf(stats.withParty, stats.partyVotes)} of the time.</p>
+			<dl class="vr-stats">
+				<div><dt>Roll calls</dt><dd>{stats.total.toLocaleString("en-US")}</dd></div>
+				<div><dt>Missed</dt><dd>{stats.missed.toLocaleString("en-US")} <small>{pctOf(stats.missed, stats.total)}</small></dd></div>
+				<div><dt>With party</dt><dd>{pctOf(stats.withParty, stats.partyVotes)}</dd></div>
+				<div><dt>Broke with party</dt><dd>{(stats.partyVotes - stats.withParty).toLocaleString("en-US")}</dd></div>
+			</dl>
+			<nav class="vr-tabs" aria-label="Filter votes">
+				<a href={link({})} aria-current={filter === "all" ? "true" : undefined}>All votes</a>
+				<a href={link({ votes: "passage" })} aria-current={filter === "passage" ? "true" : undefined}>Final votes on bills and nominations</a>
+				<a href={link({ votes: "broke" })} aria-current={filter === "broke" ? "true" : undefined}>Broke with party</a>
+			</nav>
+			{shown.length ? (
+				<ol class="vr-list">
+					{shown.map((v) => {
+						const wp = withParty(v, m.party);
+						const bill = billName(v.bill), bl = billLink(v.bill, v.congress);
+						return (
+							<li>
+								<span class={`vr-pos vr-${v.position}`}>{POSITION_WORD[v.position]}</span>
+								<div>
+									<p class="vr-q">{bill && (bl ? <a href={bl} rel="noopener" target="_blank"><b>{bill}</b></a> : <b>{bill}</b>)} {v.title ?? v.question}</p>
+									<p class="vr-meta">{date(v.date)} · {v.question} · <a href={voteUrl(v)} rel="noopener" target="_blank">{v.result ?? "Result"}{v.yea != null && v.nay != null && v.yea + v.nay > 0 ? ` ${v.yea}–${v.nay}` : ""}</a>{sideOf(v) && ` · ${sideOf(v)}`}{wp === false && <span class="vr-broke"> · Broke with party</span>}</p>
+								</div>
+							</li>
+						);
+					})}
+				</ol>
+			) : <p class="sec-note">No votes match this filter yet.</p>}
+			{(page > 1 || more) && (
+				<nav class="vr-pages" aria-label="More votes">
+					{page > 1 ? <a href={link({ votes: filter, vp: page - 1 })}>← Newer</a> : <span />}
+					<span>Page {page}</span>
+					{more ? <a href={link({ votes: filter, vp: page + 1 })}>Older →</a> : <span />}
+				</nav>
+			)}
+		</>
+	) : (
+		<p>Votes for {displayName(m)} are being collected from the {m.chamber === "senate" ? "Senate" : "House Clerk"}'s roll-call records and will appear here shortly.</p>
+	)}
+	<p class="sec-note">Official roll-call records from the {m.chamber === "senate" ? "U.S. Senate (senate.gov)" : "Clerk of the U.S. House (clerk.house.gov)"}, the same votes shown on Congress.gov. Updated through the day.</p>
+</section>
+
+<style>
+	.vr-lede { margin: 0 0 12px; line-height: 1.55; }
+	.vr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0 0 14px; }
+	.vr-stats > div { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); }
+	.vr-stats dt { font: 600 11px var(--font-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+	.vr-stats dd { margin: 4px 0 0; font-size: 18px; }
+	.vr-stats small { font-size: 12px; color: var(--color-muted); }
+	.vr-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+	.vr-tabs a { font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--color-border); color: var(--color-text-secondary); text-decoration: none; }
+	.vr-tabs a[aria-current] { background: var(--color-text); color: var(--color-bg, #fff); border-color: var(--color-text); }
+	.vr-list { list-style: none; padding: 0; margin: 0; }
+	.vr-list li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); align-items: start; }
+	.vr-pos { font: 700 11px var(--font-mono), monospace; letter-spacing: .04em; text-transform: uppercase; text-align: center; padding: 5px 4px; border-radius: 6px; border: 1px solid var(--color-border); }
+	.vr-yea { color: #1d7a46; border-color: rgb(29 122 70 / .4); background: rgb(29 122 70 / .08); }
+	.vr-nay { color: #b4322a; border-color: rgb(180 50 42 / .4); background: rgb(180 50 42 / .08); }
+	.vr-absent, .vr-present { color: var(--color-muted); }
+	.vr-q { margin: 0; line-height: 1.45; }
+	.vr-q a { color: var(--color-text); }
+	.vr-meta { margin: 3px 0 0; font-size: 12.5px; color: var(--color-muted); }
+	.vr-meta a { color: var(--color-text-secondary); }
+	.vr-broke { color: #c2410c; font-weight: 600; }
+	.vr-pages { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 14px; }
+	.vr-pages a { color: var(--color-text); }
+	@media (max-width: 560px) { .vr-list li { grid-template-columns: 70px minmax(0, 1fr); gap: 10px; } }
+</style>

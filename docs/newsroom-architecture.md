@@ -1,4 +1,4 @@
-# The Parlay Newsroom: AI writers (and real ones) as editorial staff
+# The Parlay Newsroom: AI contributors (and real writers) as editorial staff
 
 Status: built 2026-10-06 (days 1–4 of the build plan, plus forecaster ratings). Code: `src/lib/newsroom/` (engine), `src/plugins/newsroom/` (admin), `ingest/newsroom_schema.sql` (tables), `ingest/ratings.py` + `src/lib/ratings.ts` + `/forecasters/` (Cook, Sabato, Inside Elections ratings).
 
@@ -8,7 +8,7 @@ Measured in testing: a hire costs about $0.03 and takes under a minute; a story 
 
 ## What we're building
 
-A newsroom inside Parlay the People where the editor (the site owner) manages a staff of writers from the EmDash admin. Each writer has a name, photo, bio, age, beat, geography, perspective and publishing rhythm. AI writers find stories in the site's own data and in current and local news, research them with the analyst's tools, write drafts, pass an automated fact-check, and land in an editor's queue (or publish on their own, for formats the editor trusts). Human writers use the same profiles and bylines, and can use the AI desk as a research assistant.
+A newsroom inside Parlay the People where the editor (the site owner) manages a staff of writers from the EmDash admin. Each writer has a name, photo, bio, age, beat, geography, perspective and publishing rhythm. AI contributors find stories in the site's own data and in current and local news, research them with the analyst's tools, write drafts, pass an automated fact-check, and land in an editor's queue (or publish on their own, for formats the editor trusts). Human writers use the same profiles and bylines, and can use the AI desk as a research assistant.
 
 ```mermaid
 flowchart LR
@@ -60,7 +60,7 @@ To verify on day one: how a native plugin's admin page reads and writes the `new
 | --- | --- | --- |
 | Name, photo, bio | "Dana Whitfield", portrait, short bio | The byline and author page |
 | Age | 41 | Persona detail on the author page (optional) |
-| Kind | AI writer / human writer | AI writers get the AI disclosure everywhere (see Rules) |
+| Kind | AI contributor / human writer | AI contributors are titled "AI Contributor" on their author page (see Rules) |
 | Beats | Senate races, National security, Agriculture, Money in politics, Polls, World politics | Which signals and news they pick up |
 | Geography | National · Ohio · Ohio + Michigan · Cleveland | Which races, local news and state data they cover |
 | Perspective | Strong D · Lean D · Neutral · Lean R · Strong R | The lens for analysis and opinion (see below) |
@@ -110,7 +110,7 @@ Expected cost per post on GLM 5.3: about 5 to 20 cents (research, draft and chec
 
 ## Rules baked into every writer
 
-- **AI writers are disclosed.** An "AI writer" badge on bylines and author pages, and a line in the bio ("Dana is an AI writer on the Parlay Newsroom, edited by …"). Photos for AI writers are generated or illustrated portraits, never photos of real people. This keeps readers' trust, and it's what keeps a site with AI-written posts in good standing with search engines.
+- **AI contributors are disclosed on their author page.** The author page eyebrow reads "AI Contributor · Parlay Newsroom"; bylines link there. Bylines, bios and article footers carry no separate AI label. Photos are generated portraits, never photos of real people.
 - **No invented facts, quotes or sources.** If the source log doesn't support it, it doesn't run.
 - **Real people:** no unsourced claims about anyone's conduct; private individuals are left out; nothing that impersonates a real journalist or public figure.
 - **Voting information comes from official sources.** Dates, deadlines and how-to-vote details come only from the calendar and state election offices, never from the model.
@@ -159,4 +159,4 @@ newsroom_corrections (post_id, note, by, ts)
 
 - The first three writers: names, beats, geography and perspective.
 - Whether any format may auto-publish, or everything waits for approval at first (recommended: approval first).
-- Photo style for AI writers (illustrated portraits recommended).
+- Photo style for AI contributors (illustrated portraits recommended).

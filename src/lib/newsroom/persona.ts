@@ -1,8 +1,8 @@
 /**
- * Hiring an AI writer: Workers AI invents the persona (a fictional name, age, hometown, background, bio and voice) and
+ * Hiring an AI contributor: Workers AI invents the persona (a fictional name, age, hometown, background, bio and voice) and
  * FLUX.1 [schnell] paints a photorealistic portrait of a person who doesn't exist. Personas are fictional by design:
  * the prompt forbids real people's names, and the portrait prompt describes an invented face, never a real person.
- * AI writers are labeled as AI on their bylines and author pages (see docs/newsroom-architecture.md, Rules).
+ * AI contributors are titled "AI Contributor" on their author page (see docs/newsroom-architecture.md, Rules).
  */
 import { aiRun } from "../ai";
 import { costUsd, STANDARD_MODEL } from "../plans";
@@ -68,7 +68,7 @@ export function writerFromPersona(p: Persona, o: { beats: string[]; geography: s
 	const slug = p.name.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
 	return {
 		id: newId("w"), byline_id: null, name: p.name, slug, kind: "ai", age: p.age || null,
-		bio: `${p.bio.trim()}\n\n${p.name.split(/\s+/)[0]} is an AI writer on the Parlay Newsroom: a fictional persona whose stories are researched and written by AI from Parlay the People's data and cited sources, checked automatically, and reviewed by our editor.`,
+		bio: p.bio.trim(),
 		photo_media_id: null, beats: o.beats, geography: o.geography.length ? o.geography : ["US"], places: o.places, perspective: o.perspective,
 		formats: o.formats.length ? o.formats : ["brief"], cadence: { ...DEFAULT_CADENCE, per_week: o.per_week ?? DEFAULT_CADENCE.per_week }, triggers: { ...DEFAULT_TRIGGERS },
 		voice: p.voice, samples: p.samples, sources: { feeds: [], block: [] }, approval: "drafts", auto_formats: [], budget_cents: 1000,

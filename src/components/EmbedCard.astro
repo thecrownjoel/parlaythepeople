@@ -12,6 +12,7 @@ if (spark.length > 1) {
 	const t0 = spark[0].ts, t1 = spark[spark.length - 1].ts;
 	d = spark.map((p, i) => `${i ? "L" : "M"}${(((p.ts - t0) / Math.max(1, t1 - t0)) * W).toFixed(1)},${(3 + (1 - (p.v - lo) / (hi - lo)) * (H - 6)).toFixed(1)}`).join("");
 }
+const home = `${new URL(href).origin}/?utm_source=embed&utm_medium=card`;
 const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`);
 ---
 <!doctype html>
@@ -29,7 +30,10 @@ const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.ro
 		* { box-sizing: border-box; }
 		html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 		.e { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; min-height: 100vh; display: flex; flex-direction: column; gap: 10px; }
-		h1 { font-size: 16px; margin: 0; line-height: 1.3; }
+		.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+		h1 { font-size: 16px; margin: 0; line-height: 1.3; min-width: 0; }
+		.brand { flex: none; margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--mut); text-decoration: none; white-space: nowrap; }
+		.brand:hover { color: var(--fg); text-decoration: underline; }
 		h1 a { color: inherit; text-decoration: none; }
 		h1 a:hover { text-decoration: underline; }
 		ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
@@ -45,7 +49,10 @@ const pct = (p: number) => (p >= 0.995 ? ">99%" : p < 0.005 ? "<1%" : `${Math.ro
 </head>
 <body>
 	<div class="e">
-		<h1><a href={href} target="_blank" rel="noopener">{title}</a></h1>
+		<div class="top">
+			<h1><a href={href} target="_blank" rel="noopener">{title}</a></h1>
+			<a class="brand" href={home} target="_blank" rel="noopener">parlaythepeople.com</a>
+		</div>
 		<ol>{rows.map((r) => <li><span>{r.name}</span><b>{pct(r.p)}</b><i><u style={`width:${Math.max(1, r.p * 100)}%;background:${r.color}`}></u></i></li>)}</ol>
 		{d && <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Last 24 hours"><path d={d} fill="none" stroke={rows[0]?.color ?? "#5e92ee"} stroke-width="2" vector-effect="non-scaling-stroke" /></svg>}
 		<footer><span>{note}</span><a href={href} target="_blank" rel="noopener">Parlay the People ↗</a></footer>

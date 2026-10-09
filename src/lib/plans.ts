@@ -64,16 +64,21 @@ export const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 const std = { ask: STANDARD_MODEL, deep: STANDARD_MODEL };
 
+/** Temporarily open the data gates (historical data, archive, full trade lists, downloads) to everyone. The AI
+ *  analyst stays paid. Set to false to restore the Pro gates. */
+export const DATA_OPEN = true;
+const openData = DATA_OPEN ? { history: "all" as const, archive: true } : {};
+
 export const PLANS: Record<PlanId, Plan> = {
 	anon: {
 		id: "anon", name: "Public", price: 0, priceYear: 0, daily: 0, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false,
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false, ...openData,
 		blurb: "Every race, chart and poll, live, no account needed.",
 		features: ["Live odds, polls and charts for every race", "Today's view of every homepage section", "The last 7 daily reports"],
 	},
 	free: {
 		id: "free", name: "Free account", price: 0, priceYear: 0, daily: 0, seats: 1, model: std,
-		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false,
+		rounds: { ask: 6, deep: 6 }, maxTokens: { ask: 1500, deep: 1500 }, proTools: false, deep: false, history: "default", archive: false, ...openData,
 		blurb: "Sign up with your email. No card, no password.",
 		features: ["Everything public", "Followed races on every device", "One click to Pro when you want history and the AI analyst"],
 	},

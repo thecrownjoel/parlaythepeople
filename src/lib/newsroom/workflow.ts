@@ -81,10 +81,9 @@ export class NewsroomWorkflow extends WorkflowEntrypoint<Env, { assignmentId: st
 				const line = draft!.label === "perspective" ? perspectiveOf(w.perspective).line(w.name.split(/\s+/)[0]) : null;
 				const label = draft!.label === "perspective" ? "**Perspective.**" : "";
 				const head = [label, line].filter(Boolean).join(" ");
-				const auto = w.approval === "auto" && w.auto_formats.includes(job.format);
 				post = await createDraft({
 					title: draft!.headline, excerpt: draft!.dek, bylineId: w.byline_id,
-					markdown: `${head ? `*${head.replace(/\*\*/g, "")}*\n\n` : ""}${cleanBody(draft!.body)}\n\n*${w.name} is an AI writer on the Parlay Newsroom. This story was researched and written by AI from Parlay the People's data and the sources linked above, ${auto ? "and checked automatically against those sources before publishing" : "checked automatically, and reviewed by our editor"}. Research, not betting advice.*`,
+					markdown: `${head ? `*${head.replace(/\*\*/g, "")}*\n\n` : ""}${cleanBody(draft!.body)}\n\n*Research, not betting advice.*`,
 					category: draft!.category, tags: draft!.tags,
 				});
 			}

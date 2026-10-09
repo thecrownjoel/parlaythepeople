@@ -240,3 +240,22 @@ CREATE TABLE IF NOT EXISTS congress_bills (
 );
 CREATE INDEX IF NOT EXISTS congress_bills_sponsor ON congress_bills (sponsor, introduced);
 CREATE INDEX IF NOT EXISTS congress_bills_action ON congress_bills (latest_action_date);
+-- Roll-call votes in the current Congress (ingest/votes.py; House Clerk and senate.gov XML, public domain) and how
+-- every member voted. Party tallies are counted from the member votes (D/R yea and nay).
+CREATE TABLE IF NOT EXISTS congress_votes (
+  id TEXT PRIMARY KEY,          -- h-119-2-74 | s-119-2-256
+  chamber TEXT, congress INTEGER, session INTEGER, roll INTEGER,
+  date TEXT,                    -- YYYY-MM-DD
+  question TEXT, title TEXT, result TEXT,
+  bill TEXT,                    -- as the chamber writes it: "H RES 1075", "S. 5", "PN1129"
+  yea INTEGER, nay INTEGER, present INTEGER, absent INTEGER,
+  d_yea INTEGER, d_nay INTEGER, r_yea INTEGER, r_nay INTEGER,
+  updated INTEGER
+);
+CREATE INDEX IF NOT EXISTS congress_votes_date ON congress_votes (chamber, date);
+CREATE TABLE IF NOT EXISTS congress_member_votes (
+  vote_id TEXT NOT NULL, bioguide TEXT NOT NULL,
+  position TEXT,                -- yea | nay | present | absent
+  PRIMARY KEY (bioguide, vote_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS congress_member_votes_vote ON congress_member_votes (vote_id);

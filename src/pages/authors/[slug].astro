@@ -16,7 +16,8 @@ const staff = await writerByByline(author.id).catch(() => null);
 const isAI = staff?.kind === "ai";
 const avatar = author.avatarStorageKey ? `/_emdash/api/media/file/${author.avatarStorageKey}` : null;
 const bio = (author.bio ?? "").trim();
-const paras = bio ? bio.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) : [];
+// older AI personas carry a disclosure paragraph in the stored bio; the eyebrow title replaces it
+const paras = bio ? bio.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p && !/ is an AI writer on the Parlay Newsroom/.test(p)) : [];
 const summary = paras[0] ?? `Articles by ${author.displayName} on ${SITE_NAME}.`;
 const initials = author.displayName.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const website = author.websiteUrl && !author.websiteUrl.startsWith(origin) && !author.websiteUrl.includes("parlaythepeople.com") ? author.websiteUrl : null;
@@ -52,8 +53,8 @@ const ld = graph(
 				? <img class="au-photo" src={avatar} alt={author.displayName} width="168" height="168" />
 				: <span class="au-photo au-initials" aria-hidden="true">{initials}</span>}
 			<div class="au-intro">
-				<p class="eyebrow">{isAI ? "AI writer · Parlay Newsroom" : staff ? "Staff writer · Parlay Newsroom" : `Author · ${SITE_NAME}`}</p>
-				<h1>{author.displayName}{isAI && <span class="ai-badge" title={staff?.approval === "auto" ? "Stories are researched and written by AI from cited sources and checked automatically before publishing" : "Stories are researched and written by AI from cited sources, checked automatically, and reviewed by our editor"}>AI writer</span>}</h1>
+				<p class="eyebrow">{isAI ? "AI Contributor · Parlay Newsroom" : staff ? "Staff writer · Parlay Newsroom" : `Author · ${SITE_NAME}`}</p>
+				<h1>{author.displayName}</h1>
 				{staff && (
 					<p class="au-meta">
 						{staff.age ? <>{staff.age} · </> : null}{staff.beats.map((b) => BEATS[b] ?? b).join(", ")}{staff.geography.length && !staff.geography.includes("US") ? <> · {staff.geography.join(", ")}</> : null}{staff.perspective !== 0 ? <> · writes from a {perspectiveOf(staff.perspective).label === "Strong D" ? "progressive" : perspectiveOf(staff.perspective).label === "Lean D" ? "center-left" : perspectiveOf(staff.perspective).label === "Lean R" ? "center-right" : "conservative"} perspective</> : null}
@@ -99,7 +100,6 @@ const ld = graph(
 	.au-initials { display: grid; place-items: center; font-family: var(--font-display); font-size: 56px; font-weight: 700; color: var(--color-text-secondary); }
 	.au-intro { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 	.au-meta { margin: 0; color: var(--color-text-secondary); font-size: 15px; }
-	.ai-badge { display: inline-block; vertical-align: middle; margin-left: 12px; font: 600 12px/1 var(--font-mono), monospace; letter-spacing: .04em; text-transform: uppercase; padding: 6px 8px; border-radius: 5px; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
 	.au-count { margin: 0; color: var(--color-muted); font-size: 14px; }
 	.au-web { font-size: 14px; color: var(--color-text-secondary); }
 	.au-bio p { font-size: 18px; line-height: 1.6; max-width: 68ch; margin: 0 0 14px; }

@@ -55,7 +55,7 @@ import { PLANS } from "../lib/plans";
 					))}
 				</ol>
 				{big.length > FREE_TRADES && (
-					<div data-more-trades data-kind="race" data-race={raceId} set:html={gateHtml("trades", PLANS.anon, `<ol>${big.slice(0, FREE_TRADES).map(raceTradeRow).join("")}</ol>`, "/")} />
+					<div data-more-trades data-kind="race" data-race={raceId} set:html={PLANS.anon.archive ? "" : gateHtml("trades", PLANS.anon, `<ol>${big.slice(0, FREE_TRADES).map(raceTradeRow).join("")}</ol>`, "/")} />
 				)}
 			</div>
 		)}

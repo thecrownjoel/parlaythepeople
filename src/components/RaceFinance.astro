@@ -2,10 +2,12 @@
 /** Campaign finance for a race page: each candidate's money from the FEC and outside spending for and against them. */
 import { raceFinance, financeRows, fecName, fecUrl, partyLetter, usd, asOfReport } from "../lib/fec";
 import type { Race } from "../lib/markets";
+import { fecLinks } from "../lib/people";
 interface Props { race: Race; names: string[] }
 const { race, names } = Astro.props;
 const field = await raceFinance(race);
 const { market, missing, rest } = financeRows(field, names);
+const people = await fecLinks();
 const rows = [...market, ...rest];
 const latest = rows.map((c) => c.coverage_end).filter(Boolean).sort().pop() ?? null;
 const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open seat" : x === "C" ? "Challenger" : "");
@@ -25,7 +27,7 @@ const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open s
 					<tbody>
 						{market.map((c, _i, _a, mk = true) => (
 							<tr class={mk ? "fin-mk" : undefined}>
-								<th scope="row"><a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a> <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
+								<th scope="row">{people.get(c.cand_id) ? <a href={people.get(c.cand_id)}>{fecName(c.name)}</a> : <a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a>} <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
 								<td>{usd(c.receipts)}</td><td>{usd(c.disbursements)}</td><td><b>{usd(c.cash)}</b></td>
 								<td>{c.support ? usd(c.support) : "—"}</td><td>{c.oppose ? usd(c.oppose) : "—"}</td>
 							</tr>
@@ -35,7 +37,7 @@ const ici = (x: string | null) => (x === "I" ? "Incumbent" : x === "O" ? "Open s
 						))}
 						{rest.map((c, _i, _a, mk = false) => (
 							<tr class={mk ? "fin-mk" : undefined}>
-								<th scope="row"><a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a> <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
+								<th scope="row">{people.get(c.cand_id) ? <a href={people.get(c.cand_id)}>{fecName(c.name)}</a> : <a href={fecUrl(c.cand_id)} rel="noopener" target="_blank">{fecName(c.name)}</a>} <span class={`fin-p fin-${partyLetter(c.party) ?? "o"}`}>{partyLetter(c.party) ?? "–"}</span>{ici(c.ici) && <span class="fin-ici">{ici(c.ici)}</span>}</th>
 								<td>{usd(c.receipts)}</td><td>{usd(c.disbursements)}</td><td><b>{usd(c.cash)}</b></td>
 								<td>{c.support ? usd(c.support) : "—"}</td><td>{c.oppose ? usd(c.oppose) : "—"}</td>
 							</tr>

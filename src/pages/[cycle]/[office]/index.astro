@@ -1,0 +1,72 @@
+---
+/** Every race for one office in a cycle: /2026/house/ (each state's House races), /2026/senate/, /2026/governor/. */
+import Base from "../../../layouts/Base.astro";
+import JsonLd from "../../../components/JsonLd.astro";
+import { getCycle, consensus, candidate, pct, PARTY_WORD, fmtDate, type Race } from "../../../lib/markets";
+import { STATES, statePath } from "../../../lib/states";
+import { organization, breadcrumbs, graph } from "../../../lib/site";
+import "../../../styles/data.css";
+
+const { cycle, office } = Astro.params;
+const KIND = { house: "House", senate: "Senate", governor: "Governor" } as const;
+if (!/^\d{4}$/.test(cycle ?? "") || !(office && office in KIND)) return Astro.rewrite("/404");
+const kind = office as keyof typeof KIND;
+const data = await getCycle(Number(cycle));
+const races = (data?.races ?? []).filter((r) => r.kind === kind);
+if (!data || !races.length) return Astro.rewrite("/404");
+Astro.response.headers.set("cache-control", "public, max-age=300");
+const origin = Astro.url.origin;
+const path = `/${cycle}/${kind}/`;
+const states = [...new Set(races.map((r) => r.st))].filter((st) => STATES[st]).sort((a, b) => STATES[a].localeCompare(STATES[b]));
+const stSlug = (st: string) => statePath(st).split("/")[2];
+const fav = (r: Race) => {
+	if (!r.k && !r.p) return null;
+	const c = consensus(r);
+	return { lead: c.lead, text: `${candidate(r, c.lead as "D" | "R" | "I") ?? PARTY_WORD[c.lead]} ${pct(c.lp)}` };
+};
+const lean = (st: string) => {
+	const rs = races.filter((r) => r.st === st && (r.k || r.p));
+	return { D: rs.filter((r) => consensus(r).lead === "D").length, R: rs.filter((r) => consensus(r).lead === "R").length, n: races.filter((r) => r.st === st && !r.special).length };
+};
+const title = `${cycle} ${KIND[kind]} races: every ${kind === "house" ? "state and district" : "race"}`;
+const lede = kind === "house"
+	? `All ${races.filter((r) => !r.special).length} U.S. House races on ${fmtDate(data.meta.election_day)}, by state. Each state page lists every district, who holds it, everyone running and the market odds.`
+	: `Every ${cycle} ${kind === "senate" ? "U.S. Senate" : "governor's"} race (${races.length}), with the prediction market favorite and links to every candidate.`;
+const ld = graph(organization(origin), breadcrumbs(origin, [[String(cycle), `/${cycle}/`], [KIND[kind], path]]));
+---
+<Base title={title} description={lede.slice(0, 158)} canonical={`${origin}${path}`} modifiedTime={data.meta.generated}>
+	<JsonLd slot="head" data={ld} />
+	<div class="dp" style="max-width:960px">
+		<nav class="mk-crumbs" aria-label="Breadcrumb"><a href={`/${cycle}/`}>{cycle}</a> / {KIND[kind]}</nav>
+		<header class="dp-head">
+			<p class="eyebrow">{cycle} · {KIND[kind]}</p>
+			<h1>{cycle} {KIND[kind]} races</h1>
+			<p class="lede">{lede}</p>
+		</header>
+		<section class="panel">
+			<ol class="oi">
+				{kind === "house"
+					? states.map((st) => {
+						const l = lean(st);
+						return <li><a href={`/${cycle}/house/${stSlug(st)}/`}>{STATES[st]}</a><span>{l.n} {l.n === 1 ? "seat" : "seats"}</span><b>{l.R || l.D ? `R ${l.R} · D ${l.D}` : ""}</b></li>;
+					})
+					: races.sort((a, b) => (STATES[a.st] ?? a.st).localeCompare(STATES[b.st] ?? b.st)).map((r) => {
+						const f = fav(r);
+						return <li><a href={r.path}>{r.state}{r.special ? " (special)" : ""}</a><span>{f ? "" : "No market yet"}</span><b class={f ? `oi-${f.lead}` : ""}>{f?.text ?? ""}</b></li>;
+					})}
+			</ol>
+			{kind === "house" && <p class="sec-note">R / D: districts where the market favorite is a Republican or a Democrat.</p>}
+		</section>
+	</div>
+</Base>
+
+<style>
+	.mk-crumbs { font-size: 13px; color: var(--color-muted); margin-bottom: 8px; }
+	.mk-crumbs a { color: var(--color-text-secondary); }
+	.oi { list-style: none; padding: 0; margin: 0; columns: 2 300px; column-gap: 28px; }
+	.oi li { break-inside: avoid; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
+	.oi a { color: var(--color-text); font-weight: 600; }
+	.oi span { color: var(--color-muted); font-size: 13px; }
+	.oi b { font: 600 12.5px var(--font-mono), monospace; text-align: right; }
+	.oi-D { color: var(--bt-d, #2f6bd8); } .oi-R { color: var(--bt-r, #d8432f); }
+</style>

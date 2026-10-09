@@ -5,7 +5,7 @@ import Discussion from "../../components/Discussion.astro";
 import JsonLd from "../../components/JsonLd.astro";
 import { stateFromSlug, stateView, stateMoney, statePath } from "../../lib/states";
 import { consensus, candidate, pct, fmtVol, daysUntil, RATING_LABEL, PARTY_WORD, officeTitle } from "../../lib/markets";
-import { allCandidates, candidatePath } from "../../lib/candidates";
+import { allPeople, personPath } from "../../lib/people";
 import { getPolitics, marketPath } from "../../lib/politics";
 import { usd } from "../../lib/fec";
 import { calendar, calDay } from "../../lib/calendar";
@@ -22,7 +22,10 @@ const cycles = [...new Set([...v.races.map((r) => r.cycle), ...v.ballots.map((b)
 const next = cycles.find((c) => (v.electionDays.get(c) ?? "") >= new Date().toISOString().slice(0, 10)) ?? cycles[cycles.length - 1];
 const nextRaces = v.races.filter((r) => r.cycle === next);
 const money = next ? await stateMoney(st, next) : null;
-const people = (await allCandidates()).filter((c) => c.entries.some((e) => e.race?.st === st));
+// everyone running here, by office (Senate and governor first), plus the state's sitting members of Congress
+const ORDER = { senate: 0, governor: 1, house: 2, president: 3 } as const;
+const people = (await allPeople()).filter((p) => p.runs.some((r) => r.st === st) || p.member?.state === st)
+	.sort((a, b) => Math.min(...a.runs.map((r) => ORDER[r.office]), 4) - Math.min(...b.runs.map((r) => ORDER[r.office]), 4) || a.name.localeCompare(b.name));
 const board = await getPolitics();
 const dates = (await calendar(undefined, 400)).filter((e) => (e.kind === "election" && cycles.includes(Number(e.date.slice(0, 4)))) || (e.st === st && e.kind !== "markets"));
 const nameRx = new RegExp(`\\b${v.name}\\b`, "i");
@@ -115,8 +118,9 @@ const ld = graph(
 
 		{people.length > 0 && (
 			<section class="panel">
-				<h2>Candidates</h2>
-				<ul class="st-people">{people.map((c) => <li><a href={candidatePath(c)}>{c.name}</a> <span>{c.party ?? ""}</span></li>)}</ul>
+				<h2>Candidates and members of Congress</h2>
+				{next && nextRaces.some((r) => r.kind === "house") && <p class="sec-note"><a href={`/${next}/house/${path.split("/")[2]}/`}>Every {next} House race in {v.name} →</a></p>}
+				<ul class="st-people">{people.map((c) => <li><a href={personPath(c)}>{c.name}</a> <span>{c.party ?? ""}</span></li>)}</ul>
 			</section>
 		)}
 

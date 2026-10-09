@@ -1,52 +1,65 @@
 ---
-/** Every candidate with a page: presidential hopefuls, then Senate, governor and House candidates, by chance. */
+/** Everyone with a page (lib/people.ts): presidential hopefuls, then Senate, governor and House candidates, then members
+ *  of Congress not on the ballot. Market odds where an exchange lists them, money raised otherwise. */
 import Base from "../../layouts/Base.astro";
 import JsonLd from "../../components/JsonLd.astro";
-import { allCandidates, candidatePath, entryLabel, type Candidate } from "../../lib/candidates";
+import { allPeople, personPath, runLabel, type Person, type Office } from "../../lib/people";
 import { pct } from "../../lib/markets";
-import { organization, breadcrumbs, graph, SITE_NAME } from "../../lib/site";
+import { usd } from "../../lib/fec";
+import { organization, breadcrumbs, graph } from "../../lib/site";
 import "../../styles/data.css";
 
 Astro.response.headers.set("cache-control", "public, max-age=300");
-const list = await allCandidates();
+const list = await allPeople();
 const origin = Astro.url.origin;
-const top = (c: Candidate) => c.entries[0];
-const groups: [string, Candidate[]][] = [
-	["Presidential hopefuls", list.filter((c) => top(c).kind === "pres")],
-	["Senate", list.filter((c) => top(c).race?.kind === "senate")],
-	["Governor", list.filter((c) => top(c).race?.kind === "governor")],
-	["House", list.filter((c) => top(c).race?.kind === "house")],
+const ORDER: Office[] = ["president", "senate", "governor", "house"];
+const topRun = (p: Person) => [...p.runs].sort((a, b) => ORDER.indexOf(a.office) - ORDER.indexOf(b.office))[0] ?? null;
+const chance = (p: Person) => p.candidate?.entries[0]?.chance ?? null;
+const raised = (p: Person) => p.fec.reduce((a, f) => Math.max(a, f.receipts), 0);
+const rank = (a: Person, b: Person) => (chance(b) ?? -1) - (chance(a) ?? -1) || raised(b) - raised(a) || a.name.localeCompare(b.name);
+const groups: [string, Person[]][] = [
+	["Presidential hopefuls", list.filter((p) => topRun(p)?.office === "president").sort(rank)],
+	["Senate", list.filter((p) => topRun(p)?.office === "senate").sort(rank)],
+	["Governor", list.filter((p) => topRun(p)?.office === "governor").sort(rank)],
+	["House", list.filter((p) => topRun(p)?.office === "house").sort(rank)],
+	["Members of Congress not on the ballot", list.filter((p) => !topRun(p) && p.member).sort((a, b) => a.name.localeCompare(b.name))],
 ];
-const description = `Odds for ${list.length.toLocaleString()} candidates for president, Senate, governor and the House, from Kalshi and Polymarket, with campaign money, polls and social buzz.`;
+const running = list.filter((p) => p.runs.length).length;
+const description = `${running.toLocaleString()} candidates for president, Senate, governor and the House, and every member of Congress: voting records, odds from Kalshi and Polymarket, campaign money and polls.`;
 const ld = graph(organization(origin), breadcrumbs(origin, [["Candidates", "/candidates/"]]), {
-	"@type": "CollectionPage", "@id": `${origin}/candidates/#page`, url: `${origin}/candidates/`, name: "Candidates and their odds", description,
-	mainEntity: { "@type": "ItemList", numberOfItems: list.length, itemListElement: list.slice(0, 100).map((c, i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${candidatePath(c)}`, name: c.name })) },
+	"@type": "CollectionPage", "@id": `${origin}/candidates/#page`, url: `${origin}/candidates/`, name: "Candidates and members of Congress", description,
+	mainEntity: { "@type": "ItemList", numberOfItems: list.length, itemListElement: list.slice(0, 100).map((c, i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${personPath(c)}`, name: c.name })) },
 });
 ---
-<Base title={`2026 candidates: odds to win every race`} description={description} canonical={`${origin}/candidates/`}>
+<Base title="Candidates and members of Congress: records and odds" description={description} canonical={`${origin}/candidates/`}>
 	<JsonLd slot="head" data={ld} />
 	<div class="dp" style="max-width:960px">
 		<header class="dp-head">
 			<p class="eyebrow">Candidates</p>
-			<h1>Every candidate, by their odds</h1>
+			<h1>Every candidate and member of Congress</h1>
 			<p class="lede">{description}</p>
-			<input class="cl-filter" type="search" placeholder="Find a candidate or state" aria-label="Find a candidate or state" data-cl-filter />
+			<input class="cl-filter" type="search" placeholder="Find a person or state (e.g. OH)" aria-label="Find a person or state" data-cl-filter />
 		</header>
 		{groups.filter(([, g]) => g.length).map(([name, g]) => (
 			<section class="panel" data-cl-group>
 				<h2>{name} <span class="cl-n">{g.length}</span></h2>
 				<ol class="cl">
-					{g.map((c) => (
-						<li data-cl={`${c.name} ${c.state ?? ""} ${entryLabel(top(c))}`.toLowerCase()}>
-							<a href={candidatePath(c)}>{c.name}</a>
-							<span class={`fin-p fin-${c.party ?? "o"}`}>{c.party ?? "–"}</span>
-							<span class="cl-r">{entryLabel(top(c))}</span>
-							<b>{pct(top(c).chance)}</b>
-						</li>
-					))}
+					{g.map((p) => {
+						const r = topRun(p);
+						const where = r ? runLabel(r) : p.member ? `${p.member.chamber === "senate" ? "Senator" : "Representative"}, ${p.state}${p.member.chamber === "house" ? `-${p.member.district || "AL"}` : ""}` : "";
+						return (
+							<li data-cl={`${p.name} ${p.state ?? ""} ${where}`.toLowerCase()}>
+								<a href={personPath(p)}>{p.name}</a>
+								<span class={`fin-p fin-${p.party ?? "o"}`}>{p.party ?? "–"}</span>
+								<span class="cl-r">{where}{r?.incumbent ? " · incumbent" : ""}</span>
+								<b>{chance(p) != null ? pct(chance(p)!) : raised(p) > 0 ? usd(raised(p)) : ""}</b>
+							</li>
+						);
+					})}
 				</ol>
 			</section>
 		))}
+		<p class="sec-note">Percentages are market odds; dollar figures are money raised this cycle (FEC) for candidates no exchange lists yet.</p>
 	</div>
 </Base>
 
@@ -64,11 +77,11 @@ const ld = graph(organization(origin), breadcrumbs(origin, [["Candidates", "/can
 	.cl-filter { margin-top: 12px; width: min(100%, 340px); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: inherit; }
 	.cl-n { font: 600 13px var(--font-mono), monospace; color: var(--color-muted); }
 	.cl { list-style: none; padding: 0; margin: 0; }
-	.cl li { display: grid; grid-template-columns: minmax(0, 1.2fr) 30px minmax(0, 1.4fr) 56px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
+	.cl li { display: grid; grid-template-columns: minmax(0, 1.2fr) 30px minmax(0, 1.4fr) 64px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 14.5px; }
 	.cl a { color: var(--color-text); font-weight: 600; }
 	.cl-r { color: var(--color-muted); font-size: 13px; }
 	.cl b { font-family: var(--font-mono), monospace; text-align: right; }
 	.fin-p { font: 700 10.5px var(--font-mono), monospace; padding: 1px 6px; border-radius: 6px; text-align: center; }
 	.fin-D { color: #fff; background: var(--bt-d, #2f6bd8); } .fin-R { color: #fff; background: var(--bt-r, #d8432f); } .fin-I, .fin-o, .fin-null { background: var(--color-border); }
-	@media (max-width: 560px) { .cl li { grid-template-columns: minmax(0, 1fr) 30px 52px; } .cl-r { grid-column: 1 / -1; grid-row: 2; } }
+	@media (max-width: 560px) { .cl li { grid-template-columns: minmax(0, 1fr) 30px 60px; } .cl-r { grid-column: 1 / -1; grid-row: 2; } }
 </style>

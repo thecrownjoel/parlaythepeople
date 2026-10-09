@@ -1,12 +1,15 @@
 ---
 /** A sitting member of Congress's record from Congress.gov: seat, years served, leadership, bills sponsored. */
 import { displayName, memberUrl, billUrl, billLabel, isLaw, yearsIn, seatWord, type Member, type Bill } from "../lib/congress";
+import { memberPath } from "../lib/people";
 
 interface Props { member: Member; bills: Bill[]; heading?: string; running?: boolean }
 const { member: m, bills, heading = "Record in Congress", running } = Astro.props;
 const years = yearsIn(m);
 const party = m.party === "D" ? "Democrat" : m.party === "R" ? "Republican" : m.party === "I" ? "Independent" : m.party;
 const credit = (m.photo_credit ?? "").replace(/<[^>]+>/g, "").trim();
+const page = await memberPath(m.bioguide);
+const away = page && page !== Astro.url.pathname ? page : null;
 const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
 ---
 <section class="panel cg">
@@ -14,8 +17,9 @@ const date = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocal
 	<div class="cg-head">
 		{m.photo && <img src={m.photo} alt={`${displayName(m)}, official portrait`} width="88" height="108" loading="lazy" title={credit || undefined} />}
 		<div>
-			<p class="cg-who"><b>{displayName(m)}</b> ({party}) is the {seatWord(m)}{m.since ? `, in Congress since ${m.since}` : ""}{years ? ` (${years} ${years === 1 ? "year" : "years"})` : ""}.{running === false && " Not on the ballot for this seat in this race."}</p>
+			<p class="cg-who"><b>{away ? <a href={away}>{displayName(m)}</a> : displayName(m)}</b> ({party}) is the {seatWord(m)}{m.since ? `, in Congress since ${m.since}` : ""}{years ? ` (${years} ${years === 1 ? "year" : "years"})` : ""}.{running === false && " Not on the ballot for this seat in this race."}</p>
 			{m.leadership && <p class="cg-lead">Leadership: {m.leadership}</p>}
+			{away && <p class="cg-lead"><a href={`${away}#votes`}>Full voting record →</a></p>}
 			<dl class="cg-stats">
 				{m.sponsored != null && <div><dt>Bills sponsored</dt><dd>{m.sponsored.toLocaleString("en-US")}</dd></div>}
 				{m.cosponsored != null && <div><dt>Bills cosponsored</dt><dd>{m.cosponsored.toLocaleString("en-US")}</dd></div>}
